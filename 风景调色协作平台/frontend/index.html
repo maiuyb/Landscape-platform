@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>风景调色协作平台</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部导航 -->
+    <el-header class="app-header">
+      <div class="header-left">
+        <img src="logo.svg" class="logo" alt="logo">
+        <span class="app-title">风景调色协作平台</span>
+      </div>
+      <div class="header-right">
+        <el-upload :show-file-list="false" :before-upload="handleUpload" accept="image/jpeg,image/png,image/webp">
+          <el-button type="primary" size="small">上传图片</el-button>
+        </el-upload>
+        <el-button text @click="currentView = 'community'">浏览社区</el-button>
+        <el-button text @click="showMyRecipes">我的配方</el-button>
+        <el-button text @click="showLoginDialog">{{ user ? user.username : '登录' }}</el-button>
+      </div>
+    </el-header>
+
+    <div class="main-layout" v-if="currentView === 'editor'">
+      <!-- 左侧：原图缩略图 -->
+      <div class="left-panel" v-if="imageLoaded">
+        <div class="panel-title">原图预览</div>
+        <div class="thumb-container">
+          <img :src="originalImageUrl" class="thumb-img" @click="showCompare = !showCompare">
+        </div>
+        <div class="thumb-hint">点击切换对比模式</div>
+      </div>
+
+      <!-- 中间：图片展示区 -->
+      <div class="center-panel">
+        <!-- 未上传 -->
+        <div class="upload-zone" v-if="!imageLoaded" @dragover.prevent @drop.prevent="handleDrop">
+          <el-icon class="upload-icon"><UploadFilled /></el-icon>
+          <p>拖拽图片到此，或点击上方"上传图片"</p>
+          <p class="upload-hint">支持 JPG / PNG / WebP，单张最大 20MB</p>
+        </div>
+
+        <!-- 已上传 -->
+        <div class="canvas-area" v-if="imageLoaded">
+          <div class="view-mode-tabs">
+            <el-radio-group v-model="viewMode" size="small">
+              <el-radio-button value="single">单图</el-radio-button>
+              <el-radio-button value="side-by-side">并排对比</el-radio-button>
+              <el-radio-button value="slider">滑动对比</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="canvas-wrapper" :class="{ 'side-by-side': viewMode === 'side-by-side', 'slider-mode': viewMode === 'slider' }">
+            <canvas ref="mainCanvas" id="mainCanvas"></canvas>
+            <canvas ref="compareCanvas" id="compareCanvas" v-if="viewMode !== 'single'" style="display:none;"></canvas>
+            <div class="slider-overlay" v-if="viewMode === 'slider'">
+              <input type="range" min="0" max="100" v-model="sliderPos" class="slider-bar">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：调整面板 -->
+      <div class="right-panel" v-if="imageLoaded">
+        <el-tabs v-model="activeTab">
+          <!-- 手动修改 -->
+          <el-tab-pane label="手动修改" name="manual">
+            <div class="panel-section">
+              <div class="section-title">变换</div>
+              <div class="transform-buttons">
+                <el-button size="small" @click="startCrop">裁剪</el-button>
+                <el-button size="small" @click="rotateLeft">↺ 左旋</el-button>
+                <el-button size="small" @click="rotateRight">↻ 右旋</el-button>
+                <el-button size="small" @click="flipH">⇔ 水平翻转</el-button>
+                <el-button size="small" @click="flipV">⇕ 垂直翻转</el-button>
+              </div>
+            </div>
+
+            <div class="panel-section">
+              <div class="section-title">滤镜</div>
+              <div class="filter-grid">
+                <div v-for="f in presetFilters" :key="f.name" class="filter-item" @click="applyFilter(f.name)">
+                  <div class="filter-preview" :style="{ background: f.color }"></div>
+                  <span>{{ f.label }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-section">
+              <div class="section-title">调色</div>
+              <div v-for="adj in adjustments" :key="adj.key" class="slider-item">
+                <div class="slider-label">
+                  <span>{{ adj.label }}</span>
+                  <span class="slider-value">{{ adj.value }}</span>
+                </div>
+                <el-slider v-model="adj.value" :min="-100" :max="100" :step="1" size="small" @input="applyAdjustments" />
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <!-- AI 推荐 -->
+          <el-tab-pane label="AI 推荐" name="ai">
+            <div class="panel-section">
+              <div class="diagnosis-box" v-if="diagnosisResult">
+                <div class="section-title">诊断结果</div>
+                <div v-for="d in diagnosisResult" :key="d.label" class="diagnosis-item" :class="d.severity">
+                  <span>{{ d.icon }} {{ d.label }}</span>
+                </div>
+              </div>
+              <el-button type="primary" size="small" :loading="aiLoading" @click="requestAI" style="width:100%;margin-top:12px">
+                {{ aiLoading ? 'AI 分析中...' : 'AI 推荐方案' }}
+              </el-button>
+              <div class="ai-results" v-if="aiResults.length">
+                <div class="section-title" style="margin-top:12px">推荐方案</div>
+                <div class="ai-result-grid">
+                  <div v-for="(r, i) in aiResults" :key="i" class="ai-result-card" @click="applyAIRecipe(r)">
+                    <canvas :ref="el => { if(el) renderPreview(el, r) }" class="ai-preview-canvas"></canvas>
+                    <span>{{ r.name }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <!-- 图库匹配 -->
+          <el-tab-pane label="图库匹配" name="gallery">
+            <div class="panel-section">
+              <el-button type="primary" size="small" :loading="galleryLoading" @click="matchGallery" style="width:100%">
+                {{ galleryLoading ? '匹配中...' : '匹配相似风格' }}
+              </el-button>
+              <div class="gallery-results" v-if="galleryResults.length">
+                <div v-for="(item, i) in galleryResults" :key="i" class="gallery-card" @click="applyGalleryRecipe(item)">
+                  <img :src="item.cover_after" class="gallery-thumb">
+                  <div class="gallery-info">
+                    <span>{{ item.name }}</span>
+                    <span class="gallery-author">by {{ item.author }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <!-- 社区配方 -->
+          <el-tab-pane label="社区配方" name="community-tab">
+            <div class="panel-section">
+              <el-input v-model="communitySearch" placeholder="搜索配方（如：日落、雪景）" size="small" clearable @input="searchCommunity"></el-input>
+              <div class="community-list" v-if="communityRecipes.length">
+                <div v-for="r in communityRecipes" :key="r.id" class="community-card" @click="applyCommunityRecipe(r)">
+                  <img :src="r.cover_after" class="community-thumb">
+                  <div class="community-info">
+                    <span class="community-name">{{ r.name }}</span>
+                    <span class="community-meta">❤ {{ r.likes }}  by {{ r.author }}</span>
+                  </div>
+                </div>
+              </div>
+              <el-empty v-else description="暂无社区配方" :image-size="80"></el-empty>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </div>
+
+    <!-- 底部工具栏 -->
+    <div class="bottom-bar" v-if="imageLoaded">
+      <div class="bar-left">
+        <el-button size="small" @click="undo" :disabled="historyIndex < 0">撤销</el-button>
+        <el-button size="small" @click="redo" :disabled="historyIndex >= history.length - 1">重做</el-button>
+      </div>
+      <div class="bar-right">
+        <el-button size="small" @click="exportImage('jpg')">导出 JPG</el-button>
+        <el-button size="small" @click="exportImage('png')">导出 PNG</el-button>
+        <el-button size="small" @click="copyRecipe">复制配方</el-button>
+        <el-button size="small" type="primary" @click="showPublishDialog" v-if="user">发布配方</el-button>
+      </div>
+    </div>
+
+    <!-- 社区视图 -->
+    <div class="community-view" v-if="currentView === 'community'">
+      <div class="community-header">
+        <el-button text @click="currentView = 'editor'">← 返回编辑器</el-button>
+        <el-input v-model="communitySearch" placeholder="搜索配方（如：日落、雪景）" style="width:300px" clearable @input="searchCommunity"></el-input>
+      </div>
+      <div class="community-waterfall">
+        <div v-for="r in communityRecipes" :key="r.id" class="waterfall-card" @click="previewRecipe(r)">
+          <img :src="r.cover_after">
+          <div class="waterfall-info">
+            <div class="waterfall-name">{{ r.name }}</div>
+            <div class="waterfall-meta">❤ {{ r.likes }}  {{ r.author }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 登录对话框 -->
+    <el-dialog v-model="loginDialogVisible" title="登录/注册" width="360px">
+      <el-form :model="loginForm">
+        <el-form-item label="用户名">
+          <el-input v-model="loginForm.username"></el-input>
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input v-model="loginForm.password" type="password"></el-input>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="loginDialogVisible = false">取消</el-button>
+        <el-button @click="login">登录</el-button>
+        <el-button type="primary" @click="register">注册</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 发布配方对话框 -->
+    <el-dialog v-model="publishDialogVisible" title="发布配方" width="400px">
+      <el-form :model="publishForm">
+        <el-form-item label="配方名称">
+          <el-input v-model="publishForm.name"></el-input>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="publishForm.description" type="textarea" :rows="3"></el-input>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="publishDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="publishRecipe">发布</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 配方预览对话框 -->
+    <el-dialog v-model="previewDialogVisible" title="配方预览" width="700px">
+      <div class="preview-content" v-if="previewRecipeData">
+        <div class="preview-images">
+          <div>
+            <div class="preview-label">原图</div>
+            <img :src="previewRecipeData.cover_before" class="preview-img">
+          </div>
+          <div>
+            <div class="preview-label">调色后</div>
+            <img :src="previewRecipeData.cover_after" class="preview-img">
+          </div>
+        </div>
+        <div class="preview-info">
+          <h3>{{ previewRecipeData.name }}</h3>
+          <p>{{ previewRecipeData.description }}</p>
+          <el-button type="primary" @click="applyCommunityRecipe(previewRecipeData)">一键套用</el-button>
+        </div>
+      </div>
+    </el-dialog>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/element-plus"></script>
+  <script src="app.js"></script>
+</body>
+</html>
