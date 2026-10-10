@@ -117,5 +117,5 @@
 
 - 初稿：[风景调色协作平台_需求规格说明书.md](../风景调色协作平台_需求规格说明书.md)
 - 原型目录：temp 分支的 风景调色协作平台/backend 和 frontend。
-- 本轮对话中的个人体验反馈：答复者已体验 Pixlr、Photopea、Canva、Fotor；认为 Pixlr/Photopea 复杂、Canva 偏平面设计、Fotor 更接近产品设想。其摄影朋友提到 Lightroom 和像素蛋糕为常用工具。这些反馈尚不代表项目组结论。
-- 新需求工作以 [PRD.md](PRD.md)、[UX-RESEARCH.md](UX-RESEARCH.md) 和 [DECISION-INPUT.md](DECISION-INPUT.md) 为讨论稿；其中个人意见尚未代表项目组决定；原初稿保留作历史材料，待评审后决定是否更新或替换。
+- 竞品初步体验反馈：项目成员体验 Pixlr、Photopea、Canva、Fotor 后认为前两者较复杂，Canva 更偏平面设计，Fotor 与本项目设想较接近；一位摄影爱好者提到 Lightroom 和像素蛋糕为常用工具。这些是团队产品方向的输入，不等于正式用户研究发现。
+- 当前开发以 [PRD.md](PRD.md) 为主需求基线；[DECISION-INPUT.md](DECISION-INPUT.md) 记录两位成员共同确认的方向；[UX-RESEARCH.md](UX-RESEARCH.md) 记录后续如何验证用户任务与交互。
