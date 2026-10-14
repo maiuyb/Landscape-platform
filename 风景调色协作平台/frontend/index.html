@@ -4,253 +4,126 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>风景调色协作平台</title>
-  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">
-    <!-- 顶部导航 -->
-    <el-header class="app-header">
-      <div class="header-left">
-        <img src="logo.svg" class="logo" alt="logo">
-        <span class="app-title">风景调色协作平台</span>
-      </div>
-      <div class="header-right">
-        <el-upload :show-file-list="false" :before-upload="handleUpload" accept="image/jpeg,image/png,image/webp">
-          <el-button type="primary" size="small">上传图片</el-button>
-        </el-upload>
-        <el-button text @click="currentView = 'community'">浏览社区</el-button>
-        <el-button text @click="showMyRecipes">我的配方</el-button>
-        <el-button text @click="showLoginDialog">{{ user ? user.username : '登录' }}</el-button>
-      </div>
-    </el-header>
+  <div id="app" v-cloak>
+    <header class="app-header">
+      <a class="brand" href="#" @click.prevent="currentView = 'editor'"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">协作工作区</span></span></a>
+      <nav aria-label="主导航">
+        <button :aria-current="currentView === 'editor' ? 'page' : undefined" @click="currentView = 'editor'">编辑器</button>
+        <button :aria-current="currentView === 'community' ? 'page' : undefined" @click="openCommunity">浏览社区</button>
+        <label class="button primary upload-button" :class="{ disabled: imageLoading || exporting }">
+          {{ imageLoading ? '读取中…' : imageLoaded ? '更换照片' : '选择照片' }}
+          <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" :disabled="imageLoading || exporting" @change="handleUpload" aria-label="选择照片">
+        </label>
+      </nav>
+    </header>
+    <div class="notice error" v-if="error" role="alert">{{ error }}</div>
+    <div class="notice" v-else-if="message" role="status">{{ message }}</div>
 
-    <div class="main-layout" v-if="currentView === 'editor'">
-      <!-- 左侧：原图缩略图 -->
-      <div class="left-panel" v-if="imageLoaded">
-        <div class="panel-title">原图预览</div>
-        <div class="thumb-container">
-          <img :src="originalImageUrl" class="thumb-img" @click="showCompare = !showCompare">
-        </div>
-        <div class="thumb-hint">点击切换对比模式</div>
-      </div>
-
-      <!-- 中间：图片展示区 -->
-      <div class="center-panel">
-        <!-- 未上传 -->
-        <div class="upload-zone" v-if="!imageLoaded" @dragover.prevent @drop.prevent="handleDrop">
-          <el-icon class="upload-icon"><UploadFilled /></el-icon>
-          <p>拖拽图片到此，或点击上方"上传图片"</p>
-          <p class="upload-hint">支持 JPG / PNG / WebP，单张最大 20MB</p>
-        </div>
-
-        <!-- 已上传 -->
-        <div class="canvas-area" v-if="imageLoaded">
-          <div class="view-mode-tabs">
-            <el-radio-group v-model="viewMode" size="small">
-              <el-radio-button value="single">单图</el-radio-button>
-              <el-radio-button value="side-by-side">并排对比</el-radio-button>
-              <el-radio-button value="slider">滑动对比</el-radio-button>
-            </el-radio-group>
+    <main class="workspace" :class="{ 'with-ai': aiOpen }" v-show="currentView === 'editor'">
+      <section class="empty-workspace" v-if="!imageLoaded" @dragover.prevent @drop.prevent="handleDrop" aria-label="照片导入">
+        <div class="empty-icon" aria-hidden="true">▧</div>
+        <p class="eyebrow">从一张风景开始</p>
+        <h1>让照片更接近<br>你眼中的风景。</h1>
+        <p>手动微调，尝试风格，或向 AI 寻找灵感。<br>每一次改变，都可以回退。</p>
+        <label class="button primary large">{{ imageLoading ? '正在读取…' : '选择一张照片' }}<input type="file" accept="image/jpeg,image/png,image/webp" :disabled="imageLoading" @change="handleUpload" aria-label="选择一张照片"></label>
+        <p class="small">也可以拖放图片 · JPG / PNG / WebP · 最大 20MB</p>
+        <p class="privacy-note">编辑在本机进行。刷新或关闭页面后不恢复作品，请及时导出。</p>
+      </section>
+      <template v-else>
+        <section class="canvas-panel" aria-label="照片画布" @dragover.prevent @drop.prevent="handleDrop">
+          <div class="canvas-heading"><div class="file-info"><strong>{{ filename }}</strong><span>{{ outputDimensions.width }} × {{ outputDimensions.height }} · {{ preview ? '方案预览' : dirty ? '已编辑' : '原图' }}</span></div><button @click="aiOpen = !aiOpen" :aria-expanded="aiOpen">{{ aiOpen ? '收起 AI' : 'AI 建议' }}</button></div>
+          <div class="canvas-toolbar">
+            <div class="segmented" aria-label="画布显示">
+              <button @click="compareMode = 'original'" :aria-pressed="compareMode === 'original'" :disabled="cropOpen">原图</button>
+              <button @click="compareMode = 'edited'" :aria-pressed="compareMode === 'edited'" :disabled="cropOpen">编辑后</button>
+              <button class="desktop-compare" @click="compareMode = 'slider'" :aria-pressed="compareMode === 'slider'" :disabled="cropOpen">滑杆对比</button>
+            </div>
+            <label class="zoom-label">显示 <select v-model.number="zoom" aria-label="画布缩放" :disabled="cropOpen"><option :value="50">50%</option><option :value="100">适配画布</option><option :value="200">200%</option></select></label>
           </div>
-          <div class="canvas-wrapper" :class="{ 'side-by-side': viewMode === 'side-by-side', 'slider-mode': viewMode === 'slider' }">
-            <canvas ref="mainCanvas" id="mainCanvas"></canvas>
-            <canvas ref="compareCanvas" id="compareCanvas" v-if="viewMode !== 'single'" style="display:none;"></canvas>
-            <div class="slider-overlay" v-if="viewMode === 'slider'">
-              <input type="range" min="0" max="100" v-model="sliderPos" class="slider-bar">
+          <div class="canvas-container" ref="canvasContainer">
+            <div class="canvas-centering">
+              <div class="image-stage" :class="{ 'wb-picking': wbPicking }" :style="stageStyle" @click="wbPicking && pickWhiteBalance($event)">
+                <canvas ref="mainCanvas" id="mainCanvas" aria-label="编辑后照片"></canvas>
+                <canvas ref="compareCanvas" id="compareCanvas" class="compare-canvas" :style="{ visibility: compareMode === 'edited' ? 'hidden' : 'visible', clipPath: compareMode === 'slider' ? `inset(0 ${100 - sliderPos}% 0 0)` : 'none' }" aria-label="原图，同构图"></canvas>
+                <div class="compare-line" v-if="compareMode === 'slider'" :style="{ left: sliderPos + '%' }"><span>↔</span></div>
+                <div class="crop-layer" v-if="cropOpen" @pointerdown="cropPointerDown" @pointermove="cropPointerMove" @pointerup="cropPointerUp" @pointercancel="cropPointerUp"><div class="crop-selection" :style="cropStyle"><i></i><i></i><i></i><i></i><button v-for="handle in cropHandles" :key="handle.key" class="crop-handle" :class="handle.key" :data-crop-handle="handle.key" :aria-label="'调整裁剪' + handle.label" @keydown="cropHandleKey(handle.key,$event)"></button></div></div>
+                <span class="image-badge">{{ wbPicking ? '点击本应为白色或灰色的区域' : compareMode === 'original' ? '原图 · 同构图' : compareMode === 'slider' ? '左：原图 · 右：编辑后' : preview ? '方案预览 · 尚未应用' : hoverFilter ? '滤镜预览 · ' + hoverFilter.label : '编辑后' }}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- 右侧：调整面板 -->
-      <div class="right-panel" v-if="imageLoaded">
-        <el-tabs v-model="activeTab">
-          <!-- 手动修改 -->
-          <el-tab-pane label="手动修改" name="manual">
-            <div class="panel-section">
-              <div class="section-title">变换</div>
-              <div class="transform-buttons">
-                <el-button size="small" @click="startCrop">裁剪</el-button>
-                <el-button size="small" @click="rotateLeft">↺ 左旋</el-button>
-                <el-button size="small" @click="rotateRight">↻ 右旋</el-button>
-                <el-button size="small" @click="flipH">⇔ 水平翻转</el-button>
-                <el-button size="small" @click="flipV">⇕ 垂直翻转</el-button>
-              </div>
-            </div>
-
-            <div class="panel-section">
-              <div class="section-title">滤镜</div>
-              <div class="filter-grid">
-                <div v-for="f in presetFilters" :key="f.name" class="filter-item" @click="applyFilter(f.name)">
-                  <div class="filter-preview" :style="{ background: f.color }"></div>
-                  <span>{{ f.label }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel-section">
-              <div class="section-title">调色</div>
-              <div v-for="adj in adjustments" :key="adj.key" class="slider-item">
-                <div class="slider-label">
-                  <span>{{ adj.label }}</span>
-                  <span class="slider-value">{{ adj.value }}</span>
-                </div>
-                <el-slider v-model="adj.value" :min="-100" :max="100" :step="1" size="small" @input="applyAdjustments" />
-              </div>
-            </div>
-          </el-tab-pane>
-
-          <!-- AI 推荐 -->
-          <el-tab-pane label="AI 推荐" name="ai">
-            <div class="panel-section">
-              <div class="diagnosis-box" v-if="diagnosisResult">
-                <div class="section-title">诊断结果</div>
-                <div v-for="d in diagnosisResult" :key="d.label" class="diagnosis-item" :class="d.severity">
-                  <span>{{ d.icon }} {{ d.label }}</span>
-                </div>
-              </div>
-              <el-button type="primary" size="small" :loading="aiLoading" @click="requestAI" style="width:100%;margin-top:12px">
-                {{ aiLoading ? 'AI 分析中...' : 'AI 推荐方案' }}
-              </el-button>
-              <div class="ai-results" v-if="aiResults.length">
-                <div class="section-title" style="margin-top:12px">推荐方案</div>
-                <div class="ai-result-grid">
-                  <div v-for="(r, i) in aiResults" :key="i" class="ai-result-card" @click="applyAIRecipe(r)">
-                    <canvas :ref="el => { if(el) renderPreview(el, r) }" class="ai-preview-canvas"></canvas>
-                    <span>{{ r.name }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </el-tab-pane>
-
-          <!-- 图库匹配 -->
-          <el-tab-pane label="图库匹配" name="gallery">
-            <div class="panel-section">
-              <el-button type="primary" size="small" :loading="galleryLoading" @click="matchGallery" style="width:100%">
-                {{ galleryLoading ? '匹配中...' : '匹配相似风格' }}
-              </el-button>
-              <div class="gallery-results" v-if="galleryResults.length">
-                <div v-for="(item, i) in galleryResults" :key="i" class="gallery-card" @click="applyGalleryRecipe(item)">
-                  <img :src="item.cover_after" class="gallery-thumb">
-                  <div class="gallery-info">
-                    <span>{{ item.name }}</span>
-                    <span class="gallery-author">by {{ item.author }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </el-tab-pane>
-
-          <!-- 社区配方 -->
-          <el-tab-pane label="社区配方" name="community-tab">
-            <div class="panel-section">
-              <el-input v-model="communitySearch" placeholder="搜索配方（如：日落、雪景）" size="small" clearable @input="searchCommunity"></el-input>
-              <div class="community-list" v-if="communityRecipes.length">
-                <div v-for="r in communityRecipes" :key="r.id" class="community-card" @click="applyCommunityRecipe(r)">
-                  <img :src="r.cover_after" class="community-thumb">
-                  <div class="community-info">
-                    <span class="community-name">{{ r.name }}</span>
-                    <span class="community-meta">❤ {{ r.likes }}  by {{ r.author }}</span>
-                  </div>
-                </div>
-              </div>
-              <el-empty v-else description="暂无社区配方" :image-size="80"></el-empty>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
-      </div>
-    </div>
-
-    <!-- 底部工具栏 -->
-    <div class="bottom-bar" v-if="imageLoaded">
-      <div class="bar-left">
-        <el-button size="small" @click="undo" :disabled="historyIndex < 0">撤销</el-button>
-        <el-button size="small" @click="redo" :disabled="historyIndex >= history.length - 1">重做</el-button>
-      </div>
-      <div class="bar-right">
-        <el-button size="small" @click="exportImage('jpg')">导出 JPG</el-button>
-        <el-button size="small" @click="exportImage('png')">导出 PNG</el-button>
-        <el-button size="small" @click="copyRecipe">复制配方</el-button>
-        <el-button size="small" type="primary" @click="showPublishDialog" v-if="user">发布配方</el-button>
-      </div>
-    </div>
-
-    <!-- 社区视图 -->
-    <div class="community-view" v-if="currentView === 'community'">
-      <div class="community-header">
-        <el-button text @click="currentView = 'editor'">← 返回编辑器</el-button>
-        <el-input v-model="communitySearch" placeholder="搜索配方（如：日落、雪景）" style="width:300px" clearable @input="searchCommunity"></el-input>
-      </div>
-      <div class="community-waterfall">
-        <div v-for="r in communityRecipes" :key="r.id" class="waterfall-card" @click="previewRecipe(r)">
-          <img :src="r.cover_after">
-          <div class="waterfall-info">
-            <div class="waterfall-name">{{ r.name }}</div>
-            <div class="waterfall-meta">❤ {{ r.likes }}  {{ r.author }}</div>
+          <label class="compare-control" v-if="compareMode === 'slider'">原图 <input type="range" min="0" max="100" v-model.number="sliderPos" aria-label="前后对比分界"> 编辑后</label>
+          <div class="preview-bar" v-if="preview"><div><strong>正在预览「{{ preview.name }}」</strong><span>更新配方中列出的设置，保留其他调整；尚未计入历史。</span></div><button @click="cancelPreview">取消预览</button><button class="primary" @click="applyPreview">应用到照片</button></div>
+          <div class="preview-bar" v-if="wbPicking"><div><strong>白平衡取样</strong><span>点击照片中的白色或浅灰区域，Esc 可退出。</span></div><button @click="wbPicking = false">取消取样</button></div>
+          <div class="crop-bar" v-if="cropOpen">
+            <p>拖动边框或角点调整范围，拖动框内移动选区。框外可重新框选。</p>
+            <label>比例 <select v-model="cropRatio" @change="constrainCrop"><option value="free">自由</option><option value="original">原图比例</option><option value="1">1:1</option><option :value="3/2">3:2</option><option :value="4/3">4:3</option><option :value="16/9">16:9</option><option :value="2/3">2:3</option><option :value="3/4">3:4</option><option :value="9/16">9:16</option></select><span>{{ cropPixels.width }} × {{ cropPixels.height }} 像素</span></label>
+            <details class="precision-crop"><summary>精确位置与尺寸（像素）</summary><div class="pixel-grid"><label v-for="field in [{key:'x',label:'左侧位置'},{key:'y',label:'顶部位置'},{key:'width',label:'宽度'},{key:'height',label:'高度'}]" :key="field.key">{{ field.label }}<input type="number" :value="cropDraft[field.key] ?? cropPixels[field.key]" :min="['width','height'].includes(field.key)?1:0" step="1" :aria-label="'裁剪' + field.label + '像素'" @input="cropDraft[field.key]=$event.target.value" @change="cropPixelInput(field.key,$event)" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="delete cropDraft[field.key];$event.target.value=cropPixels[field.key];$event.target.blur()"></label></div></details>
+            <div class="actions"><button @click="cropOpen = false">取消裁剪</button><button class="primary" @click="applyCrop">应用裁剪</button></div>
           </div>
-        </div>
-      </div>
-    </div>
+          <footer class="canvas-footer"><span>原图始终保留在本机 · 对比不改变编辑</span><div><button @click="restore('undo')" :disabled="!canUndo || locked">撤销</button><button @click="restore('redo')" :disabled="!canRedo || locked">重做</button><button @click="resetImage" :disabled="!dirty || locked">重置</button></div></footer>
+        </section>
 
-    <!-- 登录对话框 -->
-    <el-dialog v-model="loginDialogVisible" title="登录/注册" width="360px">
-      <el-form :model="loginForm">
-        <el-form-item label="用户名">
-          <el-input v-model="loginForm.username"></el-input>
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input v-model="loginForm.password" type="password"></el-input>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="loginDialogVisible = false">取消</el-button>
-        <el-button @click="login">登录</el-button>
-        <el-button type="primary" @click="register">注册</el-button>
+        <aside class="parameter-panel" aria-label="手动参数">
+          <div class="panel-heading"><h2>调整照片</h2><span>可随时撤销</span></div>
+          <fieldset :disabled="locked">
+            <div class="histogram-chart" aria-label="当前预览直方图"><svg viewBox="0 0 255 70" role="img" aria-label="亮度及 RGB 分布"><path :d="histogramPath('luma')" class="hist-luma"></path><path v-for="channel in ['red','green','blue']" :key="channel" :d="histogramPath(channel)" :class="'hist-' + channel"></path></svg><div><span>暗</span><span>当前预览</span><span>亮</span></div></div>
+            <details class="panel-section tool-group" open>
+              <summary><span>光线</span><button class="group-reset" @click.stop.prevent="resetGroup('light')" aria-label="复位光线">复位</button></summary>
+              <button class="auto-control" @click="autoExposure">自动曝光</button>
+              <adjustment-control v-for="control in controls.filter(c => c.group === 'light')" :key="control.key" :control="control"  :model-value="state.adjustments[control.key]" @update:model-value="value => setAdjustment(control.key, value)" @start="beginAdjustment" @commit="commit" @number-input="inputAdjustment" @reset="resetAdjustment"></adjustment-control>
+              <div class="endpoint-controls"><h3>白色与黑色</h3><adjustment-control v-for="control in controls.filter(c => c.group === 'endpoints')" :key="control.key" :control="control"  :model-value="state.adjustments[control.key]" @update:model-value="value => setAdjustment(control.key, value)" @start="beginAdjustment" @commit="commit" @number-input="inputAdjustment" @reset="resetAdjustment"></adjustment-control></div>
+              <details class="more-light"><summary>更多光线控制</summary><adjustment-control v-for="control in controls.filter(c => c.group === 'more-light')" :key="control.key" :control="control"  :model-value="state.adjustments[control.key]" @update:model-value="value => setAdjustment(control.key, value)" @start="beginAdjustment" @commit="commit" @number-input="inputAdjustment" @reset="resetAdjustment"></adjustment-control></details>
+            </details>
+            <details class="panel-section tool-group" id="color-group">
+              <summary><span>颜色</span><button class="group-reset" @click.stop.prevent="resetGroup('color')" aria-label="复位颜色">复位</button></summary>
+              <button class="auto-control" @click="autoWhiteBalance">自动白平衡</button>
+              <div class="white-balance-row"><label for="white-balance-mode">白平衡</label><select id="white-balance-mode" :value="state.whiteBalance.mode" @change="whiteBalanceChoice"><option value="original">原样</option><option value="auto">自动</option><option value="sample" disabled>已取样</option><option value="custom" disabled>自定</option></select><button @click="toggleWBSampling" :aria-pressed="wbPicking" aria-label="白平衡取样笔" title="在照片中选择白色或灰色"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4l6 6 M6 16l8-8 4 4-8 8-5 1 1-5 M14 8l3-3a2 2 0 0 1 3 3l-3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></div>
+              <adjustment-control v-for="control in controls.filter(c => c.group === 'color')" :key="control.key" :control="control"  :model-value="state.adjustments[control.key]" @update:model-value="value => setAdjustment(control.key, value)" @start="beginAdjustment" @commit="commit" @number-input="inputAdjustment" @reset="resetAdjustment"></adjustment-control>
+              <details class="hsl-section" id="hsl-group"><summary>HSL 色彩混合</summary><div class="hsl-mode"><select v-model="hslMode" aria-label="HSL 调整类型"><option value="hue">色相</option><option value="saturation">饱和度</option><option value="luminance">亮度</option></select><button @click="resetHSL" aria-label="复位全部 HSL">复位</button></div><adjustment-control v-for="control in hslControls" :key="control.key" :control="control" :model-value="state.hsl[control.band][hslMode]" @update:model-value="value => setHSL(control.band,value)" @start="beginAdjustment" @commit="commit" @number-input="hslNumber" @reset="resetHSLControl"></adjustment-control><p class="small">按颜色调整，会影响照片中所有相近颜色的区域。</p></details>
+            </details>
+            <details class="panel-section tool-group" id="curves-group"><summary><span>曲线</span><button class="group-reset" @click.stop.prevent="resetCurve(true)" aria-label="复位全部曲线">复位</button></summary><div class="curve-channels"><button v-for="channel in [{key:'master',label:'整体'},{key:'red',label:'红'},{key:'green',label:'绿'},{key:'blue',label:'蓝'}]" :key="channel.key" @click="selectCurve(channel.key)" :aria-pressed="curveChannel === channel.key" :aria-label="channel.label + '曲线'">{{ channel.label }}</button></div><svg class="curve-editor" viewBox="0 0 255 255" tabindex="0" role="img" aria-label="曲线控制点编辑区域" @pointerdown="curvePointerDown" @pointermove="curvePointerMove" @pointerup="curvePointerUp" @pointercancel="curvePointerUp" @keydown="curveKey"><path :d="histogramPath(curveChannel === 'master' ? 'luma' : curveChannel,255)" class="curve-hist"></path><path d="M0 85H255 M0 170H255 M85 0V255 M170 0V255" class="curve-grid"></path><path d="M0 255L255 0" class="curve-diagonal"></path><path :d="curvePath" class="curve-line" :class="curveChannel"></path><circle v-for="(point,index) in curvePoints" :key="index" :cx="point[0]*255" :cy="(1-point[1])*255" :r="selectedCurvePoint === index ? 6 : 5" :data-point="index" class="curve-point"></circle></svg><p class="small">点击添加点，拖动调整；上移更亮，下移更暗。</p><div class="curve-coordinates"><label>输入<input type="number" min="0" max="255" :value="curveDraft[0] ?? Math.round(selectedPoint[0]*255)" :disabled="selectedCurvePoint === 0 || selectedCurvePoint === curvePoints.length-1" aria-label="曲线输入值" @input="curveDraft[0]=$event.target.value" @change="curveNumber(0,$event)" @keydown.enter.prevent="$event.target.blur()"></label><label>输出<input type="number" min="0" max="255" :value="curveDraft[1] ?? Math.round(selectedPoint[1]*255)" aria-label="曲线输出值" @input="curveDraft[1]=$event.target.value" @change="curveNumber(1,$event)" @keydown.enter.prevent="$event.target.blur()"></label></div><div class="curve-actions"><button @click="deleteCurvePoint" :disabled="selectedCurvePoint === 0 || selectedCurvePoint >= curvePoints.length-1">删除控制点</button><button @click="resetCurve(false)">复位当前通道</button></div></details>
+            <section class="panel-section"><h3>风格滤镜</h3><p class="small">悬浮预览，移开恢复；点击应用，可撤销。</p><div class="filter-grid"><button v-for="filter in filters" :key="filter.name" @pointerenter="hoverStyle(filter,$event)" @pointerleave="leaveStyle(filter)" @focus="hoverStyle(filter)" @blur="leaveStyle(filter)" @click="applyFilter(filter)" :aria-pressed="state.filter === filter.name" :aria-label="filter.label" :aria-describedby="'filter-description-' + filter.name"><span class="filter-swatch" :class="filter.name"></span>{{ filter.label }}<span class="filter-tooltip" :id="'filter-description-' + filter.name" role="tooltip" v-show="hoverFilter && hoverFilter.name === filter.name">{{ filter.description }}</span></button></div><div v-if="state.filter" class="adjustment"><label for="filter-strength" @dblclick="state.filterStrength = 100; commit()">滤镜强度<span>{{ state.filterStrength }}%</span></label><div class="range-row"><input id="filter-strength" type="range" min="0" max="100" v-model.number="state.filterStrength" @input="beginAdjustment" @change="commit" @pointercancel="commit"><button class="reset-control" @click="state.filterStrength = 100; commit()" aria-label="复位滤镜强度" :disabled="state.filterStrength === 100">↺</button></div><button class="text-button" @click="removeFilter">移除滤镜</button></div></section>
+            <details class="panel-section tool-group"><summary><span>构图与方向</span></summary><div class="transform-grid"><button @click="beginCrop">裁剪照片</button><button @click="transform('rotate', { angle: -90 })">左转 90°</button><button @click="transform('rotate', { angle: 90 })">右转 90°</button><button @click="transform('flip', { direction: 'h' })">水平翻转</button><button @click="transform('flip', { direction: 'v' })">垂直翻转</button></div><label class="angle-input">自由旋转 <input type="number" min="-180" max="180" v-model.number="rotationAngle" aria-label="旋转角度">°</label><button @click="rotateFree">应用旋转</button><p class="small">旋转后的空白区域：PNG 保留透明，JPG 填白。</p></details>
+          </fieldset>
+          <section class="panel-section"><h3>输出与复用</h3><button class="primary full-width" @click="openExport" :disabled="locked">导出照片</button><div class="recipe-actions"><button @click="copyRecipe" :disabled="locked">复制配方</button><button @click="downloadRecipe" :disabled="locked">下载配方</button><label class="button" :class="{ disabled: locked }">导入配方<input type="file" accept=".json,application/json" @change="importRecipe" :disabled="locked" aria-label="导入配方"></label></div><p class="small">当前作品只在本页保留。刷新或关闭前，请导出照片或配方。</p></section>
+        </aside>
+        <aside class="ai-panel" v-show="aiOpen" aria-label="AI 建议">
+          <div class="panel-heading"><h2>寻找灵感</h2><button @click="aiOpen = false" aria-label="关闭 AI 面板">×</button></div>
+          <p>先看看建议，再决定是否应用。</p>
+          <p class="privacy-note">点击下方按钮，将当前照片的压缩缩略图与明暗分析发送到本项目后端；配置云端服务后由通义千问分析。</p>
+          <button class="primary full-width" @click="requestAI" :disabled="locked || aiLoading">{{ aiLoading ? '正在分析…' : '获取 AI 建议' }}</button>
+          <p class="small" role="status">{{ aiStatus }}</p>
+          <div class="proposal-list"><button v-for="(recipe,index) in aiResults" :key="index" @click="beginPreview(recipe)" :disabled="cropOpen || exporting"><canvas :ref="el => renderThumbnail(el,recipe)" aria-hidden="true"></canvas><strong>{{ recipe.name }}</strong><span>在当前照片上预览 →</span></button></div>
+          <details class="panel-section"><summary>从图库找相似风格</summary><button class="full-width" @click="matchGallery" :disabled="locked || galleryLoading">{{ galleryLoading ? '匹配中…' : '匹配图库配方' }}</button><p class="small" v-if="!galleryResults.length">暂无匹配结果。可以先尝试手动滤镜。</p><button class="full-width" v-for="recipe in galleryResults" :key="recipe.id" @click="beginPreview(recipe)">{{ recipe.name }} · 预览</button></details>
+        </aside>
       </template>
-    </el-dialog>
+    </main>
 
-    <!-- 发布配方对话框 -->
-    <el-dialog v-model="publishDialogVisible" title="发布配方" width="400px">
-      <el-form :model="publishForm">
-        <el-form-item label="配方名称">
-          <el-input v-model="publishForm.name"></el-input>
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="publishForm.description" type="textarea" :rows="3"></el-input>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="publishDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="publishRecipe">发布</el-button>
-      </template>
-    </el-dialog>
+    <section class="community-view" ref="communityContainer" v-show="currentView === 'community'" aria-label="社区配方">
+      <div class="community-heading"><div><p class="eyebrow">来自风景的灵感</p><h1>浏览社区配方</h1><p>先看效果与说明，再在自己的照片上尝试。</p></div><button @click="currentView = 'editor'">返回编辑器</button></div>
+      <label class="community-search">搜索配方<input v-model="communitySearch" @input="searchCommunity" placeholder="日落、雪景、通透…" type="search"></label>
+      <p role="status" v-if="communityLoading">正在加载配方…</p>
+      <div v-if="communityError" role="alert"><p>{{ communityError }}</p><button @click="fetchCommunity">重新加载</button></div>
+      <p class="community-empty" v-else-if="!communityLoading && !communityRecipes.length">暂无符合条件的配方。返回编辑器试试内置滤镜，或换个关键词。</p>
+      <div class="community-grid"><button class="community-card" v-for="recipe in communityRecipes" :key="recipe.id" @click="recipeDetail = recipe"><img v-if="recipe.cover_after" :src="recipe.cover_after" :alt="recipe.name" loading="lazy"><div><h2>{{ recipe.name }}</h2><p>{{ recipe.description }}</p><span>{{ recipe.author }}</span></div></button></div>
+    </section>
 
-    <!-- 配方预览对话框 -->
-    <el-dialog v-model="previewDialogVisible" title="配方预览" width="700px">
-      <div class="preview-content" v-if="previewRecipeData">
-        <div class="preview-images">
-          <div>
-            <div class="preview-label">原图</div>
-            <img :src="previewRecipeData.cover_before" class="preview-img">
-          </div>
-          <div>
-            <div class="preview-label">调色后</div>
-            <img :src="previewRecipeData.cover_after" class="preview-img">
-          </div>
-        </div>
-        <div class="preview-info">
-          <h3>{{ previewRecipeData.name }}</h3>
-          <p>{{ previewRecipeData.description }}</p>
-          <el-button type="primary" @click="applyCommunityRecipe(previewRecipeData)">一键套用</el-button>
-        </div>
-      </div>
-    </el-dialog>
+    <dialog ref="exportDialog" @cancel.prevent="!exporting && (exportOpen = false)" aria-labelledby="export-title">
+      <h2 id="export-title">导出照片</h2><p>从原图重新渲染，显示缩放不会降低导出尺寸。</p>
+      <fieldset :disabled="exporting"><label>格式 <select v-model="exportOptions.format"><option value="jpg">JPG</option><option value="png">PNG</option></select></label><label v-if="exportOptions.format === 'jpg'">质量 {{ exportOptions.quality }}%<input type="range" min="10" max="100" v-model.number="exportOptions.quality" aria-label="导出质量"></label><label>尺寸 <select v-model.number="exportOptions.scale" aria-label="导出尺寸"><option :value="1">完整尺寸</option><option :value="0.5">50% 尺寸</option><option :value="0.25">25% 尺寸</option></select></label><p class="export-size">{{ exportDimensions.width }} × {{ exportDimensions.height }} 像素</p></fieldset>
+      <p class="error" v-if="error" role="alert">{{ error }}</p><div class="actions"><button @click="exportOpen = false" :disabled="exporting">取消</button><button class="primary" @click="exportImage" :disabled="exporting">{{ exporting ? '正在生成…' : '下载照片' }}</button></div>
+    </dialog>
+    <dialog ref="recipeDialog" @cancel.prevent="recipeDetail = null" aria-labelledby="recipe-title"><template v-if="recipeDetail"><h2 id="recipe-title">{{ recipeDetail.name }}</h2><p>{{ recipeDetail.description }}</p><div class="sample-pair"><figure v-if="recipeDetail.cover_before"><img :src="recipeDetail.cover_before" alt="样板原图"><figcaption>样板原图</figcaption></figure><figure v-if="recipeDetail.cover_after"><img :src="recipeDetail.cover_after" alt="样板编辑后"><figcaption>样板编辑后</figcaption></figure></div><p class="small">不同照片的曝光和色彩会影响最终效果。预览更新配方中列出的参数，并保留其他调整。</p><div class="actions"><button @click="recipeDetail = null">关闭</button><button class="primary" @click="beginPreview(recipeDetail)" :disabled="!imageLoaded || cropOpen || exporting">在我的照片上预览</button></div><p v-if="!imageLoaded" class="small">请先返回编辑器载入照片。</p></template></dialog>
   </div>
-
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <script src="https://unpkg.com/element-plus"></script>
+  <noscript>请启用 JavaScript 后打开照片编辑器。</noscript>
+  <script src="vendor/vue.global.prod.js"></script>
+  <script src="editor-tools.js"></script>
+  <script src="editor-core.js"></script>
+  <script src="preview-renderer.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

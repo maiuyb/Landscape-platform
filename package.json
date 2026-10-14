@@ -1,0 +1,23 @@
+{
+  "name": "landscape-platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prepare": "node scripts/prepare-frontend.cjs",
+    "start": "node scripts/start.cjs",
+    "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs",
+    "test:browser": "node tests/editor-browser.cjs",
+    "test:e1": "node tests/editor-e1-browser.cjs",
+    "test:photos": "node scripts/fetch-test-photos.cjs",
+    "test:interaction": "node tests/editor-interaction.cjs",
+    "test:preview": "node tests/editor-preview-browser.cjs",
+    "test:e2": "node tests/editor-e2-browser.cjs",
+    "review:e2": "node scripts/review-e2-photos.cjs"
+  },
+  "dependencies": {
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "playwright": "1.64.0"
+  }
+}

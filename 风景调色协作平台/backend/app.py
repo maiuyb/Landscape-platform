@@ -6,16 +6,47 @@ import hashlib
 import base64
 import uuid
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, Request, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.exceptions import RequestEntityTooLarge
+
+class UploadRequest(Request):
+    """Close spooled parts even when a size limit interrupts multipart parsing."""
+    def _get_file_stream(self, *args, **kwargs):
+        stream = super()._get_file_stream(*args, **kwargs)
+        self.__dict__.setdefault('_upload_streams', []).append(stream)
+        return stream
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            for stream in self.__dict__.pop('_upload_streams', []):
+                stream.close()
+
 
 app = Flask(__name__)
+app.request_class = UploadRequest
 CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
 DB_PATH = os.path.join(BASE_DIR, 'recipes.db')
+FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), 'frontend')
+# Match the browser's 20 * 1024 * 1024 byte limit. Allow multipart overhead
+# separately so a file exactly at the limit is still accepted.
+MAX_UPLOAD_FILE_BYTES = 20 * 1024 * 1024
+MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_FILE_BYTES + 1024 * 1024
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Local frontend and API share one origin; the editor also works without a CDN.
+@app.route('/')
+def frontend_index():
+    return send_from_directory(FRONTEND_DIR, 'index.html')
+
+@app.route('/<path:filename>')
+def frontend_file(filename):
+    return send_from_directory(FRONTEND_DIR, filename)
 
 # ---------- 数据库初始化 ----------
 def init_db():
@@ -62,6 +93,10 @@ def json_ok(data, status=200):
 def json_error(msg, status=400):
     return jsonify({'error': msg}), status
 
+@app.errorhandler(RequestEntityTooLarge)
+def upload_too_large(error):
+    return json_error('上传文件或请求过大，单张图片最大 20MB，请重新选择图片。', 413)
+
 # ---------- 认证 ----------
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -101,6 +136,8 @@ def login():
 # ---------- 图片上传 ----------
 @app.route('/api/upload', methods=['POST'])
 def upload():
+    # Enforce the request limit before Flask parses or spools the multipart body.
+    request.max_content_length = MAX_UPLOAD_REQUEST_BYTES
     if 'file' not in request.files:
         return json_error('未找到文件')
     file = request.files['file']
@@ -109,6 +146,11 @@ def upload():
     ext = file.filename.rsplit('.', 1)[-1].lower()
     if ext not in ('jpg', 'jpeg', 'png', 'webp'):
         return json_error('仅支持 JPG/PNG/WebP 格式')
+    file.stream.seek(0, os.SEEK_END)
+    file_size = file.stream.tell()
+    file.stream.seek(0)
+    if file_size > MAX_UPLOAD_FILE_BYTES:
+        raise RequestEntityTooLarge()
     filename = f"{uuid.uuid4().hex}.{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     file.save(filepath)
@@ -123,6 +165,7 @@ def call_tongyi_qianwen(image_base64, diagnosis):
     if not DASHSCOPE_API_KEY:
         # 模拟返回配方
         return {
+            'demo': True,
             'recipes': [
                 {
                     'name': '通透自然',
@@ -300,8 +343,9 @@ def like_recipe(recipe_id):
     return json_error('配方不存在')
 
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', '5000'))
     print(f"启动风景调色协作平台后端...")
     print(f"上传目录: {UPLOAD_DIR}")
     print(f"数据库: {DB_PATH}")
-    print(f"访问地址: http://localhost:5000")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print(f"访问地址: http://localhost:{port}")
+    app.run(host='0.0.0.0', port=port, debug=True)

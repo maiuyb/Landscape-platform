@@ -1,0 +1,7 @@
+node_modules/
+.venv/
+风景调色协作平台/frontend/vendor/
+风景调色协作平台/backend/uploads/
+风景调色协作平台/backend/recipes.db
+__pycache__/
+test-results/

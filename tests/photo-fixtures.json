@@ -1,0 +1,42 @@
+[
+  {
+    "file": "alpine.jpg",
+    "title": "Fronalpstock big.jpg",
+    "author": "Hannes Röst",
+    "source": "https://commons.wikimedia.org/wiki/File:Fronalpstock_big.jpg",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "download": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/1280px-Fronalpstock_big.jpg",
+    "scenes": "Alpine panorama, vegetation, pale sky, distant haze and shadow"
+  },
+  {
+    "file": "sunset.jpg",
+    "title": "Devils Tower at sunset, Wyoming USA.jpg",
+    "author": "Silvanica1",
+    "source": "https://commons.wikimedia.org/wiki/File:Devils_Tower_at_sunset,_Wyoming_USA.jpg",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "download": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Devils_Tower_at_sunset%2C_Wyoming_USA.jpg/1280px-Devils_Tower_at_sunset%2C_Wyoming_USA.jpg",
+    "scenes": "Warm sunset, backlighting, dark foreground and fine vegetation"
+  },
+  {
+    "file": "night.jpg",
+    "title": "View from The Shard to the City at night",
+    "author": "Marathon",
+    "source": "https://commons.wikimedia.org/wiki/File:View_from_The_Shard_to_the_City_at_night_-_geograph.org.uk_-_6361916.jpg",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/",
+    "download": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/74/View_from_The_Shard_to_the_City_at_night_-_geograph.org.uk_-_6361916.jpg/1280px-View_from_The_Shard_to_the_City_at_night_-_geograph.org.uk_-_6361916.jpg",
+    "scenes": "City night, bright lights, deep shadows, colored lights and ISO 1000"
+  },
+  {
+    "file": "snow.jpg",
+    "title": "Snow covered gulmarg landscape 3.jpg",
+    "author": "Gayatri Priyadarshini",
+    "source": "https://commons.wikimedia.org/wiki/File:Snow_covered_gulmarg_landscape_3.jpg",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "download": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/Snow_covered_gulmarg_landscape_3.jpg/1280px-Snow_covered_gulmarg_landscape_3.jpg",
+    "scenes": "Bright snow, shaded snow, forest and fine branches"
+  }
+]

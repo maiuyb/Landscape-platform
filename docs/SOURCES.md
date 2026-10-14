@@ -3,6 +3,8 @@
 整理日期：2026-10-09（中国标准时间）  
 说明：本文件保留可访问入口、官方文档链接和针对本项目的摘要笔记。网页内容会变化；链接指向原始页面，不复制整页文字或图片。
 
+2026-10-14 接续：当前图片编辑以 Luminar Neo 为主要参照，Fotor 补充网页操作与 AI 入口；前五节保留初期资料，最新依据与观察边界见第 6 节和 [EDITOR-BASELINE.md](EDITOR-BASELINE.md)。
+
 ## 1. 网页端轻量编辑器
 
 ### Fotor
@@ -119,3 +121,39 @@
 - 原型目录：temp 分支的 风景调色协作平台/backend 和 frontend。
 - 竞品初步体验反馈：项目成员体验 Pixlr、Photopea、Canva、Fotor 后认为前两者较复杂，Canva 更偏平面设计，Fotor 与本项目设想较接近；一位摄影爱好者提到 Lightroom 和像素蛋糕为常用工具。这些是团队产品方向的输入，不等于正式用户研究发现。
 - 当前开发以 [PRD.md](PRD.md) 为主需求基线；[DECISION-INPUT.md](DECISION-INPUT.md) 记录两位成员共同确认的方向；[UX-RESEARCH.md](UX-RESEARCH.md) 记录后续如何验证用户任务与交互。
+
+## 6. 当前编辑基线参考（2026-10-14）
+
+### Luminar Neo：主要编辑参照
+
+- 用户提供四张本机 1.22.1 截图，覆盖开发、颜色/HSL、细节附加控制、样板目录。用户补充 HSL 下拉包括色相、饱和度、亮度。截图是本机版本布局的直接依据。
+- [Skylum Develop 工具说明](https://support.skylum.com/editing-tools/essential-tools/develop-raw-develop)：用于核对明暗方向、白色/黑色和控制类别，不照搬内部算法。
+- [Skylum Color 工具说明](https://support.skylum.com/editing-tools/essential-tools/color)：用于核对颜色控制与 HSL 模式。
+- [Skylum 样板浏览与应用](https://support.skylum.com/presets/browsing-and-applying-presets)：作为样板目录参考。本项目保留预览/应用/取消及当前构图，自行确定参数更新规则。
+- 官方网页可能描述更新版本；以用户截图确定 1.22.1 观察范围，不把网页中的所有新工具纳入本项目。
+- 已只读检查 `H:\Luminar Neo  1.22.1最新版本，支持win系统\App\Luminar Neo\Data\PresetPacks\Collections`：22 个内置集合配置，样板目录内可读取 `template.lmps` JSON 和缩略图，部分效果依赖 LUT、天空图或私有处理模块。轻快风景、阴天、日落、都市灯光有对应集合；目录可读不代表所有模板依赖齐全或可直接执行。
+- 文件检查可用于理解组织和参数目标；团队用自己的工具调校样板并记录素材来源，不承诺复现 Luminar 引擎效果，也没有将其文件复制进产品。
+
+### Fotor：展开控制与网页行为补充
+
+- 实际观察入口：[基础编辑页面](https://www.fotor.com/photo-editor-app/editor/basic)。此前未登录、使用内置风景示例，展开检查了基础、色阶、颜色、结构、降噪、暗角、颗粒、裁剪、旋转、调整尺寸、HSL、曲线，共 12 个面板。
+- 观察到基础亮度/对比度/饱和度、曝光/高光/阴影、色温/色调、明度/颜色降噪，以及 HSL 和曲线等小参数。裁剪包含比例、宽高、比例锁定、手柄与三分线；部分操作有应用/取消。
+- 这些记录证明面板及控件可见，不证明所有效果已逐项验证。未完成全部 AI、会员导出限制或画质对比；后续 AI 调用参考仍需具体观察。
+- 观察截图保留在被忽略的 `test-results/references/fotor-basic-2026-10-14.png`，不是产品素材或必须提交的资源。
+
+### 当前主次
+
+Luminar 决定主要编辑控制与信息组织，Fotor 补充网页流程；Lightroom 按需辅助效果实现，像素蛋糕仅作 AI 能力边界参考。以上为用户选择及竞品观察，不替代真实照片评估或新手任务测试。
+
+### E1 真实照片测试资料
+
+使用 Wikimedia Commons 文件页面核对作者和许可，再下载页面提供的 1280 像素缩略图。四张照片及下载/许可地址记录在 [tests/photo-fixtures.json](../tests/photo-fixtures.json)，分别为 Hannes Röst 的 Fronalpstock、Silvanica1 的 Devils Tower 日落、Marathon 的伦敦夜景和 Gayatri Priyadarshini 的 Gulmarg 雪景。测试只在本地处理；对比页注明修改、来源和图片许可，不作为应用内样板素材。检查结论及性能范围见 DEVELOPMENT-STATUS.md 第 9 节。
+
+### E2 技术参考及照片检查
+
+- [OpenCV GrayworldWB](https://docs.opencv.org/4.x/d7/d71/classcv_1_1xphoto_1_1GrayworldWB.html)：通道均值及按饱和度选像素的传统白平衡参考。本项目自行实现近中性优先、暗部/截断排除和受约束的增益；不使用厂商私有算法。
+- [OpenCV SimpleWB](https://docs.opencv.org/4.x/d1/d8b/classcv_1_1xphoto_1_1SimpleWB.html)：比较独立通道分位数拉伸方法；本次没有选用，以免将通道拉伸误当作中性点取样。
+- [SciPy PchipInterpolator](https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PchipInterpolator.html)：形状保持分段三次插值及斜率计算参考。本项目 JavaScript 曲线采用相应方法限制过冲。
+- [OpenCV 直方图教程](https://docs.opencv.org/4.x/d1/db7/tutorial_py_histogram_begins.html)：256 档分布的技术参考；本项目亮度/RGB 图由当前预览像素计算，透明像素不统计。
+
+E2 复用上述四张真实照片，分别检查 HSL、曲线、自动曝光、自动白平衡及组合设置；参数、来源、许可、变体与工作区截图在本地 `test-results/e2/`。全部在本地处理，不向 AI 服务上传，也不复制 Luminar 素材。菜单选择与新的基础滤镜流程依据用户反馈；不是重新观察竞品所得结论。

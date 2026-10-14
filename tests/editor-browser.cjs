@@ -1,0 +1,216 @@
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const baseURL = process.env.HMI_TEST_URL || 'http://127.0.0.1:5050';
+const results = path.resolve(__dirname, '../test-results');
+
+(async () => {
+  await fs.mkdir(results, { recursive: true });
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  const page = await context.newPage();
+  const errors = [], externalRequests = [], checks = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('request', req => { if (!req.url().startsWith(baseURL) && /^https?:/.test(req.url())) externalRequests.push(req.url()); });
+  const button = name => page.getByRole('button', { name, exact: true });
+  const flush = async () => { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); await page.waitForFunction(() => { const canvas = document.querySelector('#mainCanvas'); return !canvas || canvas.dataset.previewStatus === 'ready'; }); };
+  const pixels = () => page.locator('#mainCanvas').evaluate(c => c.toDataURL());
+  const dimensions = () => page.locator('#mainCanvas').evaluate(c => [c.width, c.height]);
+  const setRange = async (selector, value, values = []) => {
+    await page.locator(selector).evaluate((input, { value, values }) => {
+      for (const next of [...values, value]) { input.value = next; input.dispatchEvent(new Event('input', { bubbles: true })); }
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, { value, values });
+    await flush();
+  };
+  try {
+    await page.goto(baseURL);
+    await page.getByRole('heading', { name: /让照片更接近/ }).waitFor();
+    await page.screenshot({ path: path.join(results, 'desktop-empty.png') });
+    const png = Buffer.from(await page.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 2400; c.height = 1600;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#5078a0'; ctx.fillRect(0, 0, 1200, 800);
+      ctx.fillStyle = '#9b6a4f'; ctx.fillRect(1200, 0, 1200, 800);
+      ctx.fillStyle = '#508064'; ctx.fillRect(0, 800, 1200, 800);
+      ctx.fillStyle = '#bab193'; ctx.fillRect(1200, 800, 1200, 800);
+      return c.toDataURL('image/png').split(',')[1];
+    }), 'base64');
+    const upload = data => page.locator('#image-input').setInputFiles(data);
+    await upload({ name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('invalid') });
+    await page.getByRole('alert').filter({ hasText: /仅支持/ }).waitFor();
+    await upload({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('broken image') });
+    await page.getByRole('alert').filter({ hasText: /读取失败/ }).waitFor();
+    assert.equal(await page.locator('#mainCanvas').count(), 0);
+    await upload({ name: 'test-landscape.png', mimeType: 'image/png', buffer: png });
+    await page.getByRole('status').filter({ hasText: /已载入/ }).waitFor(); await flush();
+    assert.deepEqual(await dimensions(), [1200, 800]);
+    assert.equal(await button('撤销').isEnabled(), false);
+    const original = await pixels();
+    checks.push('invalid/corrupt import recovers; first valid import immediately mounts and paints');
+
+    await page.getByText('更多光线控制', { exact: true }).click();
+    await setRange('#brightness', 25, [5, 10, 15, 20]);
+    assert.notEqual(await pixels(), original);
+    await button('撤销').click(); await flush();
+    assert.equal(await page.locator('#brightness').inputValue(), '0'); assert.equal(await pixels(), original);
+    assert.equal(await button('撤销').isEnabled(), false);
+    await button('重做').click(); await flush(); assert.equal(await page.locator('#brightness').inputValue(), '25');
+    const edited = await pixels();
+    checks.push('one continuous range gesture produces one undo; redo restores value and pixels');
+
+    await button('滑杆对比').click(); await setRange('.compare-control input', 35);
+    assert.match(await page.locator('#compareCanvas').getAttribute('style'), /65%/);
+    assert.equal(await pixels(), edited);
+    await button('原图').click(); assert.equal(await pixels(), edited);
+    await button('编辑后').click();
+    await button('胶片').hover(); await flush(); assert.notEqual(await pixels(), edited);
+    assert.equal(await page.locator('#brightness').inputValue(), '25');
+    assert.equal(await button('导出照片').isEnabled(), true);
+    await button('冷调').hover(); await flush();
+    await page.locator('#mainCanvas').hover(); await flush(); assert.equal(await pixels(), edited);
+    await button('胶片').click(); await flush();
+    assert.equal(await button('胶片').getAttribute('aria-pressed'), 'true');
+    await button('撤销').click(); await flush(); assert.equal(await pixels(), edited);
+    checks.push('comparison never commits; filter hover/leave/click preserves document and is undoable');
+
+    await page.getByText('构图与方向', { exact: true }).click();
+    await button('右转 90°').click(); await flush(); assert.deepEqual(await dimensions(), [800, 1200]);
+    const rotated = await pixels();
+    await setRange('#contrast', 15); assert.deepEqual(await dimensions(), [800, 1200]);
+    await button('撤销').click(); await flush(); assert.equal(await pixels(), rotated);
+    await button('水平翻转').click(); await flush(); assert.notEqual(await pixels(), rotated);
+    await button('撤销').click(); await flush(); assert.equal(await pixels(), rotated);
+    await page.getByRole('spinbutton', { name: '旋转角度' }).fill('15');
+    await button('应用旋转').click(); await flush(); assert.ok((await dimensions())[0] > 800);
+    await button('撤销').click(); await flush(); assert.equal(await pixels(), rotated);
+    checks.push('90-degree/free rotation and flip survive subsequent color edits and undo');
+
+    await button('裁剪照片').click(); await button('取消裁剪').click(); await flush(); assert.equal(await pixels(), rotated);
+    await button('裁剪照片').click();
+    await page.locator('.crop-bar select').selectOption('1');
+    await page.locator('.precision-crop > summary').click();
+    await page.getByRole('spinbutton', { name: '裁剪宽度像素', exact: true }).fill('800');
+    await page.getByRole('spinbutton', { name: '裁剪宽度像素', exact: true }).press('Enter');
+    await button('应用裁剪').click(); await flush(); assert.deepEqual(await dimensions(), [400, 400]);
+    const cropped = await pixels();
+    await page.locator('#color-group > summary').click();
+    await setRange('#saturation', -30); assert.deepEqual(await dimensions(), [400, 400]);
+    await button('撤销').click(); await flush(); assert.equal(await pixels(), cropped);
+    await page.setViewportSize({ width: 980, height: 700 }); await flush(); assert.equal(await pixels(), cropped);
+    await button('撤销').click(); await flush(); assert.equal(await pixels(), rotated);
+    await button('重做').click(); await flush(); assert.equal(await pixels(), cropped);
+    await page.setViewportSize({ width: 1440, height: 900 }); await flush();
+    checks.push('visible fixed-ratio crop is cancellable; resizing changes neither pixels nor history');
+
+    await button('导出照片').click();
+    await page.locator('dialog select').first().selectOption('png');
+    assert.match(await page.locator('.export-size').innerText(), /800 × 800/);
+    let downloadPromise = page.waitForEvent('download'); await button('下载照片').click();
+    const croppedDownload = await downloadPromise;
+    const croppedBuffer = await fs.readFile(await croppedDownload.path());
+    assert.deepEqual([croppedBuffer.readUInt32BE(16), croppedBuffer.readUInt32BE(20)], [800, 800]);
+    await button('重置').click(); await flush(); assert.equal(await pixels(), original);
+    await button('导出照片').click();
+    downloadPromise = page.waitForEvent('download'); await button('下载照片').click();
+    const fullDownload = await downloadPromise, fullBuffer = await fs.readFile(await fullDownload.path());
+    assert.deepEqual([fullBuffer.readUInt32BE(16), fullBuffer.readUInt32BE(20)], [2400, 1600]);
+    await fullDownload.saveAs(path.join(results, 'full-resolution.png'));
+    await button('导出照片').click();
+    await page.locator('dialog select').first().selectOption('jpg');
+    await page.getByRole('combobox', { name: '导出尺寸' }).selectOption('0.5');
+    downloadPromise = page.waitForEvent('download'); await button('下载照片').click();
+    const jpg = await fs.readFile(await (await downloadPromise).path());
+    assert.deepEqual(await page.evaluate(async base64 => {
+      const image = new Image(); image.src = `data:image/jpeg;base64,${base64}`; await image.decode(); return [image.naturalWidth, image.naturalHeight];
+    }, jpg.toString('base64')), [1200, 800]);
+    checks.push('downloaded PNG/JPG dimensions prove exports use original pixels, with crop and scale options');
+
+    await button('AI 建议').click();
+    await button('获取 AI 建议').click();
+    await page.getByText(/演示方案：未连接云端模型/).waitFor(); await flush();
+    assert.equal(await pixels(), original);
+    assert.equal(await page.locator('#brightness').isVisible(), true);
+    await page.locator('.proposal-list button').first().click(); await flush();
+    await button('取消预览').click(); await flush(); assert.equal(await pixels(), original);
+    await button('撤销').click(); await flush();
+    assert.equal(await page.locator('.proposal-list button').count(), 0);
+    await button('重做').click(); await flush(); assert.equal(await pixels(), original);
+    await page.route('**/api/ai/recommend', route => route.fulfill({ status: 503, json: { error: '测试：服务暂不可用' } }));
+    await button('获取 AI 建议').click(); await page.getByText(/获取失败：测试/).waitFor(); assert.equal(await pixels(), original);
+    await page.unroute('**/api/ai/recommend');
+    checks.push('AI/manual coexist; thumbnails are pure; undo invalidates stale suggestions; failed request keeps work');
+
+    let resolveAI;
+    const delayed = new Promise(resolve => { resolveAI = resolve; });
+    await page.route('**/api/ai/recommend', async route => { await delayed; await route.fulfill({ json: { recipes: [{ name: '旧版本', steps: [{ type: 'brightness', params: { value: 60 } }] }] } }); });
+    await button('获取 AI 建议').click(); await page.getByText('正在分析当前版本…', { exact: true }).waitFor();
+    await setRange('#brightness', 12); resolveAI();
+    await page.getByText(/分析期间编辑已改变/).waitFor();
+    assert.equal(await page.locator('.proposal-list button').count(), 0);
+    await page.unroute('**/api/ai/recommend');
+    await button('收起 AI').click();
+    checks.push('late AI response cannot apply a plan based on an outdated edit');
+
+    await button('浏览社区').click(); await page.getByText(/暂无符合条件/).waitFor();
+    const fixture = Array.from({ length: 30 }, (_, i) => ({ id: i, name: `测试社区 ${i}`, author: '测试作者', description: '仅用于自动化验证', cover_after: `data:image/png;base64,${png.toString('base64')}`, steps: JSON.stringify([{ type: 'temperature', params: { value: 20 } }]) }));
+    await page.route('**/api/recipes?*', route => route.fulfill({ json: { recipes: fixture } }));
+    await page.locator('.community-search input').fill('测试');
+    await page.locator('.community-card').first().waitFor();
+    await page.locator('.community-view').evaluate(el => { el.scrollTop = 450; });
+    const scroll = await page.locator('.community-view').evaluate(el => el.scrollTop);
+    await button('返回编辑器').click(); await flush(); const beforeCommunity = await pixels();
+    await button('浏览社区').click(); await flush();
+    assert.equal(await page.locator('.community-search input').inputValue(), '测试');
+    assert.equal(await page.locator('.community-view').evaluate(el => el.scrollTop), scroll);
+    await page.locator('.community-card').first().click(); await button('在我的照片上预览').click(); await flush();
+    await button('取消预览').click(); await flush(); assert.equal(await pixels(), beforeCommunity);
+    checks.push('community search/scroll and editor document survive navigation and proposal cancellation (fixture data)');
+
+    const recipe = { version: 1, steps: [{ type: 'tint', params: { value: 18 } }, { type: 'unknown-tool', params: {} }] };
+    await page.getByLabel('导入配方', { exact: true }).setInputFiles({ name: 'recipe.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(recipe)) });
+    await page.getByRole('status').filter({ hasText: /已忽略/ }).waitFor(); await button('应用到照片').click();
+    assert.equal(await page.locator('#color-group').getAttribute('open') !== null, true);
+    assert.equal(await page.locator('#tint').inputValue(), '18');
+    await upload({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('broken') });
+    await page.getByRole('alert').filter({ hasText: /读取失败/ }).waitFor();
+    assert.equal(await page.locator('#tint').inputValue(), '18');
+    await page.locator('#brightness').focus(); await page.keyboard.press('ArrowRight'); await page.keyboard.press('Tab'); await flush();
+    assert.equal(await page.locator('#brightness').inputValue(), '13');
+    await button('撤销').click(); await flush(); assert.equal(await page.locator('#brightness').inputValue(), '12');
+    checks.push('unknown recipe steps warn; invalid replacement preserves document; keyboard slider change is undoable');
+
+    await page.screenshot({ path: path.join(results, 'desktop-editor.png') });
+    await upload({ name: 'second.png', mimeType: 'image/png', buffer: png });
+    await page.getByRole('status').filter({ hasText: /已载入 second/ }).waitFor(); await flush();
+    assert.equal(await button('撤销').isEnabled(), false); assert.equal(await page.locator('#brightness').inputValue(), '0');
+    checks.push('replacement photo starts a new document without leaking previous history');
+    assert.deepEqual(errors, []); assert.deepEqual(externalRequests, []);
+
+    const mobileContext = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+    const mobile = await mobileContext.newPage(); mobile.on('pageerror', e => errors.push(e.message));
+    await mobile.goto(baseURL);
+    await mobile.locator('#image-input').setInputFiles({ name: 'mobile.png', mimeType: 'image/png', buffer: png });
+    await mobile.getByRole('status').filter({ hasText: /已载入/ }).waitFor();
+    await mobile.getByRole('button', { name: '原图', exact: true }).click();
+    await mobile.getByRole('button', { name: '编辑后', exact: true }).click();
+    assert.equal(await mobile.getByRole('button', { name: '滑杆对比' }).isVisible(), false);
+    assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+    await mobile.getByText('更多光线控制', { exact: true }).click();
+    await mobile.locator('#brightness').scrollIntoViewIfNeeded(); await mobile.locator('#brightness').focus(); await mobile.keyboard.press('ArrowRight'); await mobile.keyboard.press('Tab');
+    await mobile.getByRole('button', { name: '导出照片' }).click();
+    assert.equal(await mobile.locator('dialog[open]').count(), 1);
+    await mobile.getByRole('button', { name: '取消', exact: true }).click();
+    await mobile.screenshot({ path: path.join(results, 'mobile-editor.png'), fullPage: true });
+    assert.deepEqual(errors, []);
+    checks.push('375px mobile layout has no horizontal overflow and comparison/parameters/export remain reachable');
+    await fs.writeFile(path.join(results, 'browser-report.json'), JSON.stringify({ checks, errors, externalRequests, browser: browser.version(), baseURL }, null, 2));
+    console.log(`${checks.length} browser scenario groups passed; no page errors or external requests.`);
+    checks.forEach((check, index) => console.log(`${index + 1}. ${check}`));
+    await mobileContext.close();
+  } catch (e) {
+    await page.screenshot({ path: path.join(results, 'failure.png'), fullPage: true }).catch(() => {});
+    throw e;
+  } finally { await context.close(); await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
