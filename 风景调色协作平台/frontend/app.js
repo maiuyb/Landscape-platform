@@ -1,5 +1,8 @@
 const { createApp, ref, shallowRef, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } = Vue;
 const Core = EditorCore;
+const Presets = EditorPresets;
+const AI = EditorAI;
+const Community = EditorCommunity;
 
 createApp({
   components: {
@@ -76,14 +79,60 @@ createApp({
     let curveDrag = null;
     const preview = ref(null), aiLoading = ref(false), aiResults = ref([]), aiStatus = ref('');
     const panelTab=ref('edit'),panelScroller=ref(null),aiDraft=ref(''),aiInput=ref(null),aiMessages=ref([]),aiUnread=ref(false),aiDemo=ref(false),aiAppliedName=ref(''),compareGroup=ref(null);
+    let aiContext = [];
+    const aiConnection=ref('checking');
     const panelTabs=[{key:'edit',label:'编辑'},{key:'presets',label:'预设'},{key:'ai',label:'AI 助手'}],panelScroll={edit:0,presets:0,ai:0};
-    const presetCategory=ref('all'),presetCategories=[{key:'all',label:'全部'},{key:'natural',label:'自然'},{key:'warm',label:'暖色'},{key:'film',label:'胶片'},{key:'cool',label:'冷调'},{key:'mono',label:'黑白'}];
-    const presetItems=Core.filters.map((f,i)=>({...f,category:['natural','warm','film','cool','mono'][i],recipe:{version:6,steps:[{type:'filter',params:{name:f.name,strength:100}}]}}));
-    const visiblePresets=computed(()=>presetItems.filter(f=>presetCategory.value==='all'||f.category===presetCategory.value));
+    const presetCategory=ref('all'),presetSearch=ref(''),presetFavorites=ref([]);
+    try { const saved=JSON.parse(localStorage.getItem('landscape-preset-favorites')||'[]');if(Array.isArray(saved))presetFavorites.value=saved.filter(id=>Presets.byId.has(id)); } catch {}
+    const presetCategories=[{key:'all',label:'全部'},...Presets.categories,{key:'favorites',label:'我的收藏'}];
+    const legacyPresets=Core.filters.map(f=>({...f,recipe:{version:6,steps:[{type:'filter',params:{name:f.name,strength:100}}]}}));
+    const visiblePresets=computed(()=>Presets.catalog.filter(p=>(presetCategory.value==='all'||p.category===presetCategory.value||(presetCategory.value==='favorites'&&presetFavorites.value.includes(p.id)))&&(!presetSearch.value.trim()||[p.label,p.description,p.tags,Presets.categories.find(c=>c.key===p.category)?.label].join(' ').includes(presetSearch.value.trim()))));
+    const activePreset=computed(()=>Presets.byId.get(state.value.presetSession?.id)||null);
+    const presetIntro=computed(()=>Presets.categories.find(c=>c.key===presetCategory.value)?.description||(presetCategory.value==='favorites'?'把喜欢的风格放在一起，下次更容易找到。':'六种风景方向，试试看哪一种更接近你的感觉。'));
+    function togglePresetFavorite(id){const ids=presetFavorites.value;presetFavorites.value=ids.includes(id)?ids.filter(v=>v!==id):[...ids,id];try{localStorage.setItem('landscape-preset-favorites',JSON.stringify(presetFavorites.value));}catch{notify('本次收藏已保留；浏览器未允许保存到下次打开。');}}
+    function applyPreset(preset){
+      if(locked.value)return;
+      if(activePreset.value?.id===preset.id)return removePreset();
+      state.value=Presets.apply(state.value,preset.id);commit();notify(`已应用「${preset.label}」，强度和参数都可以继续调整。`);
+    }
+    function setPresetAmount(amount){if(locked.value||!activePreset.value)return;beginAdjustment();state.value=Presets.setAmount(state.value,amount);}
+    function resetPresetAmount(){setPresetAmount(100);commit();}
+    function removePreset(){if(locked.value)return;state.value=Presets.remove(state.value);commit();notify('已移除预设，保留曝光、白平衡和手动微调。');}
     const thumbnailTargets=new Map();let thumbnailTimer=null,thumbnailGeneration=0;
     function registerThumbnail(key,el){if(el)thumbnailTargets.set(key,el);else thumbnailTargets.delete(key);}
     function drawThumbnail(key,result){const target=thumbnailTargets.get(key);if(!target)return;draw(target,result);target.dataset.thumbnailStatus='ready';}
-    function requestThumbnails(){clearTimeout(thumbnailTimer);const generation=++thumbnailGeneration;thumbnailTimer=setTimeout(async()=>{if(!sourcePreview||dragging||panelTab.value==='edit')return;const items=panelTab.value==='presets'?visiblePresets.value.map(f=>({key:'preset-'+f.name,recipe:f.recipe})):aiResults.value.map((recipe,i)=>({key:'ai-'+i,recipe}));if(!items.length)return;for(const item of items){const target=thumbnailTargets.get(item.key);if(target)target.dataset.thumbnailStatus='pending';}const snapshot=Core.clone(state.value);if(renderer){renderer.requestThumbnails(snapshot,items,generation);return;}for(const item of items){await new Promise(requestAnimationFrame);if(generation!==thumbnailGeneration)return;try{const c=Core.render(sourcePreview,Core.recipeState(snapshot,item.recipe).state,{maxSide:240,sourceScale:sourcePreview.width/sourceImage.value.naturalWidth,sourceSize:{width:sourceImage.value.naturalWidth,height:sourceImage.value.naturalHeight}});drawThumbnail(item.key,c);}catch{}}},100);}
+    function failThumbnail(key,message){const target=thumbnailTargets.get(key);if(!target)return;target.dataset.thumbnailStatus='error';target.dataset.thumbnailError=message;if(target.nextElementSibling)target.nextElementSibling.textContent='暂时无法预览';}
+    function requestThumbnails() {
+      clearTimeout(thumbnailTimer);
+      const generation=++thumbnailGeneration;
+      thumbnailTimer=setTimeout(async()=>{
+        if(!sourcePreview||dragging||panelTab.value==='edit')return;
+        const candidates=panelTab.value==='presets'
+          ? [...visiblePresets.value.map(p=>({key:'preset-'+p.id,presetId:p.id})),...legacyPresets.map(f=>({key:'preset-'+f.name,recipe:f.recipe,legacy:true}))]
+          : aiResults.value.map((recipe,i)=>({key:'ai-'+i,recipe}));
+        const items=candidates.filter(item=>{
+          const target=thumbnailTargets.get(item.key);
+          return target&&!target.closest('details:not([open])');
+        });
+        if(!items.length)return;
+        for(const item of items){
+          const target=thumbnailTargets.get(item.key);
+          target.dataset.thumbnailStatus='pending';delete target.dataset.thumbnailError;
+          if(target.nextElementSibling)target.nextElementSibling.textContent='更新预览…';
+        }
+        const snapshot=Core.clone(state.value);
+        if(renderer){renderer.requestThumbnails(snapshot,items,generation);return;}
+        for(const item of items){
+          await new Promise(requestAnimationFrame);
+          if(generation!==thumbnailGeneration)return;
+          try{
+            const next=item.presetId?Presets.apply(snapshot,item.presetId):Core.recipeState(item.legacy?Presets.remove(snapshot):snapshot,item.recipe).state;
+            const canvas=Core.render(sourcePreview,next,{maxSide:240,sourceScale:sourcePreview.width/sourceImage.value.naturalWidth,sourceSize:{width:sourceImage.value.naturalWidth,height:sourceImage.value.naturalHeight}});
+            drawThumbnail(item.key,canvas);
+          }catch(error){failThumbnail(item.key,error.message);}
+        }
+      },100);
+    }
     async function switchPanel(key,focus=false){
       if(!panelTabs.some(t=>t.key===key)||exporting.value)return;
       if(key===panelTab.value){if(focus&&key==='ai'){await nextTick();aiInput.value?.focus({preventScroll:true});}return;}
@@ -103,7 +152,27 @@ createApp({
     function holdGroup(key,event){if(locked.value||!groupAdjusted.value[key])return;hoverFilter.value=null;compareMode.value='edited';compareGroup.value=key;if(event?.pointerId!==undefined)event.currentTarget.setPointerCapture(event.pointerId);}
     function resetToolGroup(key){const next=withoutGroup(state.value,key);state.value=next;if(key==='vignette')vignetteDirection.value='dark';commit();}
     function proposalSummary(recipe){try{const next=Core.recipeState(state.value,recipe).state,parts=[];for(const c of Core.controls)if(next.adjustments[c.key]!==state.value.adjustments[c.key])parts.push(`${c.label} ${Number(next.adjustments[c.key]).toFixed(c.key==='exposure'?2:0)}${c.unit?' '+c.unit:''}`);if(next.filter!==state.value.filter)parts.push(next.filter?'风格 · '+(Core.filters.find(f=>f.name===next.filter)?.label||next.filter):'移除风格');return parts.join(' · ')||recipe.description||'保留当前设置，可先预览比较';}catch{return'配方暂时无法读取';}}
-    async function locateProposal(recipe){let steps;try{steps=typeof recipe.steps==='string'?JSON.parse(recipe.steps):recipe.steps;}catch{return fail('此方案的工具列表无法读取，请尝试其他方案。');}const key=steps?.find(s=>Core.controls.some(c=>c.key===s.type))?.type||'exposure';await switchPanel('edit');const el=document.getElementById(key);if(el){for(let p=el;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;await nextTick();el.scrollIntoView({block:'center'});el.focus({preventScroll:true});}}
+    async function locateProposal(recipe) {
+      let target='exposure',mode=null;
+      try {
+        const next=Core.recipeState(state.value,recipe).state;
+        const basic=Core.controls.find(c=>next.adjustments[c.key]!==state.value.adjustments[c.key]);
+        const detail=Core.detail.controls.find(c=>next.detail[c.key]!==state.value.detail[c.key]);
+        const effect=Core.effects.controls.find(c=>next.effects[c.key]!==state.value.effects[c.key]);
+        const band=Core.tools.bands.find(b=>JSON.stringify(next.hsl[b.key])!==JSON.stringify(state.value.hsl[b.key]));
+        const calibration=calibrationControls.find(c=>next.effects.calibration[c.band][c.field]!==state.value.effects.calibration[c.band][c.field]);
+        if(basic)target=basic.key;
+        else if(detail)target=detail.key;
+        else if(effect)target='effect-'+effect.key;
+        else if(next.effects.vignette.amount!==state.value.effects.vignette.amount)target='vignette-amount';
+        else if(band){target='hsl-'+band.key;mode=['hue','saturation','luminance'].find(k=>next.hsl[band.key][k]!==state.value.hsl[band.key][k]);}
+        else if(calibration)target=calibration.key;
+      } catch { return fail('此方案的工具列表无法读取，请尝试其他方案。'); }
+      if(mode)hslMode.value=mode;
+      await switchPanel('edit');
+      const el=document.getElementById(target);
+      if(el){for(let p=el;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;await nextTick();el.scrollIntoView({block:'center'});el.focus({preventScroll:true});}
+    }
     const galleryLoading = ref(false), galleryResults = ref([]);
     const compareMode = ref('edited'), sliderPos = ref(50), zoom = ref(100);
     const viewport = reactive({ width: 600, height: 400 });
@@ -130,16 +199,19 @@ createApp({
     const rotationAngle = ref(0), exportOpen = ref(false), exporting = ref(false);
     const exportOptions = reactive({ format: 'jpg', quality: 92, scale: 1 });
     const communitySearch = ref(''), communityRecipes = ref([]), communityLoading = ref(false), communityError = ref('');
-    const recipeDetail = ref(null), exportDialog = ref(null), recipeDialog = ref(null);
+    const recipeDetail = ref(null), recipeDetailLoading=ref(false), recipeDetailError=ref('');
+    let recipeDetailVersion=0;
+    const exportDialog = ref(null), recipeDialog = ref(null);
     watch(exportOpen, async open => { await nextTick(); if (open) exportDialog.value.showModal(); else exportDialog.value.close(); });
-    watch(recipeDetail, async recipe => { await nextTick(); if (recipe) recipeDialog.value.showModal(); else recipeDialog.value.close(); });
+    watch(recipeDetail, async recipe => { await nextTick(); if (recipe) {if(!recipeDialog.value.open)recipeDialog.value.showModal();} else if(recipeDialog.value.open)recipeDialog.value.close(); });
     let communityScroll = 0, searchTimer = null, communityVersion = 0, communityFetched = false;
     const previewSize = reactive({ width: 1, height: 1 });
     const canUndo = computed(() => { historyVersion.value; return history.canUndo; });
     const canRedo = computed(() => { historyVersion.value; return history.canRedo; });
     const hoveredState = computed(() => {
       if (!hoverFilter.value) return null;
-      const next=Core.clone(state.value);next.filter=hoverFilter.value.name;next.filterStrength=100;return next;
+      if(hoverFilter.value.id)return Presets.apply(state.value,hoverFilter.value.id);
+      const next=state.value.presetSession?Presets.remove(state.value):Core.clone(state.value);delete next.presetSession;next.filter=hoverFilter.value.name;next.filterStrength=100;return next;
     });
     const legacyBalanceValues = computed(()=>state.value.whiteBalance.model!=='relative'&&state.value.adjustments.temperature===0&&state.value.adjustments.tint===0&&state.value.whiteBalance.gains.some(v=>v!==1)?Core.tools.whiteBalanceValues(state.value.whiteBalance.gains):null);
     const colorControls = computed(()=>Core.controls.filter(c=>c.group==='color').map(c=>(state.value.whiteBalance.model==='relative'||legacyBalanceValues.value)&&['temperature','tint'].includes(c.key)?{...c,step:.1,precision:2}:c));
@@ -214,7 +286,7 @@ createApp({
             renderer = null;
             notify('已切换兼容预览方式，可以继续编辑。'); schedulePaint();requestThumbnails();
           }
-          ,onThumbnails(result){if(result.generation!==thumbnailGeneration)return;for(const item of result.items)drawThumbnail(item.key,item.image);}
+          ,onThumbnails(result){if(result.generation!==thumbnailGeneration)return;for(const item of result.items)drawThumbnail(item.key,item.image);for(const item of result.errors||[])failThumbnail(item.key,item.message);}
         });
         renderer = owner;
       } catch { renderer = null; }
@@ -248,7 +320,7 @@ createApp({
     watch([inspectorOpen,inspectorPosition],schedulePaint,{deep:true,flush:'post'});
     watch([maskId,maskEditing,showMask],schedulePaint,{flush:'post'});
     watch(selectedMask,m=>{if(!m){maskEditing.value=false;maskDrag=null;}});
-    watch([state,presetCategory,aiResults],requestThumbnails,{deep:true,flush:'post'});
+    watch([state,presetCategory,presetSearch,presetFavorites,aiResults],requestThumbnails,{deep:true,flush:'post'});
     watch(aiMessages,async()=>{if(panelTab.value!=='ai')return;await nextTick();const log=document.querySelector('.ai-conversation');if(log)log.scrollTop=log.scrollHeight;},{deep:true});
     function invalidateProposals() {
       if (aiResults.value.length) aiStatus.value = '当前编辑已改变，请重新获取建议。';
@@ -258,6 +330,7 @@ createApp({
       compareGroup.value=null;
       dragging = false;
       hoverFilter.value=null;wbPicking.value=false;
+      Presets.reconcile(state.value);
       if (history.commit(state.value)) invalidateProposals();
       historyVersion.value++; schedulePaint();requestThumbnails();
     }
@@ -329,8 +402,8 @@ createApp({
         sourceImage.value = image; originalImageUrl.value = url; filename.value = file.name;
         vignetteDirection.value='dark';state.value = Core.createState(); history = Core.createHistory(state.value); historyVersion.value++;
         preview.value = null; cropOpen.value = false; straightenOpen.value=false;inspectorOpen.value=false;Object.assign(inspectorPosition,{x:.5,y:.5});compareMode.value = 'edited'; zoom.value = 100;
-        aiResults.value = []; aiStatus.value = ''; galleryResults.value = []; recipeDetail.value = null;
-        panelTab.value='edit';aiDraft.value='';aiMessages.value=[];aiUnread.value=false;aiAppliedName.value='';compareGroup.value=null;for(const key in panelScroll)panelScroll[key]=0;thumbnailGeneration++;
+        aiResults.value = []; aiStatus.value = ''; galleryResults.value = []; closeRecipeDetail();
+        panelTab.value='edit';aiDraft.value='';aiMessages.value=[];aiContext=[];aiUnread.value=false;aiAppliedName.value='';compareGroup.value=null;for(const key in panelScroll)panelScroll[key]=0;thumbnailGeneration++;
         currentView.value = 'editor'; imageLoaded.value = true;
         // The canvas inside v-if exists only after the DOM update completes.
         await nextTick(); observeCanvas();
@@ -588,21 +661,34 @@ createApp({
       error.value = '';
       try {
         const proposal = Core.recipeState(state.value, recipe);
+        delete proposal.state.presetSession;
         preview.value = { name: recipe.name, state: proposal.state, warnings: proposal.warnings };
-        recipeDetail.value = null; currentView.value = 'editor'; compareMode.value = 'edited';
+        closeRecipeDetail(); currentView.value = 'editor'; compareMode.value = 'edited';
         if (proposal.warnings.length) notify(proposal.warnings.join('；'));
       } catch (e) { fail(e.message); }
     }
-    function hoverStyle(filter,event) { if(locked.value||wbPicking.value||(event?.pointerType&&event.pointerType!=='mouse'))return;hoverFilter.value=filter;compareMode.value='edited'; }
-    function leaveStyle(filter) { if(hoverFilter.value?.name===filter.name)hoverFilter.value=null; }
-    function applyFilter(filter) { if(locked.value)return;hoverFilter.value=null;state.value.filter=filter.name;state.value.filterStrength=100;commit();notify(`已应用「${filter.label}」，可以调整强度或撤销。`); }
+    function hoverStyle(filter,event) {
+      if(locked.value||wbPicking.value||(event?.pointerType&&event.pointerType!=='mouse'))return;
+      // Hover/focus on the selected card must preserve its current strength and manual edits.
+      if(filter.id?activePreset.value?.id===filter.id:state.value.filter===filter.name){hoverFilter.value=null;return;}
+      hoverFilter.value=filter;compareMode.value='edited';
+    }
+    function leaveStyle(filter) { if(hoverFilter.value==filter||(filter.id?hoverFilter.value?.id===filter.id:hoverFilter.value?.name===filter.name))hoverFilter.value=null; }
+    function applyFilter(filter) {
+      if(locked.value)return;
+      hoverFilter.value=null;
+      if(state.value.filter===filter.name){removeFilter();notify(`已移除「${filter.label}」，保留手动调整。`);return;}
+      if(state.value.presetSession)state.value=Presets.remove(state.value);
+      delete state.value.presetSession;state.value.filter=filter.name;state.value.filterStrength=100;
+      commit();notify(`已应用「${filter.label}」，可以调整强度或撤销。`);
+    }
     function applyPreview() {
       if (!preview.value) return; const name = preview.value.name;
       state.value = Core.clone(preview.value.state); preview.value = null; commit(); notify(`已应用「${name}」，可以继续调色或撤销。`);
       if(panelTab.value==='ai'){aiAppliedName.value=name;aiStatus.value=`已应用「${name}」，可以切到编辑继续微调，也可以撤销。`;aiMessages.value.push({role:'assistant',text:aiStatus.value});}
     }
     function cancelPreview() { preview.value = null; schedulePaint(); notify('已取消预览，保留之前的编辑。'); }
-    function removeFilter() { state.value.filter = null; commit(); }
+    function removeFilter() { state.value.filter = null; state.value.filterStrength = 100; commit(); }
     function renderThumbnail(canvas, recipe) {
       if (!canvas || !sourceImage.value || dragging) return;
       const key = JSON.stringify([importVersion, state.value, recipe]);
@@ -613,8 +699,8 @@ createApp({
       }
       catch { canvas.width = 1; canvas.height = 1; }
     }
-    function diagnosis() {
-      const canvas = Core.render(sourceImage.value, state.value, { maxSide: 224 });
+    function diagnosis(maxSide = 224) {
+      const canvas = Core.render(sourceImage.value, state.value, { maxSide });
       const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
       let valueSum = 0, saturationSum = 0, hueX = 0, hueY = 0, dark = 0, bright = 0, count = 0;
       const hueHist = new Array(360).fill(0);
@@ -647,27 +733,41 @@ createApp({
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || `服务暂不可用（${response.status}）`); return data;
     }
+    async function refreshAIStatus() {
+      try {
+        const status=await api('/ai/status');
+        aiConnection.value=status.requires_key?'missing':status.mode==='live'?'live':'demo';
+      } catch { aiConnection.value='unknown'; }
+    }
     async function requestAI() {
       if (locked.value || aiLoading.value) return;
-      aiLoading.value = true; aiStatus.value = '正在分析当前版本…'; const version = importVersion;
-      aiAppliedName.value='';
-      const baseState = JSON.stringify(state.value),intent=aiDraft.value.trim();
+      aiLoading.value=true;aiResults.value=[];aiStatus.value='正在分析当前版本…';
+      const version=importVersion,baseState=JSON.stringify(state.value),base=Core.clone(state.value),intent=aiDraft.value.trim();
+      aiAppliedName.value='';aiDemo.value=false;
       aiMessages.value.push({role:'user',text:intent||'请分析当前照片，给我一些调整建议。'});aiMessages.value=aiMessages.value.slice(-12);
       try {
-        const d = diagnosis();
-        const data = await api('/ai/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ intent,diagnosis: d.diag, image_base64: d.canvas.toDataURL('image/jpeg', 0.7).split(',')[1] }) });
-        if (version !== importVersion) return;
-        if (baseState !== JSON.stringify(state.value)) {
-          aiResults.value = []; aiStatus.value = '分析期间编辑已改变，请重新获取当前版本的建议。'; return;
+        const d=diagnosis(512);
+        const data=await api('/ai/recommend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          intent,current_state:AI.context(base),history:aiContext.slice(-6),image_base64:d.canvas.toDataURL('image/jpeg',0.75).split(',')[1]
+        })});
+        if(version!==importVersion)return;
+        if(baseState!==JSON.stringify(state.value)){
+          aiResults.value=[];aiStatus.value='分析期间编辑已改变，请重新获取当前版本的建议。';return;
         }
-        aiResults.value = (Array.isArray(data.recipes)?data.recipes.slice(0,6):[]).filter(recipe=>{try{Core.recipeState(state.value,recipe);return typeof recipe.name==='string';}catch{return false;}});
-        aiDemo.value=!!data.demo;
-        aiStatus.value = data.demo ? '演示方案：未连接云端模型，以下为固定示例配方。' : '建议已生成，点击方案先预览。';
-        if (!aiResults.value.length) throw new Error('没有收到可用方案，请重试或使用手动调整。');
-        aiMessages.value.push({role:'assistant',text:data.demo?'当前未连接云端模型。这些是固定演示方案，不会根据描述生成；可以体验预览和应用流程。':'已根据当前照片生成方案。先预览比较，应用后可切到编辑继续微调。'});aiUnread.value=panelTab.value!=='ai';
-      } catch (e) { if (version === importVersion) aiStatus.value = `获取失败：${e.message}`; }
-      finally { aiLoading.value = false;if(version===importVersion&&panelTab.value!=='ai')aiUnread.value=true; }
+        if(!Array.isArray(data.proposals)||data.proposals.length<1||data.proposals.length>3)throw Error('没有收到可用方案，请重试或使用手动调整。');
+        // All-or-nothing validation; never render a partially valid model response.
+        const recipes=data.proposals.map(p=>AI.recipe(base,p));
+        if(typeof data.message!=='string'||data.message.length>600)throw Error('建议说明格式无效，请重试。');
+        aiResults.value=recipes;aiDemo.value=data.demo===true;aiConnection.value=aiDemo.value?'demo':'live';
+        aiStatus.value=aiDemo.value?'演示方案：未连接云端模型，以下为固定示例配方。':'建议已生成，点击方案先预览。';
+        const reply=aiDemo.value?'当前未连接云端模型。这些是固定演示方案，不会根据描述生成；可以体验预览和应用流程。':data.message;
+        aiMessages.value.push({role:'assistant',text:reply});aiMessages.value=aiMessages.value.slice(-12);
+        if(!aiDemo.value)aiContext=[...aiContext,{role:'user',text:intent||'请分析当前照片，给我一些调整建议。'},{role:'assistant',text:data.message}].slice(-6);
+        aiUnread.value=panelTab.value!=='ai';
+      } catch(e){if(version===importVersion){aiResults.value=[];aiStatus.value=`获取失败：${e.message}`;}}
+      finally{aiLoading.value=false;if(version===importVersion&&panelTab.value!=='ai')aiUnread.value=true;}
     }
+    onMounted(refreshAIStatus);
     async function matchGallery() {
       if (locked.value || galleryLoading.value) return;
       galleryLoading.value = true; const version = importVersion;
@@ -688,6 +788,22 @@ createApp({
       finally { if (version === communityVersion) communityLoading.value = false; }
     }
     function searchCommunity() { clearTimeout(searchTimer); searchTimer = setTimeout(fetchCommunity, 250); }
+    function closeRecipeDetail(){recipeDetailVersion++;recipeDetailLoading.value=false;recipeDetailError.value='';recipeDetail.value=null;}
+    async function openCommunityRecipe(record){
+      const version=++recipeDetailVersion;
+      recipeDetail.value=record;recipeDetailLoading.value=true;recipeDetailError.value='';
+      try{
+        let detail=record;
+        if(!Community.hasSteps(detail)){
+          if(!Number.isSafeInteger(detail?.id)||detail.id<=0)throw Error('社区作品缺少可读取的配方编号。');
+          const response=await api('/recipes/'+detail.id);
+          detail=response.recipe??response;
+        }
+        const normalized=Community.normalize(detail);
+        if(version===recipeDetailVersion)recipeDetail.value=normalized;
+      }catch(e){if(version===recipeDetailVersion)recipeDetailError.value=e.message;}
+      finally{if(version===recipeDetailVersion)recipeDetailLoading.value=false;}
+    }
     function openCommunity() { currentView.value = 'community'; if (!communityFetched) fetchCommunity(); }
     watch(currentView, async (value, oldValue) => {
       if (oldValue === 'community') communityScroll = communityContainer.value?.scrollTop || 0;
@@ -746,7 +862,7 @@ createApp({
       window.removeEventListener('pointerdown',closeGeometry);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
     });
     return {
-      panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,visiblePresets,registerThumbnail,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
+      panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
       maskId,maskEditing,showMask,maskErase,brushSize,brushFeather,maskCanvas,selectedMask,maskHandles,maskGuide,selectMask,addMask,editMask,deleteMask,clearBrush,maskPointerDown,maskPointerMove,maskPointerUp,maskHandleKey,
       mainCanvas, compareCanvas, canvasContainer, communityContainer, currentView, imageLoaded, imageLoading, originalImageUrl, filename, message, error,
@@ -756,7 +872,7 @@ createApp({
       cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
       exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
-      communitySearch, communityRecipes, communityLoading, communityError, recipeDetail, exportDialog, recipeDialog,
+      communitySearch, communityRecipes, communityLoading, communityError, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,

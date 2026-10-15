@@ -1,5 +1,5 @@
 /* The preview uses the exact same color pipeline as full-size export. */
-importScripts('editor-tools.js','editor-detail.js','editor-effects.js','editor-masks.js','editor-core.js');
+importScripts('editor-tools.js','editor-detail.js','editor-effects.js','editor-masks.js','editor-core.js','editor-presets.js');
 let source = null;
 let nativeGeometry = null;
 const geometryCache = new Map();
@@ -14,9 +14,9 @@ self.onmessage = async ({ data }) => {
     }
     if(!source)return;
     if(data.type==='thumbnails'){
-      const items=[];
-      for(const item of data.items){try{const state=EditorCore.recipeState(data.state,item.recipe).state,canvas=EditorCore.render(source,state,{maxSide:240});items.push({key:item.key,image:await createImageBitmap(canvas)});}catch{}}
-      self.postMessage({type:'thumbnails',generation:data.generation,items},items.map(i=>i.image));return;
+      const items=[],errors=[];
+      for(const item of data.items){try{const state=item.presetId?EditorPresets.apply(data.state,item.presetId):EditorCore.recipeState(item.legacy?EditorPresets.remove(data.state):data.state,item.recipe).state,canvas=EditorCore.render(source,state,{maxSide:240});items.push({key:item.key,image:await createImageBitmap(canvas)});}catch(error){errors.push({key:item.key,message:error.message});}}
+      self.postMessage({type:'thumbnails',generation:data.generation,items,errors},items.map(i=>i.image));return;
     }
     if (data.type !== 'render') return;
     const start = performance.now();

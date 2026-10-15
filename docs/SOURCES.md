@@ -180,3 +180,9 @@ E2 复用上述四张真实照片，分别检查 HSL、曲线、自动曝光、�
 - 用户提供的 Luminar Neo 预设标签截图及本轮确认：照片保留，右侧编辑/预设/AI 三标签切换；构成当前布局的直接需求依据。
 - [W3C APG Tabs Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/)：标签选择、关联面板、方向键及 Home/End 语义参考；不据此宣称已完成整体 WCAG 审计。
 - [NN/g Progressive Disclosure](https://www.nngroup.com/articles/progressive-disclosure/)：常用控制优先、进阶按需展开的设计参考。具体层级为本项目方案，仍需用户任务观察评估。
+
+### 预设库接入（2026-10-15）
+
+用户提供 Gemini/Argon 检索报告，独立复核与范围见 [PRESET-RESOURCE-AUDIT.md](PRESET-RESOURCE-AUDIT.md)。首批只采用 peva3/Lightroom-Presets 固定快照 `f22f4d8057aaaada6df3f0ed7fbe6b952a30db77` 的六项公开风格参数作为原生改编参考，18 项映射与遗漏效果见前端 `preset-sources.json`，MIT 原声明保存在前端 `licenses/peva3-presets-MIT.txt` 并随应用提供。参数经独立手工调校，不是直接兼容导入或商业/真实胶片等效；没有使用外部封面或样张。技术图片继续使用测试夹具清单所列授权照片，仅本地生成检查产物。
+
+2026-10-15：千问平台接入依据与已核对链接见 [AI-SETUP.md](AI-SETUP.md#已核对的接入依据)。本轮未发起真实模型调用；API 文档与模型页面不是实际质量/延迟/费用的测量证据。

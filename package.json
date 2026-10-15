@@ -5,8 +5,12 @@
   "scripts": {
     "prepare": "node scripts/prepare-frontend.cjs",
     "start": "node scripts/start.cjs",
-    "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs tests/editor-detail.test.cjs tests/editor-effects.test.cjs",
+    "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs tests/editor-detail.test.cjs tests/editor-effects.test.cjs tests/editor-presets.test.cjs tests/editor-ai.test.cjs tests/editor-community.test.cjs",
+    "test:ai": "node tests/editor-ai-browser.cjs",
     "test:workspace": "node tests/editor-workspace-browser.cjs",
+    "test:community": "node tests/editor-community-browser.cjs",
+    "test:feedback": "node tests/editor-feedback-browser.cjs",
+    "test:presets": "node tests/editor-presets-browser.cjs",
     "test:browser": "node tests/editor-browser.cjs",
     "test:e1": "node tests/editor-e1-browser.cjs",
     "test:photos": "node scripts/fetch-test-photos.cjs",
@@ -16,6 +20,7 @@
     "test:e3": "node tests/editor-e3-browser.cjs",
     "test:e4": "node tests/editor-e4-browser.cjs",
     "review:e4": "node scripts/review-e4-photos.cjs",
+    "review:presets": "node scripts/review-presets.cjs",
     "review:e3": "node scripts/review-e3-photos.cjs",
     "review:e2": "node scripts/review-e2-photos.cjs"
   },

@@ -1,6 +1,7 @@
 """Upload boundary regressions, with all application storage isolated in a temp dir."""
 import importlib.util
 import io
+import sys
 from contextlib import closing
 from pathlib import Path
 import tempfile
@@ -20,7 +21,7 @@ class UploadTests(unittest.TestCase):
         cls.backend = importlib.util.module_from_spec(spec)
         # The prototype initializes its database and uploads on import. Redirect
         # the base directory before executing it; never touch project/user data.
-        with patch('os.path.abspath', return_value=str(cls.root / 'app.py')):
+        with patch.object(sys, 'path', [str(module_path.parent), *sys.path]), patch('os.path.abspath', return_value=str(cls.root / 'app.py')):
             spec.loader.exec_module(cls.backend)
         cls.backend.app.config['TESTING'] = True
         cls.client = cls.backend.app.test_client()

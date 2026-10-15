@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "reviewed": "2026-10-15",
+  "description": "以公开风格参数为参考，在本项目解码 RGB 管线中人工重新调校；不宣称复现原软件或真实胶片。",
+  "upstream": {
+    "author": "peva3",
+    "repository": "https://github.com/peva3/Lightroom-Presets",
+    "commit": "f22f4d8057aaaada6df3f0ed7fbe6b952a30db77",
+    "license": "MIT",
+    "notice": "licenses/peva3-presets-MIT.txt"
+  },
+  "adaptation": {
+    "retuned": [
+      "基础光线、八色 HSL、整体与 RGB 曲线、清晰度和降噪"
+    ],
+    "notReproduced": [
+      "Adobe Camera Profile / Look",
+      "颗粒",
+      "原生 Color Grading 与 GrayMixer 算法"
+    ],
+    "notes": [
+      "白平衡、曝光、亮度、构图、蒙版与暗角形状保留用户设置。",
+      "黑白通过八色 HSL 同步去色并保留按原色明度调节，使用自有曲线再塑形。",
+      "RGB 曲线色偏为独立手工近似，不是原颜色分级的数学转换。",
+      "未使用上游示例照片、缩略图或商业预设文件。"
+    ]
+  },
+  "references": [
+    {
+      "id": "provia",
+      "file": "Presets/Slide/Fuji Provia 100F.xmp",
+      "url": "https://github.com/peva3/Lightroom-Presets/blob/f22f4d8057aaaada6df3f0ed7fbe6b952a30db77/Presets/Slide/Fuji%20Provia%20100F.xmp"
+    },
+    {
+      "id": "velvia",
+      "file": "Presets/Slide/Fuji Velvia 50.xmp",
+      "url": "https://github.com/peva3/Lightroom-Presets/blob/f22f4d8057aaaada6df3f0ed7fbe6b952a30db77/Presets/Slide/Fuji%20Velvia%2050.xmp"
+    },
+    {
+      "id": "gold",
+      "file": "Presets/Color-Negative/Kodak Gold 200.xmp",
+      "url": "https://github.com/peva3/Lightroom-Presets/blob/f22f4d8057aaaada6df3f0ed7fbe6b952a30db77/Presets/Color-Negative/Kodak%20Gold%20200.xmp"
+    },
+    {
+      "id": "neon",
+      "file": "Presets/Creative/Cyberpunk Neon City.xmp",
+      "url": "https://github.com/peva3/Lightroom-Presets/blob/f22f4d8057aaaada6df3f0ed7fbe6b952a30db77/Presets/Creative/Cyberpunk%20Neon%20City.xmp"
+    },
+    {
+      "id": "chrome",
+      "file": "Presets/Color-Negative/Fujifilm Classic Chrome.xmp",
+      "url": "https://github.com/peva3/Lightroom-Presets/blob/f22f4d8057aaaada6df3f0ed7fbe6b952a30db77/Presets/Color-Negative/Fujifilm%20Classic%20Chrome.xmp"
+    },
+    {
+      "id": "acros",
+      "file": "Presets/Black-White/Fujifilm Acros.xmp",
+      "url": "https://github.com/peva3/Lightroom-Presets/blob/f22f4d8057aaaada6df3f0ed7fbe6b952a30db77/Presets/Black-White/Fujifilm%20Acros.xmp"
+    }
+  ],
+  "presets": [
+    {
+      "id": "clear-day",
+      "name": "晴空通透",
+      "category": "natural",
+      "reference": "provia"
+    },
+    {
+      "id": "soft-backlight",
+      "name": "逆光拾光",
+      "category": "natural",
+      "reference": "provia"
+    },
+    {
+      "id": "alpine-air",
+      "name": "山间清风",
+      "category": "natural",
+      "reference": "provia"
+    },
+    {
+      "id": "deep-forest",
+      "name": "林间深绿",
+      "category": "forest",
+      "reference": "velvia"
+    },
+    {
+      "id": "misty-woods",
+      "name": "薄雾森林",
+      "category": "forest",
+      "reference": "velvia"
+    },
+    {
+      "id": "golden-leaves",
+      "name": "草木金秋",
+      "category": "forest",
+      "reference": "velvia"
+    },
+    {
+      "id": "golden-sunset",
+      "name": "金色晚霞",
+      "category": "sunset",
+      "reference": "gold"
+    },
+    {
+      "id": "ember-sky",
+      "name": "落日余烬",
+      "category": "sunset",
+      "reference": "gold"
+    },
+    {
+      "id": "rose-dusk",
+      "name": "粉紫暮光",
+      "category": "sunset",
+      "reference": "gold"
+    },
+    {
+      "id": "blue-hour",
+      "name": "蓝调夜色",
+      "category": "night",
+      "reference": "neon"
+    },
+    {
+      "id": "neon-city",
+      "name": "霓虹漫游",
+      "category": "night",
+      "reference": "neon"
+    },
+    {
+      "id": "quiet-night",
+      "name": "静谧街灯",
+      "category": "night",
+      "reference": "neon"
+    },
+    {
+      "id": "soft-fade",
+      "name": "柔和褪色",
+      "category": "film",
+      "reference": "chrome"
+    },
+    {
+      "id": "airy-postcard",
+      "name": "清新明信片",
+      "category": "film",
+      "reference": "chrome"
+    },
+    {
+      "id": "muted-memory",
+      "name": "青调回忆",
+      "category": "film",
+      "reference": "chrome"
+    },
+    {
+      "id": "mono-landscape",
+      "name": "黑白层次",
+      "category": "mono",
+      "reference": "acros"
+    },
+    {
+      "id": "mono-soft",
+      "name": "柔调银灰",
+      "category": "mono",
+      "reference": "acros"
+    },
+    {
+      "id": "mono-architecture",
+      "name": "建筑炭黑",
+      "category": "mono",
+      "reference": "acros"
+    }
+  ]
+}

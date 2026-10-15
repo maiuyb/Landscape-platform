@@ -42,8 +42,13 @@ const results = path.resolve(__dirname, '../test-results/interaction');
       await page.getByLabel('导入配方',{exact:true}).setInputFiles({name:'e4-perf.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(recipe))});await page.getByRole('button',{name:'应用到照片',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');await page.locator('.parameter-panel').evaluate(p=>p.scrollTop=0);
     }
     await reveal(page,'#whites');
-    const dragKey=process.env.HMI_PERF_PRESETS==='1'?'filter-strength':'whites';
-    if(dragKey==='filter-strength'){await page.getByRole('tab',{name:'预设',exact:true}).click();await page.getByRole('button',{name:'通透',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');await page.waitForFunction(()=>[...document.querySelectorAll('.preset-card canvas')].every(c=>c.dataset.thumbnailStatus==='ready'));}
+    const dragKey=process.env.HMI_PERF_PRESETS==='1'?'preset-strength':'whites';
+    if(dragKey==='preset-strength'){
+      await page.getByRole('tab',{name:'预设',exact:true}).click();await page.getByRole('button',{name:'蓝调夜色',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');
+      try{await page.waitForFunction(()=>[...document.querySelectorAll('.preset-card canvas')].filter(c=>!c.closest('details:not([open])')&&c.getClientRects().length).every(c=>c.dataset.thumbnailStatus==='ready'));}
+      catch(error){console.log(await page.locator('.preset-card canvas').evaluateAll(items=>items.map(c=>({name:c.closest('button').getAttribute('aria-label'),status:c.dataset.thumbnailStatus,visible:!!c.getClientRects().length}))));throw error;}
+    }
     await page.locator('#'+dragKey).scrollIntoViewIfNeeded();
     await session.send('Emulation.setCPUThrottlingRate',{rate:4});
     await page.evaluate(dragKey=>{

@@ -18,7 +18,7 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
     await page.locator('label[for="temperature"]').dblclick();await ready();assert.equal(await page.locator('#temperature-value').inputValue(),'0');
     await button('撤销').click();await ready();assert.equal(await page.locator('#temperature-value').inputValue(),'17');
     const base=await pixels();
-    await page.getByRole('tab',{name:'预设',exact:true}).click();await button('胶片').hover();await ready();const filmHover=await pixels();assert.notEqual(filmHover,base);assert.equal(await page.locator('.preview-bar').count(),0);
+    await page.getByRole('tab',{name:'预设',exact:true}).click();await reveal(page,'#legacy-presets');await button('胶片').hover();await ready();const filmHover=await pixels();assert.notEqual(filmHover,base);assert.equal(await page.locator('.preview-bar').count(),0);
     assert.equal(await page.locator('#preset-description-film').isVisible(),true);
     await button('冷调').hover();await ready();assert.notEqual(await pixels(),filmHover);
     await page.locator('#mainCanvas').hover();await ready();assert.equal(await pixels(),base);

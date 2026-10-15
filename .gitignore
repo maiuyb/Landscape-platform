@@ -5,3 +5,6 @@ node_modules/
 风景调色协作平台/backend/recipes.db
 __pycache__/
 test-results/
+.env
+.env.*
+!.env.example

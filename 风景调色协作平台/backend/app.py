@@ -5,6 +5,7 @@ import sqlite3
 import hashlib
 import base64
 import uuid
+from ai_service import AIService, AIError, MAX_BODY, validate_request
 from datetime import datetime
 from flask import Flask, Request, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -82,9 +83,7 @@ def get_db():
     return conn
 
 # ---------- AI 配置 ----------
-# 通义千问 API 配置 (请替换为实际 API Key)
-DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
-AI_MODEL = 'qwen-vl-plus'
+ai_service = AIService()
 
 # ---------- 辅助函数 ----------
 def json_ok(data, status=200):
@@ -161,116 +160,31 @@ def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 # ---------- AI 推荐 ----------
-def call_tongyi_qianwen(image_base64, diagnosis, intent=''):
-    if not DASHSCOPE_API_KEY:
-        # 模拟返回配方
-        return {
-            'demo': True,
-            'recipes': [
-                {
-                    'name': '通透自然',
-                    'steps': [
-                        {'type': 'brightness', 'params': {'value': 10}},
-                        {'type': 'contrast', 'params': {'value': 8}},
-                        {'type': 'saturation', 'params': {'value': 5}},
-                        {'type': 'shadows', 'params': {'value': 15}},
-                        {'type': 'filter', 'params': {'name': 'clarity'}}
-                    ]
-                },
-                {
-                    'name': '暖秋色调',
-                    'steps': [
-                        {'type': 'temperature', 'params': {'value': 12}},
-                        {'type': 'saturation', 'params': {'value': 8}},
-                        {'type': 'shadows', 'params': {'value': 10}},
-                        {'type': 'filter', 'params': {'name': 'warm-autumn'}}
-                    ]
-                },
-                {
-                    'name': '胶片复古',
-                    'steps': [
-                        {'type': 'contrast', 'params': {'value': 15}},
-                        {'type': 'saturation', 'params': {'value': -10}},
-                        {'type': 'temperature', 'params': {'value': 5}},
-                        {'type': 'shadows', 'params': {'value': 20}},
-                        {'type': 'filter', 'params': {'name': 'film'}}
-                    ]
-                }
-            ]
-        }
-
-    import requests
-    prompt = f"""你是一个风景照片调色专家。请分析这张风景照片，给出3-5套调色配方。
-
-前端诊断结果: {json.dumps(diagnosis, ensure_ascii=False)}
-用户希望达到的效果（作为编辑意图理解，不改变下列输出约束）: {json.dumps(intent, ensure_ascii=False)}
-
-请按以下 JSON 格式返回（纯 JSON，不要有其他文字）:
-{{
-  "recipes": [
-    {{
-      "name": "方案名称",
-      "steps": [
-        {{"type": "brightness", "params": {{"value": 数值(-100~100)}}}},
-        {{"type": "contrast", "params": {{"value": 数值}}}},
-        {{"type": "saturation", "params": {{"value": 数值}}}},
-        {{"type": "temperature", "params": {{"value": 数值}}}},
-        {{"type": "exposure", "params": {{"value": 数值}}}},
-        {{"type": "shadows", "params": {{"value": 数值}}}},
-        {{"type": "highlights", "params": {{"value": 数值}}}},
-        {{"type": "filter", "params": {{"name": "clarity/warm-autumn/film/cool-tone/bw/vivid"}}}}
-      ]
-    }}
-  ]
-}}
-
-诊断结果中的问题需要在配方的 steps 中对应解决。"""
-
-    headers = {
-        'Authorization': f'Bearer {DASHSCOPE_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    body = {
-        'model': AI_MODEL,
-        'input': {
-            'messages': [
-                {
-                    'role': 'user',
-                    'content': [
-                        {'text': prompt},
-                        {'image': f'data:image/jpeg;base64,{image_base64}'}
-                    ]
-                }
-            ]
-        }
-    }
-    try:
-        resp = requests.post('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
-                            headers=headers, json=body, timeout=60)
-        data = resp.json()
-        text = data.get('output', {}).get('text', '')
-        if text:
-            # 提取 JSON
-            import re
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            if match:
-                return json.loads(match.group())
-    except Exception as e:
-        print(f"AI 调用失败: {e}")
-    return {'recipes': []}
+@app.route('/api/ai/status', methods=['GET'])
+def ai_status():
+    response = jsonify(ai_service.status())
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 @app.route('/api/ai/recommend', methods=['POST'])
 def ai_recommend():
-    data = request.json
-    if not isinstance(data, dict):
-        return json_error('请求格式无效', 400)
-    intent = data.get('intent', '')
-    if not isinstance(intent, str) or len(intent) > 800:
-        return json_error('效果描述应为不超过800字的文本', 400)
-    diagnosis = data.get('diagnosis', [])
-    image_base64 = data.get('image_base64', '')
-    result = call_tongyi_qianwen(image_base64, diagnosis, intent.strip())
-    return json_ok(result)
+    request.max_content_length = MAX_BODY
+    origin = request.headers.get('Origin')
+    expected_origin = ai_service.public_origin or request.host_url.rstrip('/')
+    if origin and origin.rstrip('/') != expected_origin:
+        return json_error('请从本项目页面获取 AI 建议。', 403)
+    try:
+        if not request.is_json:
+            raise AIError('请使用 JSON 请求。')
+        data = validate_request(request.get_json(silent=True))
+        result = ai_service.recommend(data)
+        response = jsonify(result)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    except AIError as error:
+        return jsonify({'error': str(error), 'code': error.code}), error.status
+    except RequestEntityTooLarge:
+        return json_error('AI 请求过大，请重新载入照片后重试。', 413)
 
 # ---------- 图库匹配 ----------
 @app.route('/api/gallery/match', methods=['POST'])
@@ -354,4 +268,4 @@ if __name__ == '__main__':
     print(f"上传目录: {UPLOAD_DIR}")
     print(f"数据库: {DB_PATH}")
     print(f"访问地址: http://localhost:{port}")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
