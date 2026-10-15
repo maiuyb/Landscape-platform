@@ -17,10 +17,11 @@ test('curve interpolation is bounded, shape-preserving and reproduces identity',
   state.curves= T.createCurves();state.curves.red=[[0,0],[.5,.7],[1,1]];
   const red=pixel([100,100,100],state);assert.ok(red[0]>100);assert.equal(red[1],100);assert.equal(red[2],100);
 });
-test('version 3 preserves HSL, curves, white balance and legacy v1/v2 behavior',()=>{
+test('HSL, curves and white balance preserve v3 compatibility and legacy v1/v2 behavior',()=>{
   const state=Core.createState();state.hsl.cyan.hue=-22;state.hsl.blue.luminance=31;
   state.curves.blue=[[0,.05],[.4,.5],[1,.95]];state.whiteBalance={gains:[1.1,1,.9],mode:'sample'};
-  assert.equal(Core.toRecipe(state).version,3);assert.deepEqual(Core.recipeState(Core.createState(),Core.toRecipe(state)).state,state);
+  assert.equal(Core.toRecipe(state).version,6);assert.deepEqual(Core.recipeState(Core.createState(),Core.toRecipe(state)).state,state);
+  const old=Core.toRecipe(state);old.version=3;old.steps=old.steps.filter(step=>!['detail','effects','masks'].includes(step.type));const v3=Core.recipeState(Core.createState(),old);assert.equal(v3.warnings.length,0);assert.deepEqual(v3.state,state);
   const v2=Core.recipeState(Core.createState(),{version:2,steps:[{type:'exposure',params:{value:1}},{type:'highlights',params:{value:-20}}]});
   assert.equal(v2.state.adjustments.exposure,1);assert.equal(v2.state.adjustments.highlights,-20);assert.deepEqual(v2.state.hsl,T.createHSL());
   const bad=Core.recipeState(state,{version:3,steps:[{type:'curve',params:{channel:'master',points:[[0,0],[.5,.6],[.5,.7],[1,1]]}},{type:'hsl',params:{band:'red',hue:NaN,saturation:0,luminance:0}},{type:'white-balance',params:{gains:[0,1,1],mode:'auto'}}]});
@@ -45,6 +46,28 @@ test('auto exposure is deterministic and constrained by bright tones',()=>{
   assert.ok(T.autoExposure(pixels(new Array(100).fill(50)))>0);
   assert.ok(T.autoExposure(pixels(new Array(100).fill(210)))<0);
   assert.ok(T.autoExposure(pixels([...new Array(90).fill(30),...new Array(10).fill(250)]))<=.3);
+});
+test('auto/sample white balance writes editable temperature/tint without applying correction twice',()=>{
+  const rgb=[170,150,120],state=Core.createState(),gains=T.sampleGains(rgb);
+  Core.setWhiteBalance(state,gains,'sample');
+  assert.ok(state.adjustments.temperature<0);assert.ok(Math.abs(state.adjustments.tint)>0);
+  assert.ok(state.whiteBalance.gains.every((v,i)=>Math.abs(v-gains[i])<1e-12));
+  const balanced=pixel(rgb,state);assert.ok(Math.max(...balanced)-Math.min(...balanced)<=1);
+  assert.deepEqual(pixel([0,0,0],state),[0,0,0]);
+  const recipe=Core.toRecipe(state);assert.equal(recipe.version,6);assert.deepEqual(Core.recipeState(Core.createState(),recipe).state,state);
+  const start=state.adjustments.temperature;state.adjustments.temperature=start+1;Core.syncWhiteBalance(state);
+  assert.notDeepEqual(pixel(rgb,state),balanced);
+  state.adjustments.temperature=0;Core.syncWhiteBalance(state);assert.equal(state.adjustments.tint,recipe.steps.find(s=>s.type==='tint').params.value);
+  state.adjustments.tint=0;Core.syncWhiteBalance(state);assert.deepEqual(state.whiteBalance.gains,[1,1,1]);assert.deepEqual(pixel(rgb,state),rgb);
+  for(const temperature of[-100,100])for(const tint of[-100,100])assert.ok(T.whiteBalanceGains(temperature,tint).every(v=>v>=1/64&&v<=64));
+  // The old gain-plus-additive scheme keeps its exact output after a v5 save.
+  const old={version:4,steps:[{type:'temperature',params:{value:10}},{type:'tint',params:{value:3}},{type:'white-balance',params:{gains:[1.1,1,.9],mode:'custom'}}]};
+  const legacy=Core.recipeState(Core.createState(),old).state,roundtrip=Core.recipeState(Core.createState(),Core.toRecipe(legacy)).state;
+  assert.equal(legacy.whiteBalance.model,undefined);assert.deepEqual(pixel(rgb,roundtrip),pixel(rgb,legacy));
+  const relative=Core.createState();Core.setWhiteBalance(relative,gains,'sample');
+  const partial=Core.recipeState(relative,{version:4,steps:[{type:'white-balance',params:{gains:[1,1,1],mode:'original'}}]}).state;assert.deepEqual(pixel(rgb,partial),rgb);
+  const oldManual=Core.recipeState(relative,{version:1,steps:[{type:'temperature',params:{value:5}}]}).state;
+  const expected=Core.clone(relative);delete expected.whiteBalance.model;expected.adjustments.temperature=5;expected.adjustments.tint=0;assert.deepEqual(pixel(rgb,oldManual),pixel(rgb,expected));
 });
 test('crop edge/corner resizing stays anchored, constrained and ratio-locked',()=>{
   const start={x:.1,y:.2,width:.6,height:.5};

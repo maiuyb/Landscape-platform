@@ -49,13 +49,28 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
     await button('撤销').click();await ready();assert.equal(await pixels(),base);
     checks.push('native edge and corner dragging, moving the selected region, ratio lock, source-pixel inputs and reversible crop');
 
-    await upload();await button('自动曝光').click();await ready();assert.notEqual(await pixels(),original);await button('撤销').click();await ready();assert.equal(await pixels(),original);
+    await upload();await range('exposure',-1);const underexposed=await pixels();await button('自动曝光').click();await ready();assert.notEqual(await pixels(),underexposed);await button('撤销').click();await ready();assert.equal(await pixels(),underexposed);await button('撤销').click();await ready();assert.equal(await pixels(),original);
     await button('白平衡取样笔').click();await page.getByRole('button',{name:'取消取样',exact:true}).waitFor();
     const photoBox=await page.locator('#mainCanvas').boundingBox();await page.mouse.click(photoBox.x+photoBox.width*.15,photoBox.y+photoBox.height*.5);await ready();
     const neutral=await sample();assert.ok(Math.max(...neutral.slice(0,3))-Math.min(...neutral.slice(0,3))<=1);assert.equal(await page.locator('#white-balance-mode').inputValue(),'sample');
+    const wbValues=await page.locator('#temperature-value, #tint-value').evaluateAll(inputs=>inputs.map(el=>Number(el.value)));
+    assert.ok(wbValues[0]<0&&Math.abs(wbValues[1])>0);assert.ok(Math.abs(Number(await page.locator('#temperature').inputValue())-wbValues[0])<.11);
+    await range('temperature',wbValues[0]+1);assert.equal(await page.locator('#white-balance-mode').inputValue(),'custom');assert.notDeepEqual(await sample(),neutral);
+    await button('撤销').click();await ready();assert.deepEqual(await sample(),neutral);assert.equal(await page.locator('#white-balance-mode').inputValue(),'sample');
+    await button('复位色温').click();await ready();assert.equal(Number(await page.locator('#temperature-value').inputValue()),0);assert.equal(Number(await page.locator('#tint-value').inputValue()),wbValues[1]);
+    await button('复位色调').click();await ready();assert.deepEqual((await sample()).slice(0,3),[170,150,120]);
+    await button('撤销').click();await ready();await button('撤销').click();await ready();assert.deepEqual(await sample(),neutral);
     await button('撤销').click();await ready();assert.deepEqual((await sample()).slice(0,3),[170,150,120]);await button('重做').click();await ready();assert.deepEqual(await sample(),neutral);
     await page.locator('#white-balance-mode').selectOption('auto');await ready();assert.equal(await page.locator('#white-balance-mode').inputValue(),'auto');
     await page.locator('#white-balance-mode').selectOption('original');await ready();await button('自动白平衡').click();await ready();assert.equal(await page.locator('#white-balance-mode').inputValue(),'auto');
+    assert.ok(Math.abs(Number(await page.locator('#temperature-value').inputValue()))+Math.abs(Number(await page.locator('#tint-value').inputValue()))>0);
+    // Old gain-only white-balance files keep their pixels and expose derived controls.
+    await button('重置').click();await ready();
+    const oldBalance={version:4,steps:[{type:'white-balance',params:{gains:[152.56/170,152.56/150,152.56/120],mode:'sample'}}]};
+    await page.getByLabel('导入配方',{exact:true}).setInputFiles({name:'old-balance.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(oldBalance))});await button('应用到照片').click();await ready();
+    assert.ok(Number(await page.locator('#temperature-value').inputValue())<0);const legacySample=await sample();
+    await range('temperature',-10);await button('撤销').click();await ready();assert.deepEqual(await sample(),legacySample);
+    await button('重置').click();await ready();await button('自动白平衡').click();await ready();
     checks.push('auto exposure is undoable; sampling corrects a known cast; auto/neutral/original modes preserve undo and redo');
 
     await page.locator('#hsl-group > summary').click();await range('hsl-blue',45);
@@ -73,12 +88,12 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
     await button('红曲线').click();assert.equal(await page.locator('.curve-point').count(),2);await button('整体曲线').click();assert.equal(await page.locator('.curve-point').count(),3);
     await button('撤销').click();await ready();assert.equal(await pixels(),beforeCurves);await button('重做').click();await ready();
     const final=await pixels();
-    let waiting=page.waitForEvent('download');await button('下载配方').click();const recipeFile=await(await waiting).path(),recipe=JSON.parse(await fs.readFile(recipeFile,'utf8'));assert.equal(recipe.version,3);
+    let waiting=page.waitForEvent('download');await button('下载配方').click();const recipeFile=await(await waiting).path(),recipe=JSON.parse(await fs.readFile(recipeFile,'utf8'));assert.equal(recipe.version,6);
     assert.equal(recipe.steps.find(s=>s.type==='hsl'&&s.params.band==='blue').params.hue,45);
     assert.equal(recipe.steps.find(s=>s.type==='curve'&&s.params.channel==='master').params.points.length,3);
     await button('重置').click();await ready();assert.equal(await pixels(),original);
     await page.getByLabel('导入配方',{exact:true}).setInputFiles(recipeFile);await button('应用到照片').click();await ready();assert.equal(await pixels(),final);
-    checks.push('24 HSL values survive mode switches; four curve channels, added points, undo/redo and full v3 recipe roundtrip');
+    checks.push('24 HSL values survive mode switches; four curve channels, added points, undo/redo and current recipe roundtrip with v3 tool state');
     await button('导出照片').click();await page.locator('dialog select').first().selectOption('png');waiting=page.waitForEvent('download');await button('下载照片').click();const output=await fs.readFile(await(await waiting).path());
     assert.deepEqual([output.readUInt32BE(16),output.readUInt32BE(20)],[2400,1600]);
     const equal=await page.evaluate(async({png,output,recipe})=>{

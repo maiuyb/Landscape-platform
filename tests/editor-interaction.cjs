@@ -12,7 +12,7 @@ const results = path.resolve(__dirname, '../test-results/interaction');
   const session = await page.context().newCDPSession(page);
   try {
     await page.goto(baseURL);
-    await page.locator('#image-input').setInputFiles(path.resolve(__dirname,'../test-results/e1/photos/night.jpg'));
+    await page.locator('#image-input').setInputFiles(path.resolve(__dirname,process.env.HMI_PERF_E3==='1'?'../test-results/e3/native/night.jpg':'../test-results/e1/photos/night.jpg'));
     await page.getByRole('status').filter({hasText:'已载入'}).waitFor();
     await page.evaluate(async () => {
       for(const [key,value] of Object.entries({whites:20,blacks:10,highlights:-20,shadows:20,temperature:10,tint:3,saturation:20,vibrance:60})) {
@@ -26,6 +26,19 @@ const results = path.resolve(__dirname, '../test-results/interaction');
       await page.getByRole('button',{name:'应用到照片',exact:true}).click();
       await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');
       await page.locator('.parameter-panel').evaluate(panel=>{panel.scrollTop=0;});
+    }
+    if(process.env.HMI_PERF_E3==='1'){
+      const recipe={version:4,steps:[{type:'detail',params:{sharpen:55,radius:1.5,protection:40,luminance:50,color:60}}]};
+      await page.getByLabel('导入配方',{exact:true}).setInputFiles({name:'e3-perf.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(recipe))});
+      await page.getByRole('button',{name:'应用到照片',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');
+      await page.getByRole('button',{name:'100% 细节查看',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#detailCanvas')?.dataset.previewStatus==='ready');
+      await page.locator('.parameter-panel').evaluate(panel=>{panel.scrollTop=0;});
+    }
+    if(process.env.HMI_PERF_E4==='1'){
+      const recipe=await page.evaluate(()=>{const s=EditorCore.createState();s.effects.clarity=40;s.effects.dehaze=30;s.effects.calibration.blue.hue=-25;s.effects.vignette.amount=-35;const m=EditorCore.masks.create('linear','test-gradient');m.start=[.5,.7];m.end=[.5,.1];m.adjustments.exposure=-.4;m.adjustments.clarity=20;m.adjustments.dehaze=15;s.masks=[m];return EditorCore.toRecipe(s);});
+      // Import just the new tools so the existing E1/E2/E3 parameters remain enabled.
+      recipe.steps=recipe.steps.filter(s=>['effects','masks'].includes(s.type));
+      await page.getByLabel('导入配方',{exact:true}).setInputFiles({name:'e4-perf.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(recipe))});await page.getByRole('button',{name:'应用到照片',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');await page.locator('.parameter-panel').evaluate(p=>p.scrollTop=0);
     }
     await session.send('Emulation.setCPUThrottlingRate',{rate:4});
     await page.evaluate(()=>{
@@ -52,7 +65,7 @@ const results = path.resolve(__dirname, '../test-results/interaction');
       const summary=values=>{const a=values.slice().sort((a,b)=>a-b);return {count:a.length,median:a[Math.floor(a.length*.5)]||0,p95:a[Math.floor(a.length*.95)]||0,max:a.at(-1)||0};};
       return {heartbeat:summary(m.gaps),inputDispatch:summary(m.inputDelays),inputToAnimationFrame:summary(m.numberPaintDelays),longTasks:summary(m.longTasks),value:document.querySelector('#whites').value,quality:document.querySelector('#mainCanvas').dataset.previewQuality||'sync',renderMode:document.querySelector('#mainCanvas').dataset.previewMode||'sync'};
     });
-    metrics.phase=phase;metrics.e2Enabled=process.env.HMI_PERF_E2==='1';metrics.totalGestureMs=Date.now()-start;metrics.cpuSlowdown=4;metrics.browser=browser.version();
+    metrics.phase=phase;metrics.e2Enabled=process.env.HMI_PERF_E2==='1';metrics.e3Enabled=process.env.HMI_PERF_E3==='1';metrics.e4Enabled=process.env.HMI_PERF_E4==='1';metrics.totalGestureMs=Date.now()-start;metrics.cpuSlowdown=4;metrics.browser=browser.version();
     if(metrics.renderMode==='worker') assert.equal(metrics.quality,'1200');
     await fs.writeFile(path.join(results,`${phase}.json`),JSON.stringify(metrics,null,2));console.log(JSON.stringify(metrics,null,2));
   } finally {await browser.close();}

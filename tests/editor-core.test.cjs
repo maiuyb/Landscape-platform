@@ -102,7 +102,7 @@ test('legacy recipes reproduce frozen v1 pixel output after explicit unit/sign m
 test('v2 recipes preserve EV, highlight direction and new controls; unsupported versions are rejected', () => {
   const state = Core.createState();
   Object.assign(state.adjustments, { exposure: 0.75, highlights: -25, whites: -18, blacks: 23, vibrance: 46 });
-  assert.equal(Core.toRecipe(state).version, 3);
+  assert.equal(Core.toRecipe(state).version, 6);
   assert.deepEqual(Core.recipeState(Core.createState(), Core.toRecipe(state)).state, state);
   const parsed = Core.recipeState(state, { version: 2, steps: [
     { type: 'exposure', params: { value: 500 } }, { type: 'whites', params: { value: -500 } },

@@ -60,7 +60,7 @@ const escape = text => text.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;'
     const legacyPixels = await pixels();
     let downloading = page.waitForEvent('download'); await button('下载配方').click();
     const recipeFile = await (await downloading).path(); const recipe = JSON.parse(await fs.readFile(recipeFile,'utf8'));
-    assert.equal(recipe.version,3); assert.deepEqual(recipe.rendering.legacyTone,{highlights:true,shadows:true});
+    assert.equal(recipe.version,6); assert.deepEqual(recipe.rendering.legacyTone,{highlights:true,shadows:true});
     await button('重置').click();
     await page.getByLabel('导入配方',{exact:true}).setInputFiles(recipeFile); await button('应用到照片').click(); await flush(); assert.equal(await pixels(),legacyPixels);
     await number('highlights',-40); await page.getByRole('status').filter({hasText:'新版平滑调整'}).waitFor();
@@ -71,7 +71,7 @@ const escape = text => text.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;'
     await page.getByLabel('导入配方',{exact:true}).setInputFiles(recipeFile); await flush();
     assert.equal(await page.getByRole('alert').count(),0);
     await button('取消预览').click();await flush();assert.equal(await pixels(),legacyPixels);
-    report.checks.push('v1 exposure/highlight migration, preview cancellation, v2 compatibility export/import, manual upgrade/undo and future-version rejection');
+    report.checks.push('v1 exposure/highlight migration, preview cancellation, legacy compatibility export/import, manual upgrade/undo and future-version rejection');
 
     for(const photo of photos) {
       await upload(photo);

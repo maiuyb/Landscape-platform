@@ -157,3 +157,19 @@ Luminar 决定主要编辑控制与信息组织，Fotor 补充网页流程；Lig
 - [OpenCV 直方图教程](https://docs.opencv.org/4.x/d1/db7/tutorial_py_histogram_begins.html)：256 档分布的技术参考；本项目亮度/RGB 图由当前预览像素计算，透明像素不统计。
 
 E2 复用上述四张真实照片，分别检查 HSL、曲线、自动曝光、自动白平衡及组合设置；参数、来源、许可、变体与工作区截图在本地 `test-results/e2/`。全部在本地处理，不向 AI 服务上传，也不复制 Luminar 素材。菜单选择与新的基础滤镜流程依据用户反馈；不是重新观察竞品所得结论。
+
+### E3 细节参考与原尺寸检查（2026-10-15）
+
+- [scikit-image Unsharp masking](https://scikit-image.org/docs/stable/auto_examples/filters/plot_unsharp_mask.html)：原图与模糊图差值、强度与高斯半径的技术参考。本项目自行实现亮度 USM、梯度边缘保护和增量限制，未引入 Python 图像处理依赖。
+- [scikit-image denoise_bilateral](https://scikit-image.org/docs/stable/api/skimage.restoration.html#skimage.restoration.denoise_bilateral)：空间/颜色距离的保边平滑参考。本项目使用可分离的引导双边近似，明度与色差分别处理；不声称与库的完整二维滤波逐像素相同。
+- [伦敦夜景原文件与元数据](https://commons.wikimedia.org/wiki/File:View_from_The_Shard_to_the_City_at_night_-_geograph.org.uk_-_6361916.jpg)：Marathon，CC BY-SA 2.0，4000×3000，页面记录 ISO 1000。下载原文件用于真实噪点、建筑、天空及 12MP 输出检查。
+- [Gulmarg 雪景原文件](https://commons.wikimedia.org/wiki/File:Snow_covered_gulmarg_landscape_3.jpg)：Gayatri Priyadarshini，CC BY-SA 4.0，2000×1500，检查树林、雪地和构图。另复用山景/日落的 1280px 检查图。
+
+原文件下载脚本为 `scripts/fetch-detail-photos.py`，仅下载到被忽略的 `test-results/e3/native/`；许可与作者沿用 `tests/photo-fixtures.json`，未成为产品素材。E3 对比页标注修改与许可，保存原图像素局部和参数。拉直采用保持当前比例的居中内接矩形，自行根据逆向旋转边界约束求得，不照搬厂商引擎。
+
+
+### E4 编辑补全参考（2026-10-15）
+
+- [Adobe Lightroom Classic：Image tone and color / Calibration](https://helpx.adobe.com/lightroom-classic/desktop/process-and-develop-photos/image-tone-color.html)：核对红/绿/蓝原色的色相、饱和度及与按颜色混合工具的区别，也参考清晰度和去朦胧的控制语义。本项目处理普通解码 RGB，自行实现原色基底变换，不实现 RAW/DCP 或承诺 Adobe 画质等效。
+- [He, Sun, Tang：Single Image Haze Removal Using Dark Channel Prior，作者论文](https://people.csail.mit.edu/kaiming/publications/pami10dehaze.pdf)：大气散射、归一化暗通道与透射率思想及天空区域边界。本项目采用简化局部最小值/平滑、保守透射率和高亮保护，不是论文完整的 soft matting 或商业 Dehaze 复现。
+- 照片继续使用 `tests/photo-fixtures.json` 所列四项许可。E4 处理变体、修改说明和完整参数保存在被忽略的 `test-results/e4/photos/`，可用 `npm.cmd run review:e4` 重建；未引入 Luminar 私有预设或下载商业程序资源作为产品素材。

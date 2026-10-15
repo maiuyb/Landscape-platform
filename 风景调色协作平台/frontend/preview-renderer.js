@@ -10,14 +10,14 @@
       this.timer = setTimeout(() => this.fail(new Error('Preview initialization timed out')), 15000);
       this.worker.onerror = event => { event.preventDefault(); this.fail(new Error(event.message)); };
       this.worker.onmessage = ({ data }) => {
-        if (this.disposed) { data.edited?.close(); data.original?.close(); return; }
+        if (this.disposed) { data.edited?.close(); data.original?.close(); data.maskOverlay?.close(); data.detail?.edited.close(); data.detail?.original.close(); return; }
         clearTimeout(this.timer);
         if (data.type === 'error') { this.fail(new Error(data.message)); return; }
         if (data.type === 'ready') this.ready = true;
         if (data.type === 'frame') {
           this.busy = false;
           // The owner decides whether a completed interactive frame is still useful.
-          try { this.onFrame(data); } finally { data.edited.close(); data.original.close(); }
+          try { this.onFrame(data); } finally { data.edited.close(); data.original.close(); data.maskOverlay?.close(); data.detail?.edited.close(); data.detail?.original.close(); }
         }
         this.pump();
       };
@@ -26,8 +26,8 @@
         this.worker.postMessage({ type: 'source', image }, [image]);
       }).catch(error => this.fail(error));
     }
-    request(state, { maxSide, revision, requestedAt }) {
-      this.pending = { type: 'render', id: ++this.latestId, state, maxSide, revision, requestedAt };
+    request(state, { maxSide, revision, requestedAt, inspector = null, maskOverlay = null }) {
+      this.pending = { type: 'render', id: ++this.latestId, state, maxSide, revision, requestedAt, inspector, maskOverlay };
       this.pump();
     }
     pump() {

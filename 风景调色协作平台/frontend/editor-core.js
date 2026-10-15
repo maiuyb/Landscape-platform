@@ -5,6 +5,9 @@
   else root.EditorCore = core;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const Tools = typeof module === 'object' && module.exports ? require('./editor-tools.js') : globalThis.EditorTools;
+  const Detail = typeof module === 'object' && module.exports ? require('./editor-detail.js') : globalThis.EditorDetail;
+  const Effects = typeof module === 'object' && module.exports ? require('./editor-effects.js') : globalThis.EditorEffects;
+  const Masks = typeof module === 'object' && module.exports ? require('./editor-masks.js') : globalThis.EditorMasks;
   const controls = [
     { key: 'exposure', label: '曝光', group: 'light', min: -3, max: 3, step: 0.05, unit: 'EV', hint: '整体曝光；正值更亮，负值更暗' },
     { key: 'contrast', label: '对比度', group: 'light', hint: '调整明暗之间的差异' },
@@ -32,7 +35,7 @@
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
   function createState() {
     return { adjustments: Object.fromEntries(controls.map(c => [c.key, 0])), legacyTone: { highlights: false, shadows: false },
-      whiteBalance: { gains: [1,1,1], mode: 'original' }, hsl: Tools.createHSL(), curves: Tools.createCurves(), geometry: [], filter: null, filterStrength: 100 };
+      detail: Detail.defaults(), effects: Effects.defaults(), masks: [], whiteBalance: { gains: [1,1,1], mode: 'original' }, hsl: Tools.createHSL(), curves: Tools.createCurves(), geometry: [], filter: null, filterStrength: 100 };
   }
   function createHistory(initial = createState(), maxUndo = 20) {
     let entries = [clone(initial)];
@@ -62,7 +65,7 @@
       try { recipe = JSON.parse(recipe); } catch { throw new Error('配方格式无法读取，请尝试其他方案。'); }
     }
     const version = Array.isArray(recipe) ? 1 : recipe?.version ?? 1;
-    if (![1, 2, 3].includes(version)) throw new Error('暂不支持此配方版本，请使用版本 1、2 或 3 的配方。');
+    if (![1, 2, 3, 4, 5, 6].includes(version)) throw new Error('暂不支持此配方版本，请使用版本 1 到 6 的配方。');
     let steps = Array.isArray(recipe) ? recipe : recipe?.steps;
     if (typeof steps === 'string') {
       try { steps = JSON.parse(steps); } catch { throw new Error('配方格式无法读取，请尝试其他方案。'); }
@@ -77,6 +80,9 @@
       const p = step?.params || {};
       const control = Object.hasOwn(controlByKey, step?.type) ? controlByKey[step.type] : null;
       if (control && (version >= 2 || legacyKeys.has(step.type)) && Number.isFinite(p.value)) {
+        if(version<5&&['temperature','tint'].includes(step.type)&&state.whiteBalance.model==='relative'){
+          state.adjustments.temperature=0;state.adjustments.tint=0;delete state.whiteBalance.model;state.whiteBalance.mode='custom';
+        }
         let value = clamp(p.value, version === 1 ? -100 : control.min, version === 1 ? 100 : control.max);
         if (version === 1 && step.type === 'exposure') { value /= 50; migrated = true; }
         if (version === 1 && step.type === 'highlights') { value = -value; migrated = true; }
@@ -85,12 +91,22 @@
           state.legacyTone[step.type] = version === 1 || legacyTone?.[step.type] === true;
           if (version === 1) migrated = true;
         }
-      } else if (version === 3 && step?.type === 'white-balance' && Array.isArray(p.gains) && p.gains.length === 3 && p.gains.every(v=>Number.isFinite(v)&&v>=.25&&v<=4) && ['original','auto','sample','custom'].includes(p.mode)) {
+      } else if (version >= 3 && step?.type === 'white-balance' && Array.isArray(p.gains) && p.gains.length === 3 && p.gains.every(v=>Number.isFinite(v)&&v>=(version>=5&&p.model==='relative'?1/64:.25)&&v<=(version>=5&&p.model==='relative'?64:4)) && ['original','auto','sample','custom'].includes(p.mode) && (p.model===undefined||(version>=5&&p.model==='relative'))) {
+        if(p.model!=='relative'&&state.whiteBalance.model==='relative')for(const key of['temperature','tint'])if(!steps.some(s=>s?.type===key&&Number.isFinite(s.params?.value)))state.adjustments[key]=0;
         state.whiteBalance = { gains: p.gains.slice(), mode: p.mode };
-      } else if (version === 3 && step?.type === 'hsl' && Tools.bands.some(b=>b.key===p.band) && ['hue','saturation','luminance'].every(k=>Number.isFinite(p[k]))) {
+        if(p.model==='relative')state.whiteBalance.model='relative';
+      } else if (version >= 3 && step?.type === 'hsl' && Tools.bands.some(b=>b.key===p.band) && ['hue','saturation','luminance'].every(k=>Number.isFinite(p[k]))) {
         state.hsl[p.band] = Object.fromEntries(['hue','saturation','luminance'].map(k=>[k,clamp(p[k],-100,100)]));
-      } else if (version === 3 && step?.type === 'curve' && Tools.channels.includes(p.channel) && Tools.validCurve(p.points)) {
+      } else if (version >= 3 && step?.type === 'curve' && Tools.channels.includes(p.channel) && Tools.validCurve(p.points)) {
         state.curves[p.channel] = clone(p.points);
+      } else if (version >= 6 && step?.type === 'effects' && Effects.valid(p)) {
+        state.effects = clone(p);
+      } else if (version >= 6 && step?.type === 'masks' && Array.isArray(p.layers) && p.layers.length<=Masks.limits.layers && p.layers.every(Masks.valid) && new Set(p.layers.map(m=>m.id)).size===p.layers.length) {
+        state.masks = clone(p.layers);
+      } else if (version >= 4 && step?.type === 'detail' && Detail.controls.every(c=>Number.isFinite(p[c.key])&&p[c.key]>=c.min&&p[c.key]<=c.max)) {
+        state.detail = Object.fromEntries(Detail.controls.map(c=>[c.key,p[c.key]]));
+      } else if (version >= 4 && step?.type === 'straighten' && Number.isFinite(p.angle) && Math.abs(p.angle)<=45 && typeof p.autoCrop==='boolean') {
+        state.geometry.push({type:'straighten',params:{angle:p.angle,autoCrop:p.autoCrop}});
       } else if (step?.type === 'filter' && (p.name === null || allowedFilters.has(p.name))) {
         state.filter = p.name;
         state.filterStrength = Number.isFinite(p.strength) ? clamp(p.strength, 0, 100) : 100;
@@ -105,22 +121,34 @@
         warnings.push(`已忽略不支持的操作：${step?.type || '未知'}`);
       }
     }
+    syncWhiteBalance(state);
     if (migrated) warnings.unshift('已兼容旧配方：保留旧版明暗效果，并按原语义读取曝光和高光。');
     return { state, warnings };
   }
   function toRecipe(state) {
     return {
-      version: 3,
+      version: 6,
       rendering: { legacyTone: clone(state.legacyTone) },
       steps: [
         ...clone(state.geometry),
         ...controls.map(c => ({ type: c.key, params: { value: state.adjustments[c.key] } })),
-        { type: 'white-balance', params: clone(state.whiteBalance) },
+        { type: 'detail', params: clone(state.detail) },
+        { type: 'effects', params: clone(state.effects) },
+        { type: 'masks', params: {layers:clone(state.masks)} },
+        { type: 'white-balance', params: state.whiteBalance.model==='relative'?{...clone(state.whiteBalance),gains:Tools.whiteBalanceGains(state.adjustments.temperature,state.adjustments.tint)}:clone(state.whiteBalance) },
         ...Tools.bands.map(b=>({type:'hsl',params:{band:b.key,...state.hsl[b.key]}})),
         ...Tools.channels.map(channel=>({type:'curve',params:{channel,points:clone(state.curves[channel])}})),
         { type: 'filter', params: { name: state.filter, strength: state.filterStrength } }
       ]
     };
+  }
+  function syncWhiteBalance(state) {
+    if(state.whiteBalance.model==='relative')state.whiteBalance.gains=Tools.whiteBalanceGains(state.adjustments.temperature,state.adjustments.tint);
+  }
+  function setWhiteBalance(state,gains,mode) {
+    const values=Tools.whiteBalanceValues(gains);
+    state.adjustments.temperature=clamp(values.temperature,-100,100);state.adjustments.tint=clamp(values.tint,-100,100);
+    state.whiteBalance={gains:Tools.whiteBalanceGains(state.adjustments.temperature,state.adjustments.tint),mode,model:'relative'};
   }
   function rotationSize(width, height, angle) {
     const rad = angle * Math.PI / 180;
@@ -129,9 +157,57 @@
       height: Math.max(1, Math.ceil(width * Math.abs(Math.sin(rad)) + height * Math.abs(Math.cos(rad)) - 1e-8))
     };
   }
+  function straightenSize(width,height,{angle,autoCrop}) {
+    if(!autoCrop)return rotationSize(width,height,angle);
+    const radians=Math.abs(angle)*Math.PI/180,c=Math.cos(radians),s=Math.sin(radians);
+    const factor=Math.min(width/(width*c+height*s),height/(width*s+height*c));
+    return {width:Math.max(1,Math.floor(width*factor+1e-8)),height:Math.max(1,Math.floor(height*factor+1e-8))};
+  }
+  function spatialPadding(state,scale=1){return Detail.padding(state.detail,scale)+Effects.padding(state.effects,scale)+(state.masks||[]).filter(Masks.active).reduce((n,m)=>n+Effects.padding({...Effects.defaults(),...m.adjustments},scale),0);}
+  function processPixels(data,width,height,state,scale=1,context={},tileSize=512) {
+    // Snapshot reactive parameters before spatial loops and mask rasterization as well.
+    state=clone(state);
+    adjustPixels(data,state);
+    const layers=(state.masks||[]).filter(Masks.active);
+    if(!Effects.active(state.effects)&&!layers.length)return Detail.applyTiled(data,width,height,state.detail,scale);
+    const frame={fullWidth:width,fullHeight:height,offsetX:0,offsetY:0,sourceWidth:width/scale,sourceHeight:height/scale,transform:[scale,0,0,scale,0,0],...context};
+    frame.airlight ||= Effects.airlight(data);
+    const localStates=layers.map(m=>{const s=createState();for(const c of controls)if(Object.hasOwn(m.adjustments,c.key))s.adjustments[c.key]=m.adjustments[c.key];s.effects.clarity=m.adjustments.clarity;s.effects.dehaze=m.adjustments.dehaze;return s;});
+    function spatial(pixels,w,h,f){
+      Effects.apply(pixels,w,h,state.effects,scale,f);Detail.apply(pixels,w,h,state.detail,scale);
+      layers.forEach((m,index)=>{const weights=Masks.raster(m,w,h,f);if(!weights.some(v=>v>0))return;const adjusted=pixels.slice(),s=localStates[index];adjustPixels(adjusted,s);Effects.apply(adjusted,w,h,s.effects,scale,f);for(let i=0;i<weights.length;i++)for(let c=0;c<3;c++)pixels[i*4+c]+=weights[i]*(adjusted[i*4+c]-pixels[i*4+c]);});
+    }
+    if(width<=tileSize&&height<=tileSize){spatial(data,width,height,frame);return data;}
+    const source=data.slice(),pad=spatialPadding(state,scale);
+    for(let y=0;y<height;y+=tileSize)for(let x=0;x<width;x+=tileSize){
+      const tw=Math.min(tileSize,width-x),th=Math.min(tileSize,height-y),sx=Math.max(0,x-pad),sy=Math.max(0,y-pad),right=Math.min(width,x+tw+pad),bottom=Math.min(height,y+th+pad),w=right-sx,h=bottom-sy,part=new Uint8ClampedArray(w*h*4);
+      for(let j=0;j<h;j++)part.set(source.subarray(((sy+j)*width+sx)*4,((sy+j)*width+right)*4),j*w*4);
+      spatial(part,w,h,{...frame,offsetX:frame.offsetX+sx,offsetY:frame.offsetY+sy});
+      for(let j=0;j<th;j++)data.set(part.subarray(((y-sy+j)*w+x-sx)*4,((y-sy+j)*w+x-sx+tw)*4),((y+j)*width+x)*4);
+    }
+    return data;
+  }
+  function geometryFrame(sourceWidth,sourceHeight,geometry,width=sourceWidth,height=sourceHeight){
+    let matrix=[width/sourceWidth,0,0,height/sourceHeight,0,0];
+    for(const step of geometry){const p=step.params,oldW=width,oldH=height;({width,height}=outputSize(width,height,[step]));let op;
+      if(step.type==='rotate'||step.type==='straighten'){const r=p.angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);op=[c,s,-s,c,width/2-c*oldW/2+s*oldH/2,height/2-s*oldW/2-c*oldH/2];}
+      else if(step.type==='flip')op=p.direction==='h'?[-1,0,0,1,width,0]:[1,0,0,-1,0,height];
+      else if(step.type==='crop'){const sx=width/(oldW*p.width),sy=height/(oldH*p.height);op=[sx,0,0,sy,-oldW*p.x*sx,-oldH*p.y*sy];}
+      if(op)matrix=Masks.multiply(op,matrix);
+    }
+    return{fullWidth:width,fullHeight:height,sourceWidth,sourceHeight,transform:matrix,offsetX:0,offsetY:0};
+  }
+  function prepareContext(raw,state){
+    const frame={...(raw.editorFrame||{fullWidth:raw.width,fullHeight:raw.height})};
+    if(state.effects.dehaze||(state.masks||[]).some(m=>Masks.active(m)&&m.adjustments.dehaze)){
+      const factor=Math.min(1,224/Math.max(raw.width,raw.height)),sample=makeCanvas(Math.max(1,Math.round(raw.width*factor)),Math.max(1,Math.round(raw.height*factor)));sample.getContext('2d').drawImage(raw,0,0,sample.width,sample.height);const data=sample.getContext('2d').getImageData(0,0,sample.width,sample.height).data;adjustPixels(data,state);frame.airlight=Effects.airlight(data);
+    }
+    return frame;
+  }
   function outputSize(width, height, geometry) {
     for (const step of geometry) {
       if (step.type === 'rotate') ({ width, height } = rotationSize(width, height, step.params.angle));
+      if (step.type === 'straighten') ({ width, height } = straightenSize(width, height, step.params));
       if (step.type === 'crop') {
         width = Math.max(1, Math.round(width * step.params.width));
         height = Math.max(1, Math.round(height * step.params.height));
@@ -143,9 +219,11 @@
     // Read reactive UI parameters once; millions of proxy property reads otherwise dominate processing.
     const a = { ...state.adjustments }, legacyTone = { ...state.legacyTone };
     const filter = state.filter, strength = state.filterStrength / 100;
-    const gains = state.whiteBalance.gains.slice(), hsl = Tools.compileHSL(clone(state.hsl)), curves = Tools.compileCurves(clone(state.curves));
+    const gains = state.whiteBalance.model==='relative'?Tools.whiteBalanceGains(a.temperature,a.tint):state.whiteBalance.gains.slice(), hsl = Tools.compileHSL(clone(state.hsl)), curves = Tools.compileCurves(clone(state.curves));
+    if(state.whiteBalance.model==='relative'){a.temperature=0;a.tint=0;}
+    const calibration=Effects.calibrationMatrix(clone(state.effects.calibration));
     const hslScratch = new Float64Array(3), hasCurves = Object.values(curves).some(Boolean);
-    if (controls.every(c => a[c.key] === 0) && gains.every(v=>v===1) && !hsl && !hasCurves && (!filter || strength === 0)) return data;
+    if (controls.every(c => a[c.key] === 0) && gains.every(v=>v===1) && !hsl && !hasCurves && !calibration && (!filter || strength === 0)) return data;
     const exposure = Math.pow(2, a.exposure);
     const modernToneScale = 0.8 * Math.min(1, exposure);
     const contrast = (259 * (a.contrast + 255)) / (255 * (259 - a.contrast));
@@ -159,6 +237,7 @@
       if (data[i + 3] === 0) continue;
       let r = data[i], g = data[i + 1], b = data[i + 2];
       if (gains[0]!==1 || gains[1]!==1 || gains[2]!==1) { r*=gains[0];g*=gains[1];b*=gains[2]; }
+      if(calibration){const nr=calibration[0]*r+calibration[1]*g+calibration[2]*b,ng=calibration[3]*r+calibration[4]*g+calibration[5]*b;b=calibration[6]*r+calibration[7]*g+calibration[8]*b;r=nr;g=ng;}
       const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
       // The new tonal response remains monotonic at its limits. Imported v1 controls retain their frozen response.
       const shadow = 1 - luma;
@@ -219,17 +298,18 @@
     if (canvas.width !== width || canvas.height !== height) throw new Error('图片尺寸超过浏览器可处理范围。');
     return canvas;
   }
-  function render(image, state, { maxSide = 1200, scale = 1, color = true } = {}) {
+  function render(image, state, { maxSide = 1200, scale = 1, color = true, sourceScale = 1, sourceSize = null } = {}) {
     const width = image.naturalWidth || image.width;
     const height = image.naturalHeight || image.height;
     const ratio = maxSide ? Math.min(1, maxSide / Math.max(width, height)) : scale;
     let canvas = makeCanvas(Math.max(1, Math.round(width * ratio)), Math.max(1, Math.round(height * ratio)));
+    const geometryContext=geometryFrame(sourceSize?.width||width/sourceScale,sourceSize?.height||height/sourceScale,state.geometry,canvas.width,canvas.height);
     canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
     for (const step of state.geometry) {
       const p = step.params;
       let next;
-      if (step.type === 'rotate') {
-        const size = rotationSize(canvas.width, canvas.height, p.angle);
+      if (step.type === 'rotate' || step.type === 'straighten') {
+        const size = step.type === 'straighten' ? straightenSize(canvas.width,canvas.height,p) : rotationSize(canvas.width, canvas.height, p.angle);
         next = makeCanvas(size.width, size.height);
         const ctx = next.getContext('2d');
         ctx.translate(next.width / 2, next.height / 2);
@@ -247,13 +327,26 @@
       }
       if (next) canvas = next;
     }
+    canvas.editorFrame=geometryContext;
     if (color) {
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      adjustPixels(pixels.data, state);
+      processPixels(pixels.data, canvas.width, canvas.height, state, ratio*sourceScale,prepareContext(canvas,state));
       ctx.putImageData(pixels, 0, 0);
     }
     return canvas;
   }
-  return { controls, filters, clone, clamp, createState, createHistory, recipeState, toRecipe, outputSize, adjustPixels, render, tools: Tools };
+  function renderRegion(raw,state,{x=.5,y=.5,side=256}={}) {
+    const width=Math.min(side,raw.width),height=Math.min(side,raw.height);
+    const left=clamp(Math.round(x*raw.width-width/2),0,raw.width-width),top=clamp(Math.round(y*raw.height-height/2),0,raw.height-height);
+    const pad=spatialPadding(state),sx=Math.max(0,left-pad),sy=Math.max(0,top-pad),right=Math.min(raw.width,left+width+pad),bottom=Math.min(raw.height,top+height+pad);
+    const region=raw.getContext('2d').getImageData(sx,sy,right-sx,bottom-sy);
+    processPixels(region.data,region.width,region.height,state,1,{...prepareContext(raw,state),offsetX:sx,offsetY:sy});
+    const padded=makeCanvas(region.width,region.height);padded.getContext('2d').putImageData(region,0,0);
+    const edited=makeCanvas(width,height),original=makeCanvas(width,height);
+    edited.getContext('2d').drawImage(padded,left-sx,top-sy,width,height,0,0,width,height);
+    original.getContext('2d').drawImage(raw,left,top,width,height,0,0,width,height);
+    return {edited,original,left,top,width,height};
+  }
+  return { effects:Effects,masks:Masks,geometryFrame,prepareContext,spatialPadding,syncWhiteBalance, setWhiteBalance, detail: Detail, processPixels, renderRegion, straightenSize, controls, filters, clone, clamp, createState, createHistory, recipeState, toRecipe, outputSize, adjustPixels, render, tools: Tools };
 });

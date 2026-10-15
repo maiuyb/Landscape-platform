@@ -67,6 +67,16 @@
     if(rgb.some(v=>v>=250)&&Math.max(...rgb)-Math.min(...rgb)>12)throw new Error('这处颜色已截断，请选择未过曝的白色或浅灰区域。');
     const target=.299*rgb[0]+.587*rgb[1]+.114*rgb[2];return rgb.map(v=>clamp(target/v,.25,4));
   }
+  // Two chromatic axes plus harmonic normalization: a neutral sample retains its
+  // original luminance. The inverse recovers the ratios of sampleGains exactly.
+  function whiteBalanceValues(gains){
+    return {temperature:25*Math.log2(gains[0]/gains[2]),tint:25*Math.log2(Math.sqrt(gains[0]*gains[2])/gains[1])};
+  }
+  function whiteBalanceGains(temperature,tint){
+    if(temperature===0&&tint===0)return[1,1,1];
+    const gains=[2**(temperature/50+tint/75),2**(-2*tint/75),2**(-temperature/50+tint/75)];
+    const normalizer=.299/gains[0]+.587/gains[1]+.114/gains[2];return gains.map(v=>v*normalizer);
+  }
   function autoWhiteBalance(data){
     // Prefer near-neutral areas; broader gray-world fallback handles a stronger overall cast.
     for(const threshold of [.12,.35]){
@@ -112,5 +122,5 @@
     }
     return{x,y,width:w,height:h};
   }
-  return{bands,channels,identity,createHSL,createCurves,validCurve,curveLUT,compileCurves,lookup,compileHSL,hslPixel,histogram,sampleGains,autoWhiteBalance,autoExposure,resizeCrop};
+  return{bands,channels,identity,createHSL,createCurves,validCurve,curveLUT,compileCurves,lookup,compileHSL,hslPixel,histogram,sampleGains,whiteBalanceValues,whiteBalanceGains,autoWhiteBalance,autoExposure,resizeCrop};
 });
