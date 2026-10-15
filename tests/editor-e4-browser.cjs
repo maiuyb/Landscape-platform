@@ -1,11 +1,12 @@
+const {reveal}=require('./workspace-support.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const folder=path.resolve(__dirname,'../test-results/e4'),url=process.env.HMI_TEST_URL||'http://127.0.0.1:5050';
 (async()=>{
  await fs.mkdir(folder,{recursive:true});const browser=await chromium.launch(),page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true}),errors=[],checks=[];page.on('pageerror',e=>errors.push(e.message));
  const btn=name=>page.getByRole('button',{name,exact:true}),ready=()=>page.waitForFunction(()=>document.querySelector('#mainCanvas')?.dataset.previewStatus==='ready',null,{timeout:60000});
- const range=async(key,v)=>{await page.locator('#'+key).evaluate((e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},v);await ready();};
+ const range=async(key,v)=>{await reveal(page,'#'+key);await page.locator('#'+key).evaluate((e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));},v);await ready();};
  const pixels=()=>page.locator('#mainCanvas').evaluate(c=>c.toDataURL());
- const recipe=async()=>{const d=page.waitForEvent('download');await btn('下载配方').click();return JSON.parse(await fs.readFile(await(await d).path(),'utf8'));};
+ const recipe=async()=>{const d=page.waitForEvent('download');await reveal(page,'.workspace-output');await btn('下载配方').click();return JSON.parse(await fs.readFile(await(await d).path(),'utf8'));};
  const drag=async(a,b)=>{const rect=await page.locator('.mask-drawing').boundingBox();await page.mouse.move(rect.x+rect.width*a[0],rect.y+rect.height*a[1]);await page.mouse.down();await page.mouse.move(rect.x+rect.width*b[0],rect.y+rect.height*b[1],{steps:12});await page.mouse.up();await ready();};
  try{
   await page.goto(url);const png=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=1600;c.height=1000;const ctx=c.getContext('2d'),d=ctx.createImageData(c.width,c.height);for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++){const i=(y*c.width+x)*4,n=((x*19+y*13)%17)-8;d.data.set([75+x/16+n,95+y/18-n,145+(x+y)%40,255],i);}ctx.putImageData(d,0,0);return c.toDataURL().split(',')[1];}),'base64');

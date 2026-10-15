@@ -1,3 +1,4 @@
+const {reveal}=require('./workspace-support.cjs');
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -20,7 +21,7 @@ const escape = text => text.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;'
     await page.locator('#image-input').setInputFiles(path.join(folder, 'photos', photo.file));
     await page.getByRole('status').filter({ hasText: '已载入' }).waitFor(); await flush();
   };
-  const number = async (key,value) => { await page.locator(`#${key}-value`).fill(String(value)); await page.locator(`#${key}-value`).press('Enter'); await flush(); };
+  const number = async (key,value) => { await reveal(page,'#'+key+'-value'); await page.locator(`#${key}-value`).fill(String(value)); await page.locator(`#${key}-value`).press('Enter'); await flush(); };
   try {
     await page.goto(baseURL); await upload(photos[0]);
     assert.equal(await page.locator('.tool-group').first().getAttribute('open') !== null, true);
@@ -40,13 +41,13 @@ const escape = text => text.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;'
     await page.locator('#color-group > summary').click();
     await number('vibrance',35); await number('blacks',20);
     const mixed = await pixels();
-    await button('复位光线').click(); await flush();
-    assert.equal(await page.locator('#blacks-value').inputValue(),'0'); assert.equal(await page.locator('#vibrance-value').inputValue(),'35');
+    await button('复位基础调整').click(); await flush();
+    assert.equal(await page.locator('#blacks-value').inputValue(),'0'); assert.equal(await page.locator('#vibrance-value').inputValue(),'0');
     await button('撤销').click(); await flush(); assert.equal(await pixels(),mixed);
     await button('复位颜色').click(); await flush();
     assert.equal(await page.locator('#blacks-value').inputValue(),'20'); assert.equal(await page.locator('#vibrance-value').inputValue(),'0');
     await button('撤销').click(); await flush(); assert.equal(await pixels(),mixed);
-    report.checks.push('group resets isolate light/color and undo restores all values and pixels; toggling groups adds no history');
+    report.checks.push('base reset clears base controls and color reset isolates color and undo restores all values and pixels; toggling groups adds no history');
 
     await button('重置').click(); await flush();
     const legacy = {version:1,steps:[{type:'exposure',params:{value:37}},{type:'highlights',params:{value:41}},{type:'shadows',params:{value:22}}]};
@@ -58,7 +59,7 @@ const escape = text => text.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;'
     assert.equal(await page.locator('#exposure-value').inputValue(),'0.74');
     assert.equal(await page.locator('#highlights-value').inputValue(),'-41');
     const legacyPixels = await pixels();
-    let downloading = page.waitForEvent('download'); await button('下载配方').click();
+    let downloading = page.waitForEvent('download'); await reveal(page,'.workspace-output');await button('下载配方').click();
     const recipeFile = await (await downloading).path(); const recipe = JSON.parse(await fs.readFile(recipeFile,'utf8'));
     assert.equal(recipe.version,6); assert.deepEqual(recipe.rendering.legacyTone,{highlights:true,shadows:true});
     await button('重置').click();

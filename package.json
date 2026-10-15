@@ -6,6 +6,7 @@
     "prepare": "node scripts/prepare-frontend.cjs",
     "start": "node scripts/start.cjs",
     "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs tests/editor-detail.test.cjs tests/editor-effects.test.cjs",
+    "test:workspace": "node tests/editor-workspace-browser.cjs",
     "test:browser": "node tests/editor-browser.cjs",
     "test:e1": "node tests/editor-e1-browser.cjs",
     "test:photos": "node scripts/fetch-test-photos.cjs",

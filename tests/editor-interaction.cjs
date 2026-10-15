@@ -1,3 +1,4 @@
+const {reveal}=require('./workspace-support.cjs');
 const { chromium } = require('playwright');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -40,18 +41,22 @@ const results = path.resolve(__dirname, '../test-results/interaction');
       recipe.steps=recipe.steps.filter(s=>['effects','masks'].includes(s.type));
       await page.getByLabel('导入配方',{exact:true}).setInputFiles({name:'e4-perf.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(recipe))});await page.getByRole('button',{name:'应用到照片',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');await page.locator('.parameter-panel').evaluate(p=>p.scrollTop=0);
     }
+    await reveal(page,'#whites');
+    const dragKey=process.env.HMI_PERF_PRESETS==='1'?'filter-strength':'whites';
+    if(dragKey==='filter-strength'){await page.getByRole('tab',{name:'预设',exact:true}).click();await page.getByRole('button',{name:'通透',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');await page.waitForFunction(()=>[...document.querySelectorAll('.preset-card canvas')].every(c=>c.dataset.thumbnailStatus==='ready'));}
+    await page.locator('#'+dragKey).scrollIntoViewIfNeeded();
     await session.send('Emulation.setCPUThrottlingRate',{rate:4});
-    await page.evaluate(()=>{
+    await page.evaluate(dragKey=>{
       window.dragMetrics={gaps:[],inputDelays:[],numberPaintDelays:[],longTasks:[]};
       const m=window.dragMetrics;let previous=performance.now();
       m.timer=setInterval(()=>{const now=performance.now();m.gaps.push(now-previous);previous=now;},16);
       m.observer=new PerformanceObserver(list=>m.longTasks.push(...list.getEntries().map(e=>e.duration)));m.observer.observe({type:'longtask',buffered:false});
-      document.querySelector('#whites').addEventListener('input',event=>{
+      document.querySelector('#'+dragKey).addEventListener('input',event=>{
         const start=performance.now();m.inputDelays.push(start-event.timeStamp);
         requestAnimationFrame(()=>m.numberPaintDelays.push(performance.now()-start));
       });
-    });
-    const box=await page.locator('#whites').boundingBox();
+    },dragKey);
+    const box=await page.locator('#'+dragKey).boundingBox();
     await page.mouse.move(box.x+box.width*.6,box.y+box.height/2);await page.mouse.down();
     const start=Date.now();
     for(let i=0;i<40;i++) {
@@ -60,12 +65,13 @@ const results = path.resolve(__dirname, '../test-results/interaction');
     }
     await page.mouse.up();
     await page.waitForFunction(()=>!document.querySelector('#mainCanvas').dataset.previewStatus || document.querySelector('#mainCanvas').dataset.previewStatus==='ready');
-    const metrics=await page.evaluate(()=>{
+    const metrics=await page.evaluate(dragKey=>{
       const m=window.dragMetrics;clearInterval(m.timer);m.observer.disconnect();
       const summary=values=>{const a=values.slice().sort((a,b)=>a-b);return {count:a.length,median:a[Math.floor(a.length*.5)]||0,p95:a[Math.floor(a.length*.95)]||0,max:a.at(-1)||0};};
-      return {heartbeat:summary(m.gaps),inputDispatch:summary(m.inputDelays),inputToAnimationFrame:summary(m.numberPaintDelays),longTasks:summary(m.longTasks),value:document.querySelector('#whites').value,quality:document.querySelector('#mainCanvas').dataset.previewQuality||'sync',renderMode:document.querySelector('#mainCanvas').dataset.previewMode||'sync'};
-    });
-    metrics.phase=phase;metrics.e2Enabled=process.env.HMI_PERF_E2==='1';metrics.e3Enabled=process.env.HMI_PERF_E3==='1';metrics.e4Enabled=process.env.HMI_PERF_E4==='1';metrics.totalGestureMs=Date.now()-start;metrics.cpuSlowdown=4;metrics.browser=browser.version();
+      return {heartbeat:summary(m.gaps),inputDispatch:summary(m.inputDelays),inputToAnimationFrame:summary(m.numberPaintDelays),longTasks:summary(m.longTasks),value:document.querySelector('#'+dragKey).value,quality:document.querySelector('#mainCanvas').dataset.previewQuality||'sync',renderMode:document.querySelector('#mainCanvas').dataset.previewMode||'sync'};
+    },dragKey);
+    metrics.control=dragKey;metrics.phase=phase;metrics.e2Enabled=process.env.HMI_PERF_E2==='1';metrics.e3Enabled=process.env.HMI_PERF_E3==='1';metrics.e4Enabled=process.env.HMI_PERF_E4==='1';metrics.totalGestureMs=Date.now()-start;metrics.cpuSlowdown=4;metrics.browser=browser.version();
+    assert.ok(metrics.inputDispatch.count>=30,`only ${metrics.inputDispatch.count} actual slider inputs recorded`);
     if(metrics.renderMode==='worker') assert.equal(metrics.quality,'1200');
     await fs.writeFile(path.join(results,`${phase}.json`),JSON.stringify(metrics,null,2));console.log(JSON.stringify(metrics,null,2));
   } finally {await browser.close();}

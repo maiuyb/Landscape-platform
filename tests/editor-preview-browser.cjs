@@ -1,3 +1,4 @@
+const {reveal}=require('./workspace-support.cjs');
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const path=require('node:path');
@@ -31,7 +32,7 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050';
     await fallback.waitForFunction(()=>document.querySelector('#mainCanvas')?.dataset.previewStatus==='ready');
     assert.equal(await fallback.locator('#mainCanvas').getAttribute('data-preview-mode'),'compatible');
     assert.equal(await fallback.locator('#mainCanvas').evaluate(c=>c.toDataURL()),replacement);
-    await fallback.locator('#whites-value').fill('30');await fallback.locator('#whites-value').press('Enter');
+    await reveal(fallback,'#whites-value');await fallback.locator('#whites-value').fill('30');await fallback.locator('#whites-value').press('Enter');
     await fallback.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');
     assert.notEqual(await fallback.locator('#mainCanvas').evaluate(c=>c.toDataURL()),replacement);
     await context.close();assert.deepEqual(errors,[]);

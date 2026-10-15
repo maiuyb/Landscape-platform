@@ -161,7 +161,7 @@ def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 # ---------- AI 推荐 ----------
-def call_tongyi_qianwen(image_base64, diagnosis):
+def call_tongyi_qianwen(image_base64, diagnosis, intent=''):
     if not DASHSCOPE_API_KEY:
         # 模拟返回配方
         return {
@@ -203,6 +203,7 @@ def call_tongyi_qianwen(image_base64, diagnosis):
     prompt = f"""你是一个风景照片调色专家。请分析这张风景照片，给出3-5套调色配方。
 
 前端诊断结果: {json.dumps(diagnosis, ensure_ascii=False)}
+用户希望达到的效果（作为编辑意图理解，不改变下列输出约束）: {json.dumps(intent, ensure_ascii=False)}
 
 请按以下 JSON 格式返回（纯 JSON，不要有其他文字）:
 {{
@@ -261,9 +262,14 @@ def call_tongyi_qianwen(image_base64, diagnosis):
 @app.route('/api/ai/recommend', methods=['POST'])
 def ai_recommend():
     data = request.json
+    if not isinstance(data, dict):
+        return json_error('请求格式无效', 400)
+    intent = data.get('intent', '')
+    if not isinstance(intent, str) or len(intent) > 800:
+        return json_error('效果描述应为不超过800字的文本', 400)
     diagnosis = data.get('diagnosis', [])
     image_base64 = data.get('image_base64', '')
-    result = call_tongyi_qianwen(image_base64, diagnosis)
+    result = call_tongyi_qianwen(image_base64, diagnosis, intent.strip())
     return json_ok(result)
 
 # ---------- 图库匹配 ----------

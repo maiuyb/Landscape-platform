@@ -1,3 +1,4 @@
+const {reveal}=require('./workspace-support.cjs');
 const {chromium}=require('playwright');const assert=require('node:assert/strict');const fs=require('node:fs/promises');const path=require('node:path');
 const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.resolve(__dirname,'../test-results/e2');
 (async()=>{
@@ -6,7 +7,7 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
   const button=name=>page.getByRole('button',{name,exact:true});
   const ready=()=>page.waitForFunction(()=>document.querySelector('#mainCanvas')?.dataset.previewStatus==='ready');
   const pixels=()=>page.locator('#mainCanvas').evaluate(c=>c.toDataURL());
-  const range=async(key,value)=>{await page.locator('#'+key).evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));},value);await ready();};
+  const range=async(key,value)=>{await reveal(page,'#'+key);await page.locator('#'+key).evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));},value);await ready();};
   const sample=()=>page.locator('#mainCanvas').evaluate(c=>Array.from(c.getContext('2d').getImageData(Math.round(c.width*.15),Math.round(c.height*.5),1,1).data));
   try{
     await page.goto(baseURL);
@@ -17,17 +18,17 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
     await page.locator('label[for="temperature"]').dblclick();await ready();assert.equal(await page.locator('#temperature-value').inputValue(),'0');
     await button('撤销').click();await ready();assert.equal(await page.locator('#temperature-value').inputValue(),'17');
     const base=await pixels();
-    await button('胶片').hover();await ready();const filmHover=await pixels();assert.notEqual(filmHover,base);assert.equal(await page.locator('.preview-bar').count(),0);
-    assert.equal(await page.locator('#filter-description-film').isVisible(),true);
+    await page.getByRole('tab',{name:'预设',exact:true}).click();await button('胶片').hover();await ready();const filmHover=await pixels();assert.notEqual(filmHover,base);assert.equal(await page.locator('.preview-bar').count(),0);
+    assert.equal(await page.locator('#preset-description-film').isVisible(),true);
     await button('冷调').hover();await ready();assert.notEqual(await pixels(),filmHover);
     await page.locator('#mainCanvas').hover();await ready();assert.equal(await pixels(),base);
     await button('胶片').click();await ready();assert.equal(await button('胶片').getAttribute('aria-pressed'),'true');
-    await range('filter-strength',40);await button('复位滤镜强度').click();await ready();assert.equal(await page.locator('#filter-strength').inputValue(),'100');
+    await range('filter-strength',40);await button('复位预设强度').click();await ready();assert.equal(await page.locator('#filter-strength').inputValue(),'100');
     await button('撤销').click();await ready();assert.equal(await page.locator('#filter-strength').inputValue(),'40');await button('撤销').click();await ready();
     await button('冷调').click();await ready();assert.equal(await button('冷调').getAttribute('aria-pressed'),'true');
     await button('撤销').click();await ready();assert.equal(await button('胶片').getAttribute('aria-pressed'),'true');
     await button('撤销').click();await ready();assert.equal(await pixels(),base);
-    checks.push('visible reset plus double-click reset, reversible hover/leave, tooltip, direct filter switching and one-click undo');
+    await page.getByRole('tab',{name:'编辑',exact:true}).click();checks.push('visible reset plus double-click reset, reversible hover/leave, tooltip, direct filter switching and one-click undo');
 
     await page.getByText('构图与方向',{exact:true}).click();await button('裁剪照片').click();
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
@@ -73,13 +74,13 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
     await button('重置').click();await ready();await button('自动白平衡').click();await ready();
     checks.push('auto exposure is undoable; sampling corrects a known cast; auto/neutral/original modes preserve undo and redo');
 
-    await page.locator('#hsl-group > summary').click();await range('hsl-blue',45);
+    await reveal(page,'#hsl-group');await range('hsl-blue',45);
     await page.getByRole('combobox',{name:'HSL 调整类型'}).selectOption('saturation');await range('hsl-blue',-25);
     await page.getByRole('combobox',{name:'HSL 调整类型'}).selectOption('hue');assert.equal(await page.locator('#hsl-blue-value').inputValue(),'45');
     await button('撤销').click();await ready();await page.getByRole('combobox',{name:'HSL 调整类型'}).selectOption('saturation');assert.equal(await page.locator('#hsl-blue-value').inputValue(),'0');
     await button('重做').click();await ready();assert.equal(await page.locator('#hsl-blue-value').inputValue(),'-25');
     const beforeCurves=await pixels(),beforeSample=await sample();
-    await page.locator('#curves-group > summary').click();await page.locator('.curve-editor').scrollIntoViewIfNeeded();const graph=await page.locator('.curve-editor').boundingBox();
+    await reveal(page,'#curves-group');await page.locator('.curve-editor').scrollIntoViewIfNeeded();const graph=await page.locator('.curve-editor').boundingBox();
     await page.mouse.click(graph.x+graph.width*.5,graph.y+graph.height*.35);await ready();assert.equal(await page.locator('.curve-point').count(),3);assert.ok((await sample())[0]>beforeSample[0]);
     await page.getByRole('spinbutton',{name:'曲线输出值',exact:true}).fill('180');await page.setViewportSize({width:1440,height:980});
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));assert.equal(await page.getByRole('spinbutton',{name:'曲线输出值',exact:true}).inputValue(),'180');
@@ -88,7 +89,7 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
     await button('红曲线').click();assert.equal(await page.locator('.curve-point').count(),2);await button('整体曲线').click();assert.equal(await page.locator('.curve-point').count(),3);
     await button('撤销').click();await ready();assert.equal(await pixels(),beforeCurves);await button('重做').click();await ready();
     const final=await pixels();
-    let waiting=page.waitForEvent('download');await button('下载配方').click();const recipeFile=await(await waiting).path(),recipe=JSON.parse(await fs.readFile(recipeFile,'utf8'));assert.equal(recipe.version,6);
+    let waiting=page.waitForEvent('download');await reveal(page,'.workspace-output');await button('下载配方').click();const recipeFile=await(await waiting).path(),recipe=JSON.parse(await fs.readFile(recipeFile,'utf8'));assert.equal(recipe.version,6);
     assert.equal(recipe.steps.find(s=>s.type==='hsl'&&s.params.band==='blue').params.hue,45);
     assert.equal(recipe.steps.find(s=>s.type==='curve'&&s.params.channel==='master').params.points.length,3);
     await button('重置').click();await ready();assert.equal(await pixels(),original);

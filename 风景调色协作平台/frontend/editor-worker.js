@@ -12,7 +12,13 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ type: 'ready' });
       return;
     }
-    if (data.type !== 'render' || !source) return;
+    if(!source)return;
+    if(data.type==='thumbnails'){
+      const items=[];
+      for(const item of data.items){try{const state=EditorCore.recipeState(data.state,item.recipe).state,canvas=EditorCore.render(source,state,{maxSide:240});items.push({key:item.key,image:await createImageBitmap(canvas)});}catch{}}
+      self.postMessage({type:'thumbnails',generation:data.generation,items},items.map(i=>i.image));return;
+    }
+    if (data.type !== 'render') return;
     const start = performance.now();
     const key = JSON.stringify([data.maxSide, data.state.geometry]);
     let cached = geometryCache.get(key);

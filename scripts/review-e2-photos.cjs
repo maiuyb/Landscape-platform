@@ -1,3 +1,4 @@
+const {reveal}=require('../tests/workspace-support.cjs');
 const {chromium}=require('playwright');const fs=require('node:fs/promises');const path=require('node:path');const assert=require('node:assert/strict');
 const photos=require('../tests/photo-fixtures.json'),baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.resolve(__dirname,'../test-results/e2');
 const escape=value=>String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -29,10 +30,10 @@ const escape=value=>String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;
         await page.locator('#image-input').setInputFiles(file);await page.getByRole('status').filter({hasText:'已载入'}).waitFor();
         await page.getByLabel('导入配方',{exact:true}).setInputFiles({name:'e2-look.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(result.variants.at(-1).recipe))});
         await page.getByRole('button',{name:'应用到照片',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#mainCanvas').dataset.previewStatus==='ready');
-        await page.locator('#color-group > summary').click();await page.locator('#hsl-group > summary').click();
-        await page.locator('.tool-group').first().evaluate(el=>{el.open=false;});await page.locator('.parameter-panel').evaluate(el=>{el.scrollTop=0;});
+        await page.locator('#color-group > summary').click();await reveal(page,'#hsl-group');
+        await page.locator('.tool-group').first().evaluate(el=>{el.open=false;});await page.locator('.panel-scroll').evaluate(el=>{el.scrollTop=0;});
         await page.screenshot({path:path.join(folder,'workspace-hsl.png')});
-        await page.locator('#color-group').evaluate(el=>{el.open=false;});await page.locator('#curves-group > summary').click();await page.locator('.parameter-panel').evaluate(el=>{el.scrollTop=0;});
+        await page.locator('#color-group').evaluate(el=>{el.open=false;});await reveal(page,'#curves-group');await page.locator('.panel-scroll').evaluate(el=>{el.scrollTop=0;});
         await page.screenshot({path:path.join(folder,'workspace-curves.png')});
         await page.getByText('构图与方向',{exact:true}).click();await page.getByRole('button',{name:'裁剪照片',exact:true}).click();
         await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.screenshot({path:path.join(folder,'workspace-crop.png')});

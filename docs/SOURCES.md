@@ -173,3 +173,10 @@ E2 复用上述四张真实照片，分别检查 HSL、曲线、自动曝光、�
 - [Adobe Lightroom Classic：Image tone and color / Calibration](https://helpx.adobe.com/lightroom-classic/desktop/process-and-develop-photos/image-tone-color.html)：核对红/绿/蓝原色的色相、饱和度及与按颜色混合工具的区别，也参考清晰度和去朦胧的控制语义。本项目处理普通解码 RGB，自行实现原色基底变换，不实现 RAW/DCP 或承诺 Adobe 画质等效。
 - [He, Sun, Tang：Single Image Haze Removal Using Dark Channel Prior，作者论文](https://people.csail.mit.edu/kaiming/publications/pami10dehaze.pdf)：大气散射、归一化暗通道与透射率思想及天空区域边界。本项目采用简化局部最小值/平滑、保守透射率和高亮保护，不是论文完整的 soft matting 或商业 Dehaze 复现。
 - 照片继续使用 `tests/photo-fixtures.json` 所列四项许可。E4 处理变体、修改说明和完整参数保存在被忽略的 `test-results/e4/photos/`，可用 `npm.cmd run review:e4` 重建；未引入 Luminar 私有预设或下载商业程序资源作为产品素材。
+
+
+### 三标签工作区参考（2026-10-15）
+
+- 用户提供的 Luminar Neo 预设标签截图及本轮确认：照片保留，右侧编辑/预设/AI 三标签切换；构成当前布局的直接需求依据。
+- [W3C APG Tabs Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/)：标签选择、关联面板、方向键及 Home/End 语义参考；不据此宣称已完成整体 WCAG 审计。
+- [NN/g Progressive Disclosure](https://www.nngroup.com/articles/progressive-disclosure/)：常用控制优先、进阶按需展开的设计参考。具体层级为本项目方案，仍需用户任务观察评估。

@@ -6,8 +6,49 @@ createApp({
     AdjustmentControl: {
       props: ['control', 'modelValue', 'disabled'],
       emits: ['update:modelValue', 'start', 'commit', 'number-input', 'reset'],
+      setup() {
+        const helpButton = ref(null), hintBox = ref(null), hintOpen = ref(false);
+        const hintStyle = ref({ visibility: 'hidden' });
+        function hideHint() {
+          hintOpen.value = false;
+          window.removeEventListener('scroll', positionHint, true);
+          window.removeEventListener('resize', hideHint);
+          document.removeEventListener('pointerdown', outsideHint, true);
+        }
+        function outsideHint(event) {
+          if (!helpButton.value?.contains(event.target)) hideHint();
+        }
+        function positionHint() {
+          if (!hintOpen.value || !helpButton.value || !hintBox.value) return;
+          const anchor = helpButton.value.getBoundingClientRect(), box = hintBox.value.getBoundingClientRect();
+          const panel = helpButton.value.closest('.panel-scroll')?.getBoundingClientRect();
+          if (!anchor.width || !anchor.height || anchor.bottom <= 0 || anchor.top >= innerHeight ||
+              (panel && (anchor.bottom <= panel.top || anchor.top >= panel.bottom))) return hideHint();
+          const left = Math.max(8, Math.min(innerWidth - box.width - 8, anchor.left + anchor.width / 2 - box.width / 2));
+          const below = anchor.bottom + 6;
+          const top = Math.max(8, Math.min(innerHeight - box.height - 8, below + box.height <= innerHeight - 8 ? below : anchor.top - box.height - 6));
+          hintStyle.value = { left: left + 'px', top: top + 'px' };
+        }
+        async function showHint() {
+          if (hintOpen.value) return;
+          hintStyle.value = { visibility: 'hidden' };
+          hintOpen.value = true;
+          // Escape the sidebar's scroll clipping; fixed coordinates belong to the viewport.
+          window.addEventListener('scroll', positionHint, true);
+          window.addEventListener('resize', hideHint);
+          document.addEventListener('pointerdown', outsideHint, true);
+          await nextTick();
+          positionHint();
+        }
+        function leaveHint() {
+          if (document.activeElement !== helpButton.value) hideHint();
+        }
+        function escapeHint() { hideHint(); helpButton.value?.blur(); }
+        onBeforeUnmount(hideHint);
+        return { helpButton, hintBox, hintOpen, hintStyle, showHint, hideHint, leaveHint, escapeHint };
+      },
       template: `<div class="adjustment" :class="[control.rail ? 'rail-' + control.rail : '', {'custom-rail': control.gradient}]" :style="control.gradient ? {'--rail': control.gradient} : undefined">
-        <div class="adjustment-heading"><label :for="control.key" @dblclick="$emit('reset', control.key)" title="双击复位">{{ control.label }}</label>
+        <div class="adjustment-heading"><div class="control-label"><label :for="control.key" @dblclick="$emit('reset', control.key)" title="双击复位">{{ control.label }}</label><button ref="helpButton" type="button" class="control-help" :aria-label="control.label + '说明'" :aria-describedby="control.key + '-hint'" @mouseenter="showHint" @mouseleave="leaveHint" @focus="showHint" @blur="hideHint" @click="showHint" @keydown.esc.stop.prevent="escapeHint">?</button><teleport to="body"><span ref="hintBox" v-show="hintOpen" class="control-hint floating-control-hint" :style="hintStyle" :id="control.key + '-hint'" role="tooltip">{{ control.hint }}</span></teleport></div>
           <div class="value-entry"><input :id="control.key + '-value'" type="number" :min="control.min" :max="control.max" step="any"
             :disabled="disabled" :value="control.precision || control.key === 'exposure' ? Number(modelValue).toFixed(control.precision || 2) : modelValue" :aria-label="control.label + '数值'"
             :aria-describedby="control.key + '-hint'" @change="$emit('number-input', control, $event)"
@@ -17,7 +58,7 @@ createApp({
           :disabled="disabled" :value="modelValue" @input="$emit('start'); $emit('update:modelValue', Number($event.target.value))" @change="$emit('commit')" @pointercancel="$emit('commit')"
           :aria-describedby="control.key + '-hint'" :title="control.hint">
           <button class="reset-control" @click="$emit('reset', control.key)" :aria-label="'复位' + (control.resetLabel || control.label)" :disabled="modelValue === (control.default || 0)">↺</button></div>
-        <p class="control-hint" :id="control.key + '-hint'">{{ control.hint }}</p></div>`
+        </div>`
     }
   },
   setup() {
@@ -33,7 +74,36 @@ createApp({
     const hslMode = ref('hue'), curveChannel = ref('master'), selectedCurvePoint = ref(0);
     const curveDraft = reactive({});
     let curveDrag = null;
-    const preview = ref(null), aiOpen = ref(false), aiLoading = ref(false), aiResults = ref([]), aiStatus = ref('');
+    const preview = ref(null), aiLoading = ref(false), aiResults = ref([]), aiStatus = ref('');
+    const panelTab=ref('edit'),panelScroller=ref(null),aiDraft=ref(''),aiInput=ref(null),aiMessages=ref([]),aiUnread=ref(false),aiDemo=ref(false),aiAppliedName=ref(''),compareGroup=ref(null);
+    const panelTabs=[{key:'edit',label:'编辑'},{key:'presets',label:'预设'},{key:'ai',label:'AI 助手'}],panelScroll={edit:0,presets:0,ai:0};
+    const presetCategory=ref('all'),presetCategories=[{key:'all',label:'全部'},{key:'natural',label:'自然'},{key:'warm',label:'暖色'},{key:'film',label:'胶片'},{key:'cool',label:'冷调'},{key:'mono',label:'黑白'}];
+    const presetItems=Core.filters.map((f,i)=>({...f,category:['natural','warm','film','cool','mono'][i],recipe:{version:6,steps:[{type:'filter',params:{name:f.name,strength:100}}]}}));
+    const visiblePresets=computed(()=>presetItems.filter(f=>presetCategory.value==='all'||f.category===presetCategory.value));
+    const thumbnailTargets=new Map();let thumbnailTimer=null,thumbnailGeneration=0;
+    function registerThumbnail(key,el){if(el)thumbnailTargets.set(key,el);else thumbnailTargets.delete(key);}
+    function drawThumbnail(key,result){const target=thumbnailTargets.get(key);if(!target)return;draw(target,result);target.dataset.thumbnailStatus='ready';}
+    function requestThumbnails(){clearTimeout(thumbnailTimer);const generation=++thumbnailGeneration;thumbnailTimer=setTimeout(async()=>{if(!sourcePreview||dragging||panelTab.value==='edit')return;const items=panelTab.value==='presets'?visiblePresets.value.map(f=>({key:'preset-'+f.name,recipe:f.recipe})):aiResults.value.map((recipe,i)=>({key:'ai-'+i,recipe}));if(!items.length)return;for(const item of items){const target=thumbnailTargets.get(item.key);if(target)target.dataset.thumbnailStatus='pending';}const snapshot=Core.clone(state.value);if(renderer){renderer.requestThumbnails(snapshot,items,generation);return;}for(const item of items){await new Promise(requestAnimationFrame);if(generation!==thumbnailGeneration)return;try{const c=Core.render(sourcePreview,Core.recipeState(snapshot,item.recipe).state,{maxSide:240,sourceScale:sourcePreview.width/sourceImage.value.naturalWidth,sourceSize:{width:sourceImage.value.naturalWidth,height:sourceImage.value.naturalHeight}});drawThumbnail(item.key,c);}catch{}}},100);}
+    async function switchPanel(key,focus=false){
+      if(!panelTabs.some(t=>t.key===key)||exporting.value)return;
+      if(key===panelTab.value){if(focus&&key==='ai'){await nextTick();aiInput.value?.focus({preventScroll:true});}return;}
+      if(panelScroller.value)panelScroll[panelTab.value]=panelScroller.value.scrollTop;
+      maskPointerUp();maskEditing.value=false;wbPicking.value=false;hoverFilter.value=null;compareGroup.value=null;preview.value=null;
+      // Geometric drafts remain visibly active until explicitly applied or cancelled.
+      if(dragging)commit();panelTab.value=key;if(key==='ai')aiUnread.value=false;
+      await nextTick();if(panelScroller.value)panelScroller.value.scrollTop=panelScroll[key];requestThumbnails();
+      if(focus&&key==='ai')aiInput.value?.focus({preventScroll:true});
+      if(window.innerWidth<=760&&focus)document.querySelector('.workspace-tabs')?.scrollIntoView({block:'start',behavior:'smooth'});
+    }
+    function tabKey(event,index){let next;if(event.key==='ArrowRight')next=(index+1)%3;else if(event.key==='ArrowLeft')next=(index+2)%3;else if(event.key==='Home')next=0;else if(event.key==='End')next=2;else return;event.preventDefault();switchPanel(panelTabs[next].key);nextTick(()=>document.getElementById('tab-'+panelTabs[next].key)?.focus());}
+    function openMasks(){switchPanel('edit');nextTick(()=>{const el=document.getElementById('masks-group');if(el){el.open=true;el.scrollIntoView({block:'start',behavior:'smooth'});}});}
+    function closeGeometry(event){if(!event||!event.target.closest('.geometry-menu')){const el=document.querySelector('.geometry-menu');if(el)el.open=false;}}
+    const groupAdjusted=computed(()=>{const s=state.value,z=Core.createState();return{basic:JSON.stringify([s.adjustments,s.whiteBalance])!==JSON.stringify([z.adjustments,z.whiteBalance]),fine:JSON.stringify([s.hsl,s.curves,s.effects.calibration])!==JSON.stringify([z.hsl,z.curves,z.effects.calibration]),detail:JSON.stringify(s.detail)!==JSON.stringify(z.detail)||!!(s.effects.clarity||s.effects.dehaze),vignette:!!s.effects.vignette.amount,masks:s.masks.some(Core.masks.active)};});
+    function withoutGroup(base,key){const s=Core.clone(base),z=Core.createState();if(key==='basic'){s.adjustments=z.adjustments;s.whiteBalance=z.whiteBalance;s.legacyTone=z.legacyTone;}if(key==='fine'){s.hsl=z.hsl;s.curves=z.curves;s.effects.calibration=z.effects.calibration;}if(key==='detail'){s.detail=z.detail;s.effects.clarity=0;s.effects.dehaze=0;}if(key==='vignette')s.effects.vignette=z.effects.vignette;if(key==='masks')s.masks=[];return s;}
+    function holdGroup(key,event){if(locked.value||!groupAdjusted.value[key])return;hoverFilter.value=null;compareMode.value='edited';compareGroup.value=key;if(event?.pointerId!==undefined)event.currentTarget.setPointerCapture(event.pointerId);}
+    function resetToolGroup(key){const next=withoutGroup(state.value,key);state.value=next;if(key==='vignette')vignetteDirection.value='dark';commit();}
+    function proposalSummary(recipe){try{const next=Core.recipeState(state.value,recipe).state,parts=[];for(const c of Core.controls)if(next.adjustments[c.key]!==state.value.adjustments[c.key])parts.push(`${c.label} ${Number(next.adjustments[c.key]).toFixed(c.key==='exposure'?2:0)}${c.unit?' '+c.unit:''}`);if(next.filter!==state.value.filter)parts.push(next.filter?'风格 · '+(Core.filters.find(f=>f.name===next.filter)?.label||next.filter):'移除风格');return parts.join(' · ')||recipe.description||'保留当前设置，可先预览比较';}catch{return'配方暂时无法读取';}}
+    async function locateProposal(recipe){let steps;try{steps=typeof recipe.steps==='string'?JSON.parse(recipe.steps):recipe.steps;}catch{return fail('此方案的工具列表无法读取，请尝试其他方案。');}const key=steps?.find(s=>Core.controls.some(c=>c.key===s.type))?.type||'exposure';await switchPanel('edit');const el=document.getElementById(key);if(el){for(let p=el;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;await nextTick();el.scrollIntoView({block:'center'});el.focus({preventScroll:true});}}
     const galleryLoading = ref(false), galleryResults = ref([]);
     const compareMode = ref('edited'), sliderPos = ref(50), zoom = ref(100);
     const viewport = reactive({ width: 600, height: 400 });
@@ -75,7 +145,8 @@ createApp({
     const colorControls = computed(()=>Core.controls.filter(c=>c.group==='color').map(c=>(state.value.whiteBalance.model==='relative'||legacyBalanceValues.value)&&['temperature','tint'].includes(c.key)?{...c,step:.1,precision:2}:c));
     function adjustmentValue(key) {return legacyBalanceValues.value&&['temperature','tint'].includes(key)?legacyBalanceValues.value[key]:state.value.adjustments[key];}
     const activeState = computed(() => {
-      const base=preview.value?.state || hoveredState.value || state.value;
+      let base=preview.value?.state || hoveredState.value || state.value;
+      if(compareGroup.value)base=withoutGroup(base,compareGroup.value);
       if(!straightenOpen.value)return base;
       const next=Core.clone(base);next.geometry.push({type:'straighten',params:{angle:straightenAngle.value,autoCrop:straightenAutoCrop.value}});return next;
     });
@@ -141,8 +212,9 @@ createApp({
           onError() {
             if (renderer !== owner) return;
             renderer = null;
-            notify('已切换兼容预览方式，可以继续编辑。'); schedulePaint();
+            notify('已切换兼容预览方式，可以继续编辑。'); schedulePaint();requestThumbnails();
           }
+          ,onThumbnails(result){if(result.generation!==thumbnailGeneration)return;for(const item of result.items)drawThumbnail(item.key,item.image);}
         });
         renderer = owner;
       } catch { renderer = null; }
@@ -176,15 +248,18 @@ createApp({
     watch([inspectorOpen,inspectorPosition],schedulePaint,{deep:true,flush:'post'});
     watch([maskId,maskEditing,showMask],schedulePaint,{flush:'post'});
     watch(selectedMask,m=>{if(!m){maskEditing.value=false;maskDrag=null;}});
+    watch([state,presetCategory,aiResults],requestThumbnails,{deep:true,flush:'post'});
+    watch(aiMessages,async()=>{if(panelTab.value!=='ai')return;await nextTick();const log=document.querySelector('.ai-conversation');if(log)log.scrollTop=log.scrollHeight;},{deep:true});
     function invalidateProposals() {
       if (aiResults.value.length) aiStatus.value = '当前编辑已改变，请重新获取建议。';
       aiResults.value = []; galleryResults.value = [];
     }
     function commit() {
+      compareGroup.value=null;
       dragging = false;
       hoverFilter.value=null;wbPicking.value=false;
       if (history.commit(state.value)) invalidateProposals();
-      historyVersion.value++; schedulePaint();
+      historyVersion.value++; schedulePaint();requestThumbnails();
     }
     function restore(action) {
       maskPointerUp();maskEditing.value=false;
@@ -215,7 +290,7 @@ createApp({
       for (const control of Core.controls) {
         if (group === 'light' ? control.group !== 'color' : control.group === group) setAdjustment(control.key, 0);
       }
-      if(group==='color'){state.value.whiteBalance={gains:[1,1,1],mode:'original'};state.value.hsl=Core.tools.createHSL();state.value.effects.calibration=Core.effects.defaults().calibration;}
+      if(group==='color'){state.value.whiteBalance={gains:[1,1,1],mode:'original'};}
       commit(); notify(`已复位${group === 'light' ? '光线' : '颜色'}，可撤销。`);
     }
     function inputAdjustment(control, event) {
@@ -255,6 +330,7 @@ createApp({
         vignetteDirection.value='dark';state.value = Core.createState(); history = Core.createHistory(state.value); historyVersion.value++;
         preview.value = null; cropOpen.value = false; straightenOpen.value=false;inspectorOpen.value=false;Object.assign(inspectorPosition,{x:.5,y:.5});compareMode.value = 'edited'; zoom.value = 100;
         aiResults.value = []; aiStatus.value = ''; galleryResults.value = []; recipeDetail.value = null;
+        panelTab.value='edit';aiDraft.value='';aiMessages.value=[];aiUnread.value=false;aiAppliedName.value='';compareGroup.value=null;for(const key in panelScroll)panelScroll[key]=0;thumbnailGeneration++;
         currentView.value = 'editor'; imageLoaded.value = true;
         // The canvas inside v-if exists only after the DOM update completes.
         await nextTick(); observeCanvas();
@@ -276,13 +352,14 @@ createApp({
       });
       observer.observe(canvasContainer.value);
     }
-    function transform(type, params) { if (locked.value) return; maskPointerUp();maskEditing.value=false;state.value.geometry.push({ type, params }); commit(); }
+    function transform(type, params) { if (locked.value) return;closeGeometry(); maskPointerUp();maskEditing.value=false;state.value.geometry.push({ type, params }); commit(); }
     function rotateFree() {
       const angle = Number(rotationAngle.value);
       if (!Number.isFinite(angle) || angle < -180 || angle > 180) return fail('旋转角度应在 -180° 到 180° 之间。');
       if (angle !== 0) transform('rotate', { angle }); rotationAngle.value = 0;
     }
     function beginCrop() {
+      closeGeometry();
       maskPointerUp();maskEditing.value=false;
       if (locked.value) return;
       hoverFilter.value=null;wbPicking.value=false;
@@ -401,6 +478,7 @@ createApp({
       const bounds=mainCanvas.value.getBoundingClientRect();Object.assign(inspectorPosition,{x:Core.clamp((event.clientX-bounds.left)/bounds.width,0,1),y:Core.clamp((event.clientY-bounds.top)/bounds.height,0,1)});
     }
     function beginStraighten() {
+      closeGeometry();
       maskPointerUp();maskEditing.value=false;
       if(locked.value)return;inspectorOpen.value=false;hoverFilter.value=null;wbPicking.value=false;
       straightenAngle.value=0;straightenAutoCrop.value=true;straightenOpen.value=true;compareMode.value='edited';zoom.value=100;
@@ -521,6 +599,7 @@ createApp({
     function applyPreview() {
       if (!preview.value) return; const name = preview.value.name;
       state.value = Core.clone(preview.value.state); preview.value = null; commit(); notify(`已应用「${name}」，可以继续调色或撤销。`);
+      if(panelTab.value==='ai'){aiAppliedName.value=name;aiStatus.value=`已应用「${name}」，可以切到编辑继续微调，也可以撤销。`;aiMessages.value.push({role:'assistant',text:aiStatus.value});}
     }
     function cancelPreview() { preview.value = null; schedulePaint(); notify('已取消预览，保留之前的编辑。'); }
     function removeFilter() { state.value.filter = null; commit(); }
@@ -529,7 +608,7 @@ createApp({
       const key = JSON.stringify([importVersion, state.value, recipe]);
       if (thumbnailCache.get(canvas) === key) return;
       try {
-        draw(canvas, Core.render(sourceImage.value, Core.recipeState(state.value, recipe).state, { maxSide: 240 }));
+        draw(canvas, Core.render(sourcePreview, Core.recipeState(state.value, recipe).state, { maxSide: 240,sourceScale:sourcePreview.width/sourceImage.value.naturalWidth,sourceSize:{width:sourceImage.value.naturalWidth,height:sourceImage.value.naturalHeight} }));
         thumbnailCache.set(canvas, key);
       }
       catch { canvas.width = 1; canvas.height = 1; }
@@ -571,19 +650,23 @@ createApp({
     async function requestAI() {
       if (locked.value || aiLoading.value) return;
       aiLoading.value = true; aiStatus.value = '正在分析当前版本…'; const version = importVersion;
-      const baseState = JSON.stringify(state.value);
+      aiAppliedName.value='';
+      const baseState = JSON.stringify(state.value),intent=aiDraft.value.trim();
+      aiMessages.value.push({role:'user',text:intent||'请分析当前照片，给我一些调整建议。'});aiMessages.value=aiMessages.value.slice(-12);
       try {
         const d = diagnosis();
-        const data = await api('/ai/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ diagnosis: d.diag, image_base64: d.canvas.toDataURL('image/jpeg', 0.7).split(',')[1] }) });
+        const data = await api('/ai/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ intent,diagnosis: d.diag, image_base64: d.canvas.toDataURL('image/jpeg', 0.7).split(',')[1] }) });
         if (version !== importVersion) return;
         if (baseState !== JSON.stringify(state.value)) {
           aiResults.value = []; aiStatus.value = '分析期间编辑已改变，请重新获取当前版本的建议。'; return;
         }
-        aiResults.value = data.recipes || [];
+        aiResults.value = (Array.isArray(data.recipes)?data.recipes.slice(0,6):[]).filter(recipe=>{try{Core.recipeState(state.value,recipe);return typeof recipe.name==='string';}catch{return false;}});
+        aiDemo.value=!!data.demo;
         aiStatus.value = data.demo ? '演示方案：未连接云端模型，以下为固定示例配方。' : '建议已生成，点击方案先预览。';
         if (!aiResults.value.length) throw new Error('没有收到可用方案，请重试或使用手动调整。');
+        aiMessages.value.push({role:'assistant',text:data.demo?'当前未连接云端模型。这些是固定演示方案，不会根据描述生成；可以体验预览和应用流程。':'已根据当前照片生成方案。先预览比较，应用后可切到编辑继续微调。'});aiUnread.value=panelTab.value!=='ai';
       } catch (e) { if (version === importVersion) aiStatus.value = `获取失败：${e.message}`; }
-      finally { aiLoading.value = false; }
+      finally { aiLoading.value = false;if(version===importVersion&&panelTab.value!=='ai')aiUnread.value=true; }
     }
     async function matchGallery() {
       if (locked.value || galleryLoading.value) return;
@@ -649,20 +732,21 @@ createApp({
       catch { fail('配方无法读取，请选择有效的 JSON 配方文件。'); }
     }
     function keydown(event) {
-      if(event.key==='Escape'){maskPointerUp();maskEditing.value=false;wbPicking.value=false;hoverFilter.value=null;if(straightenOpen.value)finishStraighten(false);}
+      if(event.key==='Escape'){closeGeometry();compareGroup.value=null;maskPointerUp();maskEditing.value=false;wbPicking.value=false;hoverFilter.value=null;if(straightenOpen.value)finishStraighten(false);}
       if (/INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable || currentView.value !== 'editor' || locked.value || exportOpen.value) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); restore(event.shiftKey ? 'redo' : 'undo'); }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if (imageLoaded.value && dirty.value) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
+    onMounted(() => { window.addEventListener('pointerdown',closeGeometry);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
     onBeforeUnmount(() => {
-      importVersion++; observer?.disconnect(); clearTimeout(searchTimer); if (frame !== null) cancelAnimationFrame(frame);
+      importVersion++; observer?.disconnect(); clearTimeout(searchTimer);clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
+      window.removeEventListener('pointerdown',closeGeometry);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
     });
     return {
+      panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,visiblePresets,registerThumbnail,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
       maskId,maskEditing,showMask,maskErase,brushSize,brushFeather,maskCanvas,selectedMask,maskHandles,maskGuide,selectMask,addMask,editMask,deleteMask,clearBrush,maskPointerDown,maskPointerMove,maskPointerUp,maskHandleKey,
       mainCanvas, compareCanvas, canvasContainer, communityContainer, currentView, imageLoaded, imageLoading, originalImageUrl, filename, message, error,
@@ -671,7 +755,7 @@ createApp({
       detailControls,setDetail,inputDetail,resetDetail,resetDetails,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
       cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
-      exportOpen, exporting, exportOptions, aiOpen, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
+      exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
       communitySearch, communityRecipes, communityLoading, communityError, recipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
