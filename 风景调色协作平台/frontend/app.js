@@ -198,13 +198,17 @@ createApp({
     let cropDrag = null;
     const rotationAngle = ref(0), exportOpen = ref(false), exporting = ref(false);
     const exportOptions = reactive({ format: 'jpg', quality: 92, scale: 1 });
-    const communitySearch = ref(''), communityRecipes = ref([]), communityLoading = ref(false), communityError = ref('');
+    const communityFrame=ref(null), communityMounted=ref(false), communityReady=ref(false);
+    const shareOpen=ref(false),shareDialog=ref(null),sharing=ref(false),shareSingle=ref(false);
+    const waitingRecipe=ref(null),reuseGeometry=ref(false),reuseMasks=ref(false),reuseScope=ref({geometry:false,masks:false});
+    const handoffId=()=>Array.from(crypto.getRandomValues(new Uint32Array(4)),v=>v.toString(16).padStart(8,'0')).join('');
+    const communityChannel=handoffId(),seenHandoffs=new Set();let sharePackage=null;
     const recipeDetail = ref(null), recipeDetailLoading=ref(false), recipeDetailError=ref('');
     let recipeDetailVersion=0;
     const exportDialog = ref(null), recipeDialog = ref(null);
     watch(exportOpen, async open => { await nextTick(); if (open) exportDialog.value.showModal(); else exportDialog.value.close(); });
     watch(recipeDetail, async recipe => { await nextTick(); if (recipe) {if(!recipeDialog.value.open)recipeDialog.value.showModal();} else if(recipeDialog.value.open)recipeDialog.value.close(); });
-    let communityScroll = 0, searchTimer = null, communityVersion = 0, communityFetched = false;
+    watch(shareOpen,async open=>{await nextTick();if(open)shareDialog.value.showModal();else shareDialog.value.close();});
     const previewSize = reactive({ width: 1, height: 1 });
     const canUndo = computed(() => { historyVersion.value; return history.canUndo; });
     const canRedo = computed(() => { historyVersion.value; return history.canRedo; });
@@ -247,7 +251,7 @@ createApp({
       return `M0 ${height} `+values.map((v,i)=>`L${i} ${(height-Math.sqrt(v/max)*(height-3)).toFixed(1)}`).join(' ')+` L255 ${height} Z`;
     }
     const dirty = computed(() => JSON.stringify(state.value) !== JSON.stringify(Core.createState()));
-    const locked = computed(() => !imageLoaded.value || imageLoading.value || exporting.value || !!preview.value || cropOpen.value || straightenOpen.value);
+    const locked = computed(() => !imageLoaded.value || imageLoading.value || exporting.value || sharing.value || !!preview.value || cropOpen.value || straightenOpen.value);
     function notify(text) { error.value = ''; message.value = text; }
     function fail(text) { message.value = ''; error.value = text; }
     function draw(target, result) {
@@ -385,7 +389,7 @@ createApp({
       vignetteDirection.value='dark';state.value = Core.createState(); commit(); notify('已恢复原图，可撤销这次重置。');
     }
     async function loadImage(file) {
-      if (!file || imageLoading.value || exporting.value) return;
+      if (!file || imageLoading.value || exporting.value || sharing.value) return;
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return fail('仅支持 JPG / PNG / WebP，请重新选择图片。');
       if (file.size > 20 * 1024 * 1024) return fail('图片超过 20MB，请选择更小的文件。');
       imageLoading.value = true; error.value = ''; message.value = '正在读取图片…';
@@ -411,6 +415,7 @@ createApp({
         previewSize.width = prepared.width; previewSize.height = prepared.height;
         initRenderer(); schedulePaint();
         if (oldUrl) URL.revokeObjectURL(oldUrl);
+        if(waitingRecipe.value){const pending=waitingRecipe.value;waitingRecipe.value=null;await openCommunityRecipe(pending);}
         notify(`已载入 ${file.name} · ${image.naturalWidth} × ${image.naturalHeight}，可以开始调整。`);
       } catch (e) { URL.revokeObjectURL(url); fail(`读取失败：${e.message}。请重新选择图片。`); }
       finally { if (version === importVersion) imageLoading.value = false; }
@@ -654,13 +659,14 @@ createApp({
       event.preventDefault();const step=(event.shiftKey?10:1)/255,p=selectedPoint.value;
       moveCurvePoint(selectedCurvePoint.value,p[0]+(event.key==='ArrowLeft'?-step:event.key==='ArrowRight'?step:0),p[1]+(event.key==='ArrowDown'?-step:event.key==='ArrowUp'?step:0));commit();
     }
-    function beginPreview(recipe) {
+    function beginPreview(recipe,options={}) {
       if (!imageLoaded.value) return fail('请先载入照片，再在自己的照片上预览。');
-      if (imageLoading.value || exporting.value || cropOpen.value || straightenOpen.value) return;
+      if (imageLoading.value || exporting.value || sharing.value || cropOpen.value || straightenOpen.value) return;
       commit();
       error.value = '';
       try {
-        const proposal = Core.recipeState(state.value, recipe);
+        const base=Core.clone(state.value);if(options.replaceGeometry)base.geometry=[];
+        const proposal = Core.recipeState(base, recipe);
         delete proposal.state.presetSession;
         preview.value = { name: recipe.name, state: proposal.state, warnings: proposal.warnings };
         closeRecipeDetail(); currentView.value = 'editor'; compareMode.value = 'edited';
@@ -729,7 +735,8 @@ createApp({
       return { canvas, diag, avgV: valueSum / n, avgS: saturationSum / n, avgH, hueHist };
     }
     async function api(path, options = {}) {
-      const response = await fetch(`/api${path}`, { ...options, signal: AbortSignal.timeout(65000) });
+      const token=localStorage.getItem('landscape:token')||localStorage.getItem('cd_token');
+      const response = await fetch(`/api${path}`, { ...options, headers:{...(token?{Authorization:'Bearer '+token}:{}),...options.headers}, signal: AbortSignal.timeout(65000) });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || `服务暂不可用（${response.status}）`); return data;
     }
@@ -779,19 +786,10 @@ createApp({
       } catch (e) { if (version === importVersion) fail(`图库匹配失败：${e.message}`); }
       finally { galleryLoading.value = false; }
     }
-    async function fetchCommunity() {
-      const version = ++communityVersion; communityLoading.value = true; communityError.value = '';
-      try {
-        const data = await api(`/recipes?search=${encodeURIComponent(communitySearch.value)}`);
-        if (version === communityVersion) { communityRecipes.value = data.recipes || []; communityFetched = true; }
-      } catch (e) { if (version === communityVersion) communityError.value = `加载失败：${e.message}`; }
-      finally { if (version === communityVersion) communityLoading.value = false; }
-    }
-    function searchCommunity() { clearTimeout(searchTimer); searchTimer = setTimeout(fetchCommunity, 250); }
     function closeRecipeDetail(){recipeDetailVersion++;recipeDetailLoading.value=false;recipeDetailError.value='';recipeDetail.value=null;}
     async function openCommunityRecipe(record){
       const version=++recipeDetailVersion;
-      recipeDetail.value=record;recipeDetailLoading.value=true;recipeDetailError.value='';
+      recipeDetail.value=record;recipeDetailLoading.value=true;recipeDetailError.value='';reuseGeometry.value=false;reuseMasks.value=false;reuseScope.value={geometry:false,masks:false};
       try{
         let detail=record;
         if(!Community.hasSteps(detail)){
@@ -800,16 +798,62 @@ createApp({
           detail=response.recipe??response;
         }
         const normalized=Community.normalize(detail);
-        if(version===recipeDetailVersion)recipeDetail.value=normalized;
+        if(version===recipeDetailVersion){recipeDetail.value=normalized;reuseScope.value=Community.scope(normalized);}
       }catch(e){if(version===recipeDetailVersion)recipeDetailError.value=e.message;}
       finally{if(version===recipeDetailVersion)recipeDetailLoading.value=false;}
     }
-    function openCommunity() { currentView.value = 'community'; if (!communityFetched) fetchCommunity(); }
-    watch(currentView, async (value, oldValue) => {
-      if (oldValue === 'community') communityScroll = communityContainer.value?.scrollTop || 0;
+    function openCommunity() { communityMounted.value=true;currentView.value='community'; }
+    function connectCommunity(){communityReady.value=false;communityFrame.value?.contentWindow?.postMessage({type:'landscape:connect',channel:communityChannel},location.origin);}
+    function sendShare(){
+      if(!sharePackage||!communityReady.value)return;
+      if(Date.now()-sharePackage.sentAt>300000){sharePackage=null;fail('待发布内容已过期，请从编辑器重新分享。');return;}
+      communityFrame.value.contentWindow.postMessage(sharePackage,location.origin);
+    }
+    function communityMessage(event){
+      if(event.origin!==location.origin||event.source!==communityFrame.value?.contentWindow)return;
+      const d=event.data;
+      if(!d||d.channel!==communityChannel||typeof d.id!=='string'||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000||seenHandoffs.has(d.id))return;
+      seenHandoffs.add(d.id);if(seenHandoffs.size>100)seenHandoffs.delete(seenHandoffs.values().next().value);
+      if(d.type==='landscape:ready'){communityReady.value=true;sendShare();}
+      else if(d.type==='landscape:share-received'){sharePackage=null;notify('已送到社区发布表单，确认作品信息后再发布。');}
+      else if(d.type==='landscape:share-request'&&currentView.value==='community'){
+        if(locked.value){fail('请先回到编辑器载入照片，并完成当前预览或构图操作。');return;}
+        currentView.value='editor';openShare();
+      }
+      else if(d.type==='landscape:preview'&&currentView.value==='community'){
+        try{const recipe=Community.normalize(d.payload);if(d.payload.meta?.name)recipe.name=d.payload.meta.name;openCommunityRecipe(recipe);}catch(e){fail(e.message);}
+      }
+    }
+    function previewCommunityRecipe(){
+      if(recipeDetailLoading.value||recipeDetailError.value)return;
+      if(!imageLoaded.value){waitingRecipe.value=Core.clone(recipeDetail.value);closeRecipeDetail();currentView.value='editor';notify('配方已暂存，请先选择自己的照片。');return;}
+      const recipe=Community.reuse(recipeDetail.value,{geometry:reuseGeometry.value,masks:reuseMasks.value});
+      beginPreview(recipe,{replaceGeometry:reuseGeometry.value});
+    }
+    function openShare(){if(locked.value)return;commit();shareSingle.value=false;shareOpen.value=true;}
+    async function prepareShare(){
+      if(sharing.value||!imageLoaded.value)return;
+      sharing.value=true;error.value='';
+      try{
+        const snapshot=Core.clone(state.value),image=sourceImage.value;
+        await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
+        const fit=c=>{
+          const ratio=Math.min(1,1600/Math.max(c.width,c.height));if(ratio===1)return c;
+          const out=document.createElement('canvas');out.width=Math.max(1,Math.round(c.width*ratio));out.height=Math.max(1,Math.round(c.height*ratio));out.getContext('2d').drawImage(c,0,0,out.width,out.height);return out;
+        };
+        const before=fit(Core.render(image,snapshot,{maxSide:1600,color:false})),after=fit(Core.render(image,snapshot,{maxSide:1600}));
+        const a=before.getContext('2d').getImageData(0,0,before.width,before.height).data,b=after.getContext('2d').getImageData(0,0,after.width,after.height).data;
+        shareSingle.value=a.length===b.length&&a.every((v,i)=>v===b[i]);
+        const blob=c=>new Promise((resolve,reject)=>c.toBlob(v=>v?resolve(v):reject(Error('无法生成分享图片')),'image/png'));
+        const afterBlob=await blob(after),beforeBlob=shareSingle.value?null:await blob(before);
+        sharePackage={type:'landscape:share',channel:communityChannel,id:handoffId(),sentAt:Date.now(),payload:Community.publication(snapshot),before:beforeBlob,after:afterBlob};
+        shareOpen.value=false;openCommunity();await nextTick();sendShare();
+        notify(shareSingle.value?'当前前后效果相同，将按单图交给发布表单。':'已准备同一照片、同一构图的真实前后图。');
+      }catch(e){fail('准备分享失败：'+e.message);}finally{sharing.value=false;}
+    }
+    watch(currentView, async value => {
       await nextTick();
       if (value === 'editor') { observeCanvas(); schedulePaint(); }
-      else if (communityContainer.value) communityContainer.value.scrollTop = communityScroll;
     }, { flush: 'pre' });
     function openExport() { if (locked.value) return; commit(); exportOpen.value = true; }
     async function exportImage() {
@@ -854,12 +898,12 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if (imageLoaded.value && dirty.value) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { window.addEventListener('pointerdown',closeGeometry);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
+    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('pointerdown',closeGeometry);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
     onBeforeUnmount(() => {
-      importVersion++; observer?.disconnect(); clearTimeout(searchTimer);clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
+      importVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('pointerdown',closeGeometry);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
+      window.removeEventListener('message',communityMessage);window.removeEventListener('pointerdown',closeGeometry);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
     });
     return {
       panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
@@ -872,11 +916,11 @@ createApp({
       cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
       exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
-      communitySearch, communityRecipes, communityLoading, communityError, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
+      communityFrame,communityMounted,communityReady,connectCommunity,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      fetchCommunity, searchCommunity, openCommunity, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe
+      openCommunity, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe
     };
   }
 }).mount('#app');

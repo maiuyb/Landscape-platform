@@ -13,11 +13,14 @@
     let steps=record.steps,rendering=record.rendering;
     try{if(typeof steps==='string')steps=JSON.parse(steps);if(typeof rendering==='string')rendering=JSON.parse(rendering);}catch{throw Error('社区配方的数据格式无效。');}
     if(!Array.isArray(steps)||steps.some(s=>!object(s)))throw Error('社区配方的操作列表无效。');
+    // SQL NULL is the API's representation of an old recipe with no flags.
+    if(rendering===null)rendering=undefined;
     if(rendering!==undefined&&!object(rendering))throw Error('社区配方的渲染设置无效。');
     const recipe={version,steps:Core.clone(steps)};
     if(rendering!==undefined)recipe.rendering=Core.clone(rendering);
     // Let the shared engine validate supported versions, curves and compatibility flags.
-    Core.recipeState(Core.createState(),recipe);
+    const checked=Core.recipeState(Core.createState(),recipe);
+    if(checked.warnings.some(w=>w.startsWith('已忽略')))throw Error('社区配方含有无效或不支持的操作，无法完整预览。');
     for(const key of ['id','name','description','author','cover_before','cover_after','category','tags'])
       if(record[key]!==undefined)recipe[key]=Core.clone(record[key]);
     if(typeof recipe.name!=='string'||!recipe.name.trim())recipe.name='社区配方';
@@ -29,5 +32,12 @@
       if(metadata[key]!==undefined)recipe[key]=Core.clone(metadata[key]);
     return {recipe};
   }
-  return {hasSteps,normalize,publication};
+  const geometryTypes=new Set(['crop','rotate','flip','straighten']);
+  function reuse(raw,{geometry=false,masks=false}={}){
+    const recipe=normalize(raw);
+    recipe.steps=recipe.steps.filter(s=>(geometry||!geometryTypes.has(s.type))&&(masks||s.type!=='masks'));
+    return recipe;
+  }
+  function scope(raw){const recipe=normalize(raw);return{geometry:recipe.steps.some(s=>geometryTypes.has(s.type)),masks:recipe.steps.some(s=>s.type==='masks'&&s.params.layers.length>0)};}
+  return {hasSteps,normalize,publication,reuse,scope};
 });

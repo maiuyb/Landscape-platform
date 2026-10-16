@@ -1,0 +1,6 @@
+/* Host theme only; community layout and behavior stay owned by its module. */
+:root { --bg:#f4f1e7;--bg-2:#f0ede2;--card:#fffdf5;--card-2:#eceedd;--line:#d7d5c6;--text:#354838;--muted:#68715f;--dim:#777b6b;--accent:#526d45;--accent-2:#748754;--green:#52734a;--red:#9a4c3c;--yellow:#a17b3e; }
+body { background:#f4f1e7; }
+.topbar,.modal-card { background:#fffdf5; }
+.input,.select,.search-wrap input,.recipe-json { background:#fffdf7; color:var(--text); }
+.modal { background:#363b3066; }

@@ -132,3 +132,9 @@ dialog::backdrop { background: #363b3066; }
 @media(max-width:760px) { .preset-favorite { width: 34px; min-height: 34px; }.preset-grid { gap: 10px; } }
 
 .preset-categories button { font-size: 12px; min-height: 32px; }
+.community-view { max-width: none; padding: 16px; }
+.community-view .community-heading { margin-bottom: 12px; }
+.community-frame { display: block; width: 100%; height: calc(100dvh - 225px); min-height: 500px; border: 1px solid #d5d3c5; border-radius: 12px; background: #fffdf5; }
+.reuse-options label { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0; }
+.reuse-options input { flex: 0 0 auto; margin-top: 5px; }
+@media(max-width:760px) { .community-view { padding: 8px; }.community-heading { flex-wrap: wrap; gap: 8px; }.community-frame { min-height: 550px; height: calc(100dvh - 230px); } }

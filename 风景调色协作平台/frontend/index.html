@@ -15,15 +15,16 @@
       <nav aria-label="主导航">
         <button :aria-current="currentView === 'editor' ? 'page' : undefined" @click="currentView = 'editor'">编辑器</button>
         <button :aria-current="currentView === 'community' ? 'page' : undefined" @click="openCommunity">浏览社区</button>
-        <label class="button primary upload-button" :class="{ disabled: imageLoading || exporting }">
+        <label class="button primary upload-button" :class="{ disabled: imageLoading || exporting || sharing }">
           {{ imageLoading ? '读取中…' : imageLoaded ? '更换照片' : '选择照片' }}
-          <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" :disabled="imageLoading || exporting" @change="handleUpload" aria-label="选择照片">
+          <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" :disabled="imageLoading || exporting || sharing" @change="handleUpload" aria-label="选择照片">
         </label>
-      <button class="primary header-export" @click="openExport" :disabled="locked">导出照片</button></nav>
+      <button @click="openShare" :disabled="locked">分享到社区</button><button class="primary header-export" @click="openExport" :disabled="locked">导出照片</button></nav>
     </header>
     <div class="notice error" v-if="error" role="alert"><span>{{ error }}</span><button type="button" class="notice-close" aria-label="关闭错误提示" @click="error = ''">×</button></div>
     <div class="notice" v-else-if="message" role="status"><span>{{ message }}</span><button type="button" class="notice-close" aria-label="关闭提示" @click="message = ''">×</button></div>
 
+    <div class="notice" v-if="waitingRecipe && !imageLoaded"><span>待用配方「{{ waitingRecipe.name }}」· 选择自己的照片后再预览。</span><button @click="waitingRecipe=null">取消待用配方</button></div>
     <main class="workspace" v-show="currentView === 'editor'">
       <section class="empty-workspace" v-if="!imageLoaded" @dragover.prevent @drop.prevent="handleDrop" aria-label="照片导入">
         <div class="empty-icon" aria-hidden="true">▧</div>
@@ -143,11 +144,8 @@
 
     <section class="community-view" ref="communityContainer" v-show="currentView === 'community'" aria-label="社区配方">
       <div class="community-heading"><div><p class="eyebrow">来自风景的灵感</p><h1>浏览社区配方</h1><p>先看效果与说明，再在自己的照片上尝试。</p></div><button @click="currentView = 'editor'">返回编辑器</button></div>
-      <label class="community-search">搜索配方<input v-model="communitySearch" @input="searchCommunity" placeholder="日落、雪景、通透…" type="search"></label>
-      <p role="status" v-if="communityLoading">正在加载配方…</p>
-      <div v-if="communityError" role="alert"><p>{{ communityError }}</p><button @click="fetchCommunity">重新加载</button></div>
-      <p class="community-empty" v-else-if="!communityLoading && !communityRecipes.length">暂无符合条件的配方。返回编辑器试试内置滤镜，或换个关键词。</p>
-      <div class="community-grid"><button class="community-card" v-for="recipe in communityRecipes" :key="recipe.id" @click="openCommunityRecipe(recipe)"><img v-if="recipe.cover_after" :src="recipe.cover_after" :alt="recipe.name" loading="lazy"><div><h2>{{ recipe.name }}</h2><p>{{ recipe.description }}</p><span>{{ recipe.author }}</span></div></button></div>
+      <p v-if="!communityReady" role="status">正在连接社区… <button @click="connectCommunity">重试连接</button></p>
+      <iframe v-if="communityMounted" ref="communityFrame" src="/community/" title="风景配方社区" class="community-frame" @load="connectCommunity"></iframe>
     </section>
 
     <dialog ref="exportDialog" @cancel.prevent="!exporting && (exportOpen = false)" aria-labelledby="export-title">
@@ -155,7 +153,8 @@
       <fieldset :disabled="exporting"><label>格式 <select v-model="exportOptions.format"><option value="jpg">JPG</option><option value="png">PNG</option></select></label><label v-if="exportOptions.format === 'jpg'">质量 {{ exportOptions.quality }}%<input type="range" min="10" max="100" v-model.number="exportOptions.quality" aria-label="导出质量"></label><label>尺寸 <select v-model.number="exportOptions.scale" aria-label="导出尺寸"><option :value="1">完整尺寸</option><option :value="0.5">50% 尺寸</option><option :value="0.25">25% 尺寸</option></select></label><p class="export-size">{{ exportDimensions.width }} × {{ exportDimensions.height }} 像素</p></fieldset>
       <p class="error" v-if="error" role="alert">{{ error }}</p><div class="actions"><button @click="exportOpen = false" :disabled="exporting">取消</button><button class="primary" @click="exportImage" :disabled="exporting">{{ exporting ? '正在生成…' : '下载照片' }}</button></div>
     </dialog>
-    <dialog ref="recipeDialog" @cancel.prevent="closeRecipeDetail" aria-labelledby="recipe-title"><template v-if="recipeDetail"><h2 id="recipe-title">{{ recipeDetail.name }}</h2><p>{{ recipeDetail.description }}</p><div class="sample-pair"><figure v-if="recipeDetail.cover_before"><img :src="recipeDetail.cover_before" alt="样板原图"><figcaption>样板原图</figcaption></figure><figure v-if="recipeDetail.cover_after"><img :src="recipeDetail.cover_after" alt="样板编辑后"><figcaption>样板编辑后</figcaption></figure></div><p class="small">不同照片的曝光和色彩会影响最终效果。预览更新配方中列出的参数，并保留其他调整。</p><p class="small" v-if="recipeDetailLoading" role="status">正在读取配方…</p><p class="error" v-if="recipeDetailError" role="alert">{{ recipeDetailError }}</p><div class="actions"><button @click="closeRecipeDetail">关闭</button><button class="primary" @click="beginPreview(recipeDetail)" :disabled="!imageLoaded || cropOpen || straightenOpen || exporting || recipeDetailLoading || !!recipeDetailError">在我的照片上预览</button></div><p v-if="!imageLoaded" class="small">请先返回编辑器载入照片。</p></template></dialog>
+    <dialog ref="shareDialog" @cancel.prevent="!sharing && (shareOpen=false)" aria-labelledby="share-title"><h2 id="share-title">分享到社区</h2><p>将当前完整配方和最长边 1600 像素的预览图交给社区发布表单。前后图使用同一张照片、同一构图；效果相同时按单图分享。</p><p>你可以在社区补充名称、说明和分类。点击发布后才上传图片与配方。</p><p v-if="sharing" role="status">正在准备图片与配方…</p><div class="actions"><button @click="shareOpen=false" :disabled="sharing">取消</button><button class="primary" @click="prepareShare" :disabled="sharing">准备发布</button></div></dialog>
+    <dialog ref="recipeDialog" @cancel.prevent="closeRecipeDetail" aria-labelledby="recipe-title"><template v-if="recipeDetail"><h2 id="recipe-title">{{ recipeDetail.name }}</h2><p>{{ recipeDetail.description }}</p><p>默认只复用全局调色，保留你当前的构图和局部调整。不同照片上的效果可能不同。</p><fieldset v-if="!recipeDetailLoading && !recipeDetailError" class="reuse-options"><label v-if="reuseScope.geometry"><input type="checkbox" v-model="reuseGeometry">同时复用作者构图（替换当前裁剪、旋转和拉直）</label><label v-if="reuseScope.masks"><input type="checkbox" v-model="reuseMasks">同时复用作者局部选区（替换当前局部调整）</label><p v-if="reuseScope.masks" class="small">局部选区按原图相对位置复用，天空或山体的位置可能对不上，请在预览中检查。</p></fieldset><p class="small" v-if="recipeDetailLoading" role="status">正在读取配方…</p><p class="error" v-if="recipeDetailError" role="alert">{{ recipeDetailError }}</p><div class="actions"><button @click="closeRecipeDetail">关闭</button><button class="primary" @click="previewCommunityRecipe" :disabled="cropOpen || straightenOpen || exporting || imageLoading || recipeDetailLoading || !!recipeDetailError">{{ imageLoaded ? '在我的照片上预览' : '先选择自己的照片' }}</button></div></template></dialog>
   </div>
   <noscript>请启用 JavaScript 后打开照片编辑器。</noscript>
   <script src="vendor/vue.global.prod.js"></script>
