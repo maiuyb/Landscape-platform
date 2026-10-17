@@ -117,6 +117,12 @@ check('拒绝非有限数值(NaN)',
 check('拒绝非法版本(9)', publish({'name': 'x', 'version': 9, 'steps': []}, h).status_code == 400)
 check('拒绝越界曲线', publish({'name': 'x', 'version': 6, 'steps': [{'type': 'curve', 'params': {'channel': 'master', 'points': [[0, 0], [0.5, 2], [1, 1]]}}]}, h).status_code == 400)
 check('拒绝损坏蒙版', publish({'name': 'x', 'version': 6, 'steps': [{'type': 'masks', 'params': {'layers': [{'id': 'm', 'type': 'brush'}]}}]}, h).status_code == 400)
+# issue #3：非法集合字段必须是 400（不能 TypeError -> 500）
+check('拒绝 filter.name=[]（400 非 500）', publish({'name': 'x', 'version': 6, 'steps': [{'type': 'filter', 'params': {'name': []}}]}, h).status_code == 400)
+check('拒绝 curve.channel=[]（400 非 500）', publish({'name': 'x', 'version': 6, 'steps': [{'type': 'curve', 'params': {'channel': []}}]}, h).status_code == 400)
+check('拒绝 hsl.band=[]（400 非 500）', publish({'name': 'x', 'version': 6, 'steps': [{'type': 'hsl', 'params': {'band': [], 'hue': 0, 'saturation': 0, 'luminance': 0}}]}, h).status_code == 400)
+check('拒绝 type=[]（400 非 500）', publish({'name': 'x', 'version': 6, 'steps': [{'type': []}]}, h).status_code == 400)
+check('拒绝 masks.type=[]（400 非 500）', publish({'name': 'x', 'version': 6, 'steps': [{'type': 'masks', 'params': {'layers': [{'id': 'm', 'name': 'x', 'type': [], 'visible': True, 'invert': False, 'opacity': 1, 'feather': 1, 'start': [0, 0], 'end': [1, 1], 'center': [0.5, 0.5], 'radius': [0.1, 0.1], 'adjustments': {'exposure': 0, 'contrast': 0, 'highlights': 0, 'shadows': 0, 'temperature': 0, 'tint': 0, 'saturation': 0, 'clarity': 0, 'dehaze': 0}, 'strokes': []}]}}]}, h).status_code == 400)
 before = client.get('/api/recipes').get_json()['total']
 publish({'name': '不应落库', 'version': 6, 'steps': [{'type': 'hack', 'params': {}}]}, h)
 after = client.get('/api/recipes').get_json()['total']
