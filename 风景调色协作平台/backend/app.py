@@ -31,7 +31,7 @@ app.request_class = UploadRequest
 CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
+UPLOAD_DIR = os.environ.get('LANDSCAPE_UPLOAD_DIR', os.path.join(BASE_DIR, 'uploads'))
 DB_PATH = os.path.join(BASE_DIR, 'recipes.db')
 FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), 'frontend')
 # Match the browser's 20 * 1024 * 1024 byte limit. Allow multipart overhead
@@ -49,38 +49,24 @@ def frontend_index():
 def frontend_file(filename):
     return send_from_directory(FRONTEND_DIR, filename)
 
-# ---------- 数据库初始化 ----------
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        avatar TEXT DEFAULT '',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS recipes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        author TEXT NOT NULL,
-        description TEXT DEFAULT '',
-        cover_before TEXT DEFAULT '',
-        cover_after TEXT DEFAULT '',
-        steps TEXT DEFAULT '[]',
-        features TEXT DEFAULT '{}',
-        likes INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )''')
-    conn.commit()
-    conn.close()
+# Community source is composed here; no demo seed, database or uploads are copied.
+app.config['COMMUNITY_DB_PATH'] = os.environ.get('LANDSCAPE_DB', DB_PATH)
+with app.app_context():
+    from community_modules import db as community_db, repository as repo
+    from community_modules.auth import auth_bp, create_token
+    from community_modules.community import community_bp
+    community_db.init_db()
+app.register_blueprint(auth_bp)
+app.register_blueprint(community_bp)
+get_db = community_db.get_db
 
-init_db()
+@app.route('/community/')
+def community_index():
+    return send_from_directory(os.path.join(FRONTEND_DIR, 'community'), 'index.html')
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+@app.route('/community/assets/<path:filename>')
+def community_asset(filename):
+    return send_from_directory(os.path.join(FRONTEND_DIR, 'community'), filename)
 
 # ---------- AI 配置 ----------
 ai_service = AIService()
@@ -112,7 +98,8 @@ def register():
         conn.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)',
                      (username, password_hash))
         conn.commit()
-        return json_ok({'user': {'username': username}})
+        uid = conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()['id']
+        return json_ok({'token': create_token(uid), 'user': {'id': uid, 'username': username}})
     except sqlite3.IntegrityError:
         return json_error('用户名已存在')
     finally:
@@ -129,7 +116,7 @@ def login():
                         (username, password_hash)).fetchone()
     conn.close()
     if user:
-        return json_ok({'user': {'username': user['username']}})
+        return json_ok({'token': create_token(user['id']), 'user': {'id': user['id'], 'username': user['username']}})
     return json_error('用户名或密码错误')
 
 # ---------- 图片上传 ----------
@@ -192,7 +179,7 @@ def gallery_match():
     data = request.json
     features = data.get('features', {})
     conn = get_db()
-    rows = conn.execute('SELECT * FROM recipes ORDER BY likes DESC LIMIT 50').fetchall()
+    rows = conn.execute('SELECT * FROM recipes WHERE deleted_at IS NULL ORDER BY likes DESC LIMIT 50').fetchall()
     conn.close()
 
     if not features:
@@ -216,51 +203,6 @@ def gallery_match():
     scored.sort(key=lambda x: -x[0])
     results = [r for _, r in scored[:10]]
     return json_ok({'results': results})
-
-# ---------- 配方 CRUD ----------
-@app.route('/api/recipes', methods=['GET'])
-def list_recipes():
-    search = request.args.get('search', '').strip()
-    conn = get_db()
-    if search:
-        rows = conn.execute(
-            'SELECT * FROM recipes WHERE name LIKE ? OR description LIKE ? ORDER BY likes DESC, created_at DESC',
-            (f'%{search}%', f'%{search}%')
-        ).fetchall()
-    else:
-        rows = conn.execute('SELECT * FROM recipes ORDER BY likes DESC, created_at DESC').fetchall()
-    conn.close()
-    return json_ok({'recipes': [dict(r) for r in rows]})
-
-@app.route('/api/recipes', methods=['POST'])
-def create_recipe():
-    data = request.json
-    recipe = data.get('recipe', {})
-    username = data.get('username', '匿名')
-    name = recipe.get('name', '未命名')
-    conn = get_db()
-    cur = conn.execute(
-        'INSERT INTO recipes (name, author, description, cover_before, cover_after, steps, features) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (name[:50], username[:20], recipe.get('description', '')[:200],
-         recipe.get('cover_before', ''), recipe.get('cover_after', ''),
-         json.dumps(recipe.get('steps', []), ensure_ascii=False),
-         json.dumps(recipe.get('features', {}), ensure_ascii=False))
-    )
-    conn.commit()
-    recipe_id = cur.lastrowid
-    conn.close()
-    return json_ok({'id': recipe_id, 'message': '发布成功'})
-
-@app.route('/api/recipes/<int:recipe_id>/like', methods=['POST'])
-def like_recipe(recipe_id):
-    conn = get_db()
-    conn.execute('UPDATE recipes SET likes = likes + 1 WHERE id = ?', (recipe_id,))
-    conn.commit()
-    row = conn.execute('SELECT likes FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
-    conn.close()
-    if row:
-        return json_ok({'likes': row['likes']})
-    return json_error('配方不存在')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', '5000'))

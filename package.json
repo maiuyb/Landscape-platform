@@ -5,7 +5,7 @@
   "scripts": {
     "prepare": "node scripts/prepare-frontend.cjs",
     "start": "node scripts/start.cjs",
-    "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs tests/editor-detail.test.cjs tests/editor-effects.test.cjs tests/editor-presets.test.cjs tests/editor-ai.test.cjs tests/editor-community.test.cjs",
+    "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs tests/editor-detail.test.cjs tests/editor-effects.test.cjs tests/editor-presets.test.cjs tests/editor-ai.test.cjs tests/editor-community.test.cjs tests/editor-collection.test.cjs",
     "test:ai": "node tests/editor-ai-browser.cjs",
     "test:workspace": "node tests/editor-workspace-browser.cjs",
     "test:community": "node tests/editor-community-browser.cjs",
@@ -22,7 +22,8 @@
     "review:e4": "node scripts/review-e4-photos.cjs",
     "review:presets": "node scripts/review-presets.cjs",
     "review:e3": "node scripts/review-e3-photos.cjs",
-    "review:e2": "node scripts/review-e2-photos.cjs"
+    "review:e2": "node scripts/review-e2-photos.cjs",
+    "test:collection": "node tests/editor-welcome-browser.cjs"
   },
   "dependencies": {
     "vue": "3.5.43"

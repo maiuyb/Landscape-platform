@@ -23,3 +23,19 @@ test('publication payload exports actual flattened v6 state with metadata and no
  assert.equal(p.recipe.version,6);assert.ok(p.recipe.rendering);assert.equal(p.recipe.name,'晚霞');assert.equal('author_id' in p.recipe,false);assert.equal(JSON.stringify(p).includes('presetSession'),false);
  const actual=Core.clone(s);delete actual.presetSession;assert.deepEqual(Core.recipeState(Core.createState(),p.recipe).state,actual);
 });
+test('API rendering null means absent flags and invalid steps cannot silently disappear',()=>{
+ const r=Community.normalize({version:1,rendering:null,steps:[{type:'exposure',params:{value:40}}]});
+ assert.equal(r.rendering,undefined);assert.equal(Core.recipeState(Core.createState(),r).state.adjustments.exposure,.8);
+ for(const step of [{type:'unknown',params:{}},{type:'exposure',params:{value:null}},{type:'masks',params:{layers:[{}]}}])assert.throws(()=>Community.normalize({version:6,steps:[step]}));
+});
+test('community reuse defaults to global color while geometry and masks are independent opt-ins',()=>{
+ const {fixtures}=require('./community-fixtures.cjs'),r=fixtures()[0],base=Core.createState();
+ base.geometry=[{type:'flip',params:{direction:'v'}}];base.masks=[Core.masks.create('radial','mine')];
+ const global=Community.reuse(r);assert.deepEqual(Community.scope(r),{geometry:true,masks:true});
+ const next=Core.recipeState(base,global).state;assert.deepEqual(next.geometry,base.geometry);assert.deepEqual(next.masks,base.masks);
+ assert.equal(next.adjustments.exposure,.8);assert.equal(next.adjustments.highlights,-20);
+ const geometry=Community.reuse(r,{geometry:true}),masks=Community.reuse(r,{masks:true});
+ assert.ok(geometry.steps.some(s=>s.type==='crop'));assert.equal(geometry.steps.some(s=>s.type==='masks'),false);
+ assert.ok(masks.steps.some(s=>s.type==='masks'));assert.equal(masks.steps.some(s=>s.type==='crop'),false);
+ assert.deepEqual(Community.reuse(r,{geometry:true,masks:true}).steps,r.steps);
+});

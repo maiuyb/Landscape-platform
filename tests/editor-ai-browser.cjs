@@ -13,7 +13,7 @@ const folder=path.resolve(__dirname,'../test-results/ai'),url=process.env.HMI_TE
  try{
   await page.goto(url);await page.locator('#image-input').setInputFiles(path.resolve(__dirname,'../test-results/e1/photos/alpine.jpg'));await ready();
   await range('exposure',.55);await page.locator('#temperature').evaluate(e=>{for(let p=e;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});await range('temperature',12);
-  await page.locator('.geometry-menu>summary').click();await btn('水平翻转').click();await ready();await btn('局部调整').click();await btn('新建径向渐变').click();await page.keyboard.press('Escape');await range('mask-exposure',.2);
+  await page.locator('#composition-group>summary').click();await page.locator('#rotation-group>summary').click();await btn('水平翻转').click();await ready();await page.locator('#masks-group').evaluate(e=>e.open=true);await btn('新建径向渐变').click();await page.keyboard.press('Escape');await range('mask-exposure',.2);
   const before=await downloadRecipe(),original=await pixels();await tab('AI 助手').click();await page.getByLabel('描述想要的效果',{exact:true}).fill('保留暖色，让天空暗一点');
   let resolve;release=new Promise(r=>resolve=r);await btn('获取 AI 建议').click();await page.waitForFunction(()=>document.querySelector('.ai-status').textContent.includes('正在分析'));
   assert.equal(await btn('正在分析…').isDisabled(),true);await tab('编辑').click();resolve();release=null;

@@ -1,5 +1,7 @@
 # 开发交接包
 
+**2026-10-16 新会话请先读 [社区与编辑器联调交接](HANDOFF-2026-10-16.md)。** 当前 main 已推送 `c175cb2`；新社区实际在 `community_banch_2` 的 `acbc47e`，不是旧 `community_branch`。#3/#4 有成员新回复，代码仅初步核对，尚未独立验收 / 联调；#6 方向打光已由用户关闭，#5/#7 仍暂缓。本文件下方大量内容为历史阶段记录，最新接续以新交接包为准。
+
 主线保存与暂缓事项（2026-10-15）：用户授权将当前全部开发成果直接推到 `main`，包含六类 18 款预设、暖米色主题、真实 Flash AI 接入、字体/菜单层级与重复点击取消预设、编辑器侧社区适配及对应文档和检查。本次保存覆盖以下各阶段“尚未提交/推送”的历史状态；具体提交及远端以 `main` Git 记录核对。多图片并行区、方向打光、相框预览分别暂存于 [#5](https://github.com/maiuyb/Landscape-platform/issues/5)、[#6](https://github.com/maiuyb/Landscape-platform/issues/6)、[#7](https://github.com/maiuyb/Landscape-platform/issues/7)，均暂缓，后续再与用户讨论。社区本体仍交另一成员，#3/#4 保留。真实 `.env`、用户 `课件/`、测试照片/产物、依赖和本地数据库不纳入提交。详见开发状态第 25 节。
 
 Issue 反馈接续（2026-10-15）：用户授权字体/菜单层级和重复点击取消预设，后续明确社区本体交另一成员，我们只做编辑器侧对接，其余建 issue。已完成 16px 一级标题/14px 二级/15px 参数/14px 数值、一级卡片与展开强调；18 预设及经典滤镜重复点击/键盘/触摸取消、已选悬浮保留当前强度和手调。编辑器侧新增社区配方适配（版本/rendering、摘要取详情、过期关闭保护、发布数据打包），社区后端未合并/修改。远端 community_branch 仍 77ac7ee，隔离接口检查及 v6 退回 v1 的问题已提交 [#3](https://github.com/maiuyb/Landscape-platform/issues/3)，发布/预览衔接交 [#4](https://github.com/maiuyb/Landscape-platform/issues/4)。57 核心与专项回归见开发状态第 24 节。代码仍为本地未提交，Key 不纳入 Git，保留 `课件/`。

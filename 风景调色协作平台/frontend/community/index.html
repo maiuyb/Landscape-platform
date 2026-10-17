@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>风景调色 · 社区</title>
+<link rel="stylesheet" href="/community/assets/style.css">
+<link rel="stylesheet" href="/community-host.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">风景调色<span>社区</span></div>
+  <div class="search-wrap">
+    <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+    </svg>
+    <input id="search" type="text" placeholder="搜索配方 / 标签 / 作者，回车确认">
+  </div>
+  <div id="authArea" class="auth-area"></div>
+</header>
+
+<section class="hero">
+  <div class="hero-text">
+    <h1>发现好用的风景调色配方</h1>
+    <p>浏览 · 收藏 · 一键套用社区里的作品</p>
+  </div>
+  <div class="hero-stats" id="heroStats"></div>
+</section>
+
+<main class="container">
+  <section class="section">
+    <div class="section-head">
+      <h2>为你推荐</h2>
+      <span class="muted">按收藏数排序</span>
+    </div>
+    <div id="recommend" class="recommend-row"></div>
+  </section>
+
+  <section class="section">
+    <div class="toolbar">
+      <div class="tabs">
+        <button class="tab active" data-view="community">全部作品</button>
+        <button class="tab" data-view="mine">我的上传</button>
+        <button class="tab" data-view="favorites">我的收藏</button>
+        <button class="tab" data-view="records">上传记录</button>
+      </div>
+      <div class="tools">
+        <select id="category" class="select"><option value="">全部分类</option></select>
+        <select id="sort" class="select">
+          <option value="favorites">按收藏数</option>
+          <option value="latest">按最新</option>
+        </select>
+        <button id="publishBtn" class="btn primary">发布作品</button>
+      </div>
+    </div>
+
+    <div id="grid" class="grid"></div>
+    <div id="records" class="records" style="display:none"></div>
+    <div id="empty" class="empty" style="display:none">没有更多内容了</div>
+    <div class="loadmore"><button id="loadMore" class="btn ghost" style="display:none">加载更多</button></div>
+  </section>
+</main>
+
+<!-- 详情 -->
+<div id="detailModal" class="modal">
+  <div class="modal-card">
+    <button class="close" data-close>&times;</button>
+    <div id="detailBody"></div>
+  </div>
+</div>
+
+<!-- 登录 -->
+<div id="authModal" class="modal">
+  <div class="modal-card small">
+    <button class="close" data-close>&times;</button>
+    <h3 id="authTitle">登录</h3>
+    <label class="field-label">用户名</label>
+    <input id="authUser" class="input" placeholder="用户名">
+    <label class="field-label">密码</label>
+    <input id="authPass" class="input" type="password" placeholder="密码">
+    <div class="modal-actions">
+      <button id="authSubmit" class="btn primary">登录</button>
+      <button id="authToggle" class="btn ghost">没有账号？去注册</button>
+    </div>
+    <div class="hint">测试账号：<b>demo</b> / <b>demo1234</b></div>
+    <div id="authError" class="error"></div>
+  </div>
+</div>
+
+<!-- 发布 -->
+<div id="publishModal" class="modal">
+  <div class="modal-card">
+    <button class="close" data-close>&times;</button>
+    <h3>发布作品</h3>
+    <p class="hint">分享的是**编辑器里的完整调色配方**（v6），不是简化参数。用编辑器导出后，这里读取或粘贴即可。</p>
+    <div class="form">
+      <label class="field-label">配方（来自编辑器）</label>
+      <textarea id="pRecipeJson" class="input recipe-json" rows="6"
+        placeholder='粘贴编辑器导出的配方 JSON，例如 {"version":6,"rendering":{"legacyTone":{"highlights":false,"shadows":false}},"steps":[...]}'></textarea>
+      <div class="row">
+        <button id="pLoadHandoff" class="btn ghost" type="button">从编辑器读取配方</button>
+        <button id="pClearRecipe" class="btn ghost" type="button">清空配方</button>
+      </div>
+      <div id="pRecipeStatus" class="hint">尚未载入配方。</div>
+
+      <label class="field-label">名称</label>
+      <input id="pName" class="input" placeholder="例如：通透日落">
+      <label class="field-label">说明</label>
+      <input id="pDesc" class="input" placeholder="一句话说明效果与适用场景">
+      <div class="row">
+        <div class="col">
+          <label class="field-label">分类</label>
+          <input id="pCategory" class="input" placeholder="例如：日落 / 雪景">
+        </div>
+        <div class="col">
+          <label class="field-label">标签</label>
+          <input id="pTags" class="input" placeholder="逗号分隔，例如：日落,通透">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label class="field-label">调色前图（同一张照片、同一构图）</label>
+          <input id="pBefore" type="file" accept="image/*" class="file-input">
+        </div>
+        <div class="col">
+          <label class="field-label">调色后图（可选；不填则显示为单图）</label>
+          <input id="pAfter" type="file" accept="image/*" class="file-input">
+        </div>
+      </div>
+      <div class="modal-actions"><button id="publishSubmit" class="btn primary">发布</button></div>
+      <div id="publishError" class="error"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/community/assets/app.js"></script>
+<script src="/community-bridge.js"></script>
+</body>
+</html>
