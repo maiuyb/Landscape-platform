@@ -68,6 +68,11 @@ def _num(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def _is_choice(value, allowed):
+    """字符串枚举判断；避免把 list/dict 等不可哈希值丢进 set 触发 TypeError(500)。"""
+    return isinstance(value, str) and value in allowed
+
+
 def _in(value, bounds):
     return _num(value) and bounds[0] <= value <= bounds[1]
 
@@ -129,7 +134,7 @@ def _valid_mask(m):
         return False
     if not (isinstance(m.get('name'), str) and len(m['name']) <= 60):
         return False
-    if m.get('type') not in MASK_TYPES:
+    if not _is_choice(m.get('type'), MASK_TYPES):
         return False
     if not isinstance(m.get('visible'), bool) or not isinstance(m.get('invert'), bool):
         return False
@@ -219,7 +224,8 @@ def _validate_step(step, version):
         if not _in(params.get('angle'), (-45.0, 45.0)) or not isinstance(params.get('autoCrop'), bool):
             return 'straighten 参数无效'
     elif stype == 'filter':
-        if not (params.get('name') is None or params.get('name') in FILTER_NAMES):
+        fname = params.get('name')
+        if not (fname is None or _is_choice(fname, FILTER_NAMES)):
             return 'filter 名称无效'
         if 'strength' in params and not _in(params['strength'], (0.0, 100.0)):
             return 'filter 强度无效'
@@ -245,7 +251,7 @@ def _validate_step(step, version):
     elif stype == 'hsl':
         if version < 3:
             return '版本 %d 不支持 HSL' % version
-        if params.get('band') not in HSL_BANDS:
+        if not _is_choice(params.get('band'), HSL_BANDS):
             return 'hsl band 无效'
         for key in ('hue', 'saturation', 'luminance'):
             if not _in(params.get(key), (-100.0, 100.0)):
@@ -253,7 +259,7 @@ def _validate_step(step, version):
     elif stype == 'curve':
         if version < 3:
             return '版本 %d 不支持曲线' % version
-        if params.get('channel') not in CURVE_CHANNELS:
+        if not _is_choice(params.get('channel'), CURVE_CHANNELS):
             return 'curve 通道无效'
         if not _valid_curve(params.get('points')):
             return 'curve 控制点无效'

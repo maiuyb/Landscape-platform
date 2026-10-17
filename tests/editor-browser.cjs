@@ -27,7 +27,7 @@ const results = path.resolve(__dirname, '../test-results');
   };
   try {
     await page.goto(baseURL);
-    await page.getByRole('heading', { name: /让照片更接近/ }).waitFor();
+    await page.getByRole('heading', { name: /留住那一刻/ }).waitFor();
     await page.screenshot({ path: path.join(results, 'desktop-empty.png') });
     const png = Buffer.from(await page.evaluate(() => {
       const c = document.createElement('canvas'); c.width = 2400; c.height = 1600;
@@ -76,14 +76,14 @@ const results = path.resolve(__dirname, '../test-results');
     await button('撤销').click(); await flush(); assert.equal(await pixels(), edited);
     await page.getByRole('tab',{name:'编辑',exact:true}).click();checks.push('comparison never commits; filter hover/leave/click preserves document and is undoable');
 
-    await page.getByText('构图与方向', { exact: true }).click();
+    await reveal(page,'#rotation-group');
     await button('右转 90°').click(); await flush(); assert.deepEqual(await dimensions(), [800, 1200]);
     const rotated = await pixels();
     await setRange('#contrast', 15); assert.deepEqual(await dimensions(), [800, 1200]);
     await button('撤销').click(); await flush(); assert.equal(await pixels(), rotated);
-    await reveal(page,'.geometry-menu');await button('水平翻转').click(); await flush(); assert.notEqual(await pixels(), rotated);
+    await reveal(page,'#rotation-group');await button('水平翻转').click(); await flush(); assert.notEqual(await pixels(), rotated);
     await button('撤销').click(); await flush(); assert.equal(await pixels(), rotated);
-    await reveal(page,'.geometry-menu');await page.getByRole('spinbutton', { name: '旋转角度' }).fill('15');
+    await reveal(page,'#rotation-group');await page.getByRole('spinbutton', { name: '旋转角度' }).fill('15');
     await button('应用旋转').click(); await flush(); assert.ok((await dimensions())[0] > 800);
     await button('撤销').click(); await flush(); assert.equal(await pixels(), rotated);
     checks.push('90-degree/free rotation and flip survive subsequent color edits and undo');

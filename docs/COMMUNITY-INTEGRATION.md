@@ -54,3 +54,13 @@
 - `node tests/isolated-browser-support.cjs tests/editor-feedback-browser.cjs tests/editor-workspace-browser.cjs tests/editor-browser.cjs`：自启临时服务，**6 / 10 / 12 组**；一般编辑器浏览器测试已改为使用保留社区 iframe 的结构。
 
 测试使用 mock AI，无收费请求；社区联调用合成图片。忽略目录 `test-results/community-integration/` 内保留原始源码核验、浏览器报告及截图，未纳入 Git 或上传。查看了手机范围弹窗与社区问题截图。未使用 computer-use，未读取课件内容或输出真实环境配置/密钥。
+
+## 2026-10-17 更新接入与交付
+
+本文件前文是 10-16 历史验收，最新源码来源升级为 `community_banch_2/87a0ae1`。同步其 recipe_schema.py、社区 app.js/style.css，保留本地包内导入和隔离数据路径；保留 `community-bridge.js` 作为当前编辑器的同源交接入口。新上游原生消息协议的差异由适配层隔离，未把两套协议混用。
+
+当前组合服务已重新通过完整配方/前后图/登录/收藏/本图预览/取消/应用/撤销等 7 组检查；390px 社区和编辑器范围弹窗均无横向溢出。非法数组/对象枚举字段及其他非法输入共 17 类均 400 且不落库，旧数据迁移保留。适配层还拒绝缺失/非有限/过期时间戳，并保留有界去重。上游本体未被我们另写一套。
+
+#3 的 schema 修复已接入并可关闭；#5/#7 已按当前用户决定实现，可关闭，不再暂缓。#4 继续跟踪人工前后图的可信配对与原生/独立部署消息协议统一；不再把已接入的手机布局列为未解决。#8 保留最终合入追踪。新完整交付 PR 包含旧 PR #9 的全部提交，替代其独立合入，避免重复审查。交付分支为 `codex/welcome-multi-photo-frames`，最新 PR 链接见 #8。
+
+交付与后续使用测试范围见 [DELIVERY-2026-10-17.md](DELIVERY-2026-10-17.md)。未覆盖真实 DB/uploads，未读取或上传 `.env`/密钥/课件/测试产物，未再次调用真实 AI。

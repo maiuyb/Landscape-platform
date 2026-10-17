@@ -65,6 +65,77 @@ function copyText(text) {
   return Promise.resolve();
 }
 
+/* ---------------- 与编辑器的 iframe / postMessage 交接 ---------------- */
+const BRIDGE_CHANNEL = new URLSearchParams(location.search).get('channel') || 'landscape-community';
+const BRIDGE_EMBEDDED = !!(window.parent && window.parent !== window);
+const BRIDGE_SEEN = new Set();
+const BRIDGE_MAX_AGE = 5 * 60 * 1000;
+
+function bridgeId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function bridgeOriginAllowed(origin) {
+  if (origin === location.origin) return true;
+  const extra = window.LANDSCAPE_ALLOWED_ORIGINS;
+  return Array.isArray(extra) && extra.indexOf(origin) >= 0;
+}
+
+function bridgeValid(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (data.channel !== BRIDGE_CHANNEL) return false;
+  if (typeof data.id !== 'string' || !data.id || BRIDGE_SEEN.has(data.id)) return false;
+  if (typeof data.ts !== 'number' || Math.abs(Date.now() - data.ts) > BRIDGE_MAX_AGE) return false;
+  return true;
+}
+
+function applySharedRecipe(recipe, metadata) {
+  if (!recipe || typeof recipe !== 'object') return false;
+  try { $('#pRecipeJson').value = JSON.stringify(recipe); } catch (e) { return false; }
+  const meta = metadata || {};
+  if (!$('#pName').value && (meta.name || recipe.name)) $('#pName').value = meta.name || recipe.name;
+  if (!$('#pDesc').value && (meta.description || recipe.description)) $('#pDesc').value = meta.description || recipe.description;
+  if (!$('#pCategory').value && (meta.category || recipe.category)) $('#pCategory').value = meta.category || recipe.category;
+  if (!$('#pTags').value) {
+    const tags = meta.tags || recipe.tags;
+    if (Array.isArray(tags)) $('#pTags').value = tags.join(',');
+  }
+  updateRecipeStatus();
+  if (state.user) $('#publishModal').classList.add('open');
+  else openAuth('login');
+  return true;
+}
+
+function initBridge() {
+  window.addEventListener('message', (ev) => {
+    if (!bridgeOriginAllowed(ev.origin)) return;
+    if (BRIDGE_EMBEDDED && ev.source !== window.parent) return;
+    const data = ev.data;
+    if (!data || data.type !== 'landscape:share-recipe') return;
+    if (!bridgeValid(data)) return;
+    BRIDGE_SEEN.add(data.id);
+    const recipe = (data.recipe && typeof data.recipe === 'object') ? data.recipe : data;
+    if (applySharedRecipe(recipe, data.metadata || data.meta)) toast('已从编辑器载入配方');
+  });
+  if (BRIDGE_EMBEDDED) {
+    window.parent.postMessage({ type: 'landscape:community-ready', channel: BRIDGE_CHANNEL, id: bridgeId(), ts: Date.now() }, location.origin);
+  }
+}
+
+function sendPreviewToEditor(recipe, meta) {
+  if (!BRIDGE_EMBEDDED) return false;
+  window.parent.postMessage({
+    type: 'landscape:preview-recipe', channel: BRIDGE_CHANNEL, id: bridgeId(), ts: Date.now(),
+    recipe, meta,
+  }, location.origin);
+  return true;
+}
+
+function notifyPublished(recipeId) {
+  if (!BRIDGE_EMBEDDED) return;
+  window.parent.postMessage({
+    type: 'landscape:published', channel: BRIDGE_CHANNEL, id: bridgeId(), ts: Date.now(), recipeId,
+  }, location.origin);
+}
+
 /* ---------------- 认证 ---------------- */
 function renderAuth() {
   const area = $('#authArea');
@@ -310,10 +381,16 @@ async function previewInEditor(id) {
   const recipe = { version: rec.version || 1 };
   if (rec.rendering != null) recipe.rendering = rec.rendering;
   recipe.steps = rec.steps;
-  const payload = { recipe, meta: { id: rec.id, name: rec.name, author: rec.author } };
+  const meta = { id: rec.id, name: rec.name, author: rec.author };
+
+  // 1) 同源 / iframe：用 postMessage 交给编辑器
+  if (sendPreviewToEditor(recipe, meta)) { toast('已把配方交给编辑器预览'); return; }
+
+  // 2) 独立部署兜底：localStorage + EDITOR_URL / 复制
+  const payload = { recipe, meta };
   try { localStorage.setItem(PREVIEW_KEY, JSON.stringify(payload)); } catch (e) { /* ignore */ }
   if (EDITOR_URL) {
-    window.open(EDITOR_URL, '_blank', 'noopener');   // 新标签页：社区页面浏览状态保留
+    window.open(EDITOR_URL, '_blank', 'noopener');
     toast('已把配方送到编辑器，在你的照片上预览');
   } else {
     copyText(JSON.stringify(recipe, null, 2)).then(() => toast('已复制配方；在编辑器里粘贴即可套用'), () => toast('复制失败'));
@@ -329,6 +406,16 @@ async function uploadFile(input) {
   const r = await api('/api/upload', { method: 'POST', form: fd });
   if (!r.ok) throw new Error(r.data.error || '图片上传失败');
   return r.data.url;
+}
+
+function imageSize(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
+    img.onerror = () => { resolve(null); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
 }
 
 function parseRecipeJson(text) {
@@ -382,8 +469,18 @@ async function submitPublish() {
   if (!name) { err.textContent = '请填写名称'; return; }
   try {
     $('#publishSubmit').disabled = true;
-    const cover_before = await uploadFile($('#pBefore'));
-    const cover_after = await uploadFile($('#pAfter'));
+    const beforeFile = $('#pBefore').files[0];
+    const afterFile = $('#pAfter').files[0];
+    // 前后图配对保证：仅凭 URL 不同不足以确认，须校验尺寸一致（同一照片/同一构图）
+    if (beforeFile && afterFile) {
+      const [a, b] = await Promise.all([imageSize(beforeFile), imageSize(afterFile)]);
+      if (a && b && (a.w !== b.w || a.h !== b.h)) {
+        err.textContent = `前后图尺寸不一致（${a.w}×${a.h} vs ${b.w}×${b.h}），无法确认是同一张照片、同一构图；请使用同尺寸图片，或只上传单张封面。`;
+        return;
+      }
+    }
+    const cover_before = beforeFile ? await uploadFile($('#pBefore')) : '';
+    const cover_after = afterFile ? await uploadFile($('#pAfter')) : '';
     // 元数据附加在完整配方之上；version/rendering/steps 来自编辑器
     const recipe = Object.assign({}, parsed.recipe, {
       name,
@@ -396,6 +493,7 @@ async function submitPublish() {
     if (!r.ok) { err.textContent = r.data.error || '发布失败'; return; }
     $('#publishModal').classList.remove('open');
     toast('发布成功');
+    notifyPublished(r.data.id);
     resetPublishForm();
     loadCategories(); loadStats(); loadRecommend(); reloadCurrentView();
   } catch (e) {
@@ -484,6 +582,7 @@ function switchView(view) {
 /* ---------------- 事件 ---------------- */
 document.addEventListener('DOMContentLoaded', () => {
   renderAuth();
+  initBridge();
   loadStats(); loadCategories(); loadRecommend(); loadRecipes(true);
   updateRecipeStatus();
 

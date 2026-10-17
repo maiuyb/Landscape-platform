@@ -242,3 +242,25 @@ h3 { margin: 0 0 16px; font-size: 18px; }
   .recommend-row { grid-template-columns: repeat(2, 1fr); }
   .tools { margin-left: 0; flex-wrap: wrap; }
 }
+/* 窄屏（含 390px）防横向溢出 */
+@media (max-width: 480px) {
+  body { overflow-x: hidden; }
+  .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
+  .search-wrap { width: 100%; max-width: none; }
+  .auth-area { margin-left: auto; }
+  .container { padding-left: 12px; padding-right: 12px; }
+  .hero { padding: 18px; }
+  .hero-stats { flex-wrap: wrap; gap: 16px; }
+  .section-head { flex-wrap: wrap; }
+  .tabs { flex-wrap: wrap; }
+  .tab { padding: 6px 10px; }
+  .tools { width: 100%; }
+  .tools .select, .tools .btn { flex: 1 1 auto; }
+  .form .row { flex-direction: column; }
+  .modal-card { padding: 16px; width: 100%; }
+  .detail-img { width: 100% !important; }
+  .recommend-row { gap: 10px; }
+  .card-cover img { height: 150px; }
+  .record { flex-wrap: wrap; }
+  .keysheet, pre { white-space: pre-wrap; word-break: break-word; }
+}

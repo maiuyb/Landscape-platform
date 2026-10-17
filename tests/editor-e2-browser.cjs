@@ -30,7 +30,7 @@ const baseURL=process.env.HMI_TEST_URL||'http://127.0.0.1:5050',folder=path.reso
     await button('撤销').click();await ready();assert.equal(await pixels(),base);
     await page.getByRole('tab',{name:'编辑',exact:true}).click();checks.push('visible reset plus double-click reset, reversible hover/leave, tooltip, direct filter switching and one-click undo');
 
-    await page.getByText('构图与方向',{exact:true}).click();await button('裁剪照片').click();
+    await page.locator('#composition-group').evaluate(e=>e.open=true);await button('裁剪照片').click();
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     let box=await page.locator('.crop-selection').boundingBox(),handle=await page.locator('[data-crop-handle="e"]').boundingBox();
     await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();await page.mouse.move(handle.x-60,handle.y+handle.height/2,{steps:8});await page.mouse.up();

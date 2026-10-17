@@ -1,7 +1,7 @@
-/* Editor-owned adapter around the unchanged community app from acbc47e. */
+/* Editor-owned adapter around the unchanged community app from 87a0ae1. */
 (() => {
   if (parent === window) return;
-  let channel='',sequence=0,lastShare='',previewRequest=0,pendingPublish=false;
+  let channel='',sequence=0,previewRequest=0,pendingPublish=false;const seenShares=new Set();
   const originalAuth=submitAuth;
   submitAuth=async()=>{
     await originalAuth();
@@ -20,9 +20,10 @@
     if(d.type==='landscape:connect'&&typeof d.channel==='string'){
       channel=d.channel;send('landscape:ready');return;
     }
-    if(!channel||d.channel!==channel||d.type!=='landscape:share'||typeof d.id!=='string'||d.id===lastShare||Math.abs(Date.now()-d.sentAt)>300000)return;
+    if(channel&&d.channel===channel&&d.type==='landscape:auth'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){openAuth('login');return;}
+    if(!channel||d.channel!==channel||d.type!=='landscape:share'||typeof d.id!=='string'||!d.id||seenShares.has(d.id)||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000)return;
     if(!d.payload?.recipe||!(d.after instanceof Blob))return;
-    lastShare=d.id;
+    seenShares.add(d.id);if(seenShares.size>100)seenShares.delete(seenShares.values().next().value);
     // Reuse the community's existing parser and metadata form; consume immediately.
     localStorage.setItem(SHARE_KEY,JSON.stringify(d.payload));
     loadHandoff();localStorage.removeItem(SHARE_KEY);

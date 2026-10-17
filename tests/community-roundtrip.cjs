@@ -12,8 +12,8 @@ function roundtrip(upstream){
   const normalized=Community.normalize(rec.detail);
   assert.deepEqual(Core.recipeState(Core.createState(),normalized).state,Core.recipeState(Core.createState(),input[i]).state);
  });
- assert.deepEqual(out.rejected,Array(7).fill(400));assert.equal(out.unchanged,true);assert.equal(out.me,200);assert.equal(out.migration,true);
+ assert.deepEqual(out.rejected,Array(17).fill(400));assert.equal(out.unchanged,true);assert.equal(out.me,200);assert.equal(out.migration,true);
  return {input,records:out.records};
 }
 module.exports={roundtrip};
-if(require.main===module){roundtrip(process.argv[2]);console.log('PASS: actual Core v6 / legacy / migrated recipes, full steps, rendering and 7 invalid inputs');}
+if(require.main===module){roundtrip(process.argv[2]);console.log('PASS: actual Core v6 / legacy / migrated recipes, full steps, rendering and 17 invalid inputs');}

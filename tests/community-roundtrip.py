@@ -4,6 +4,7 @@ Optional argv[1]: upstream backend source directory for independent acceptance.
 No production data, .env or network calls are read by this runner.
 """
 import contextlib
+import copy
 import importlib.util
 import json
 import os
@@ -56,6 +57,18 @@ with tempfile.TemporaryDirectory(prefix='hmi-roundtrip-') as tmp:
          {'version':6,'steps':[{'type':'curve','params':{'channel':'master','points':[[0,0],[1,2]]}}]},
          {'version':6,'steps':[{'type':'masks','params':{'layers':[{}]}}]},
          {'version':99,'steps':[]}, {'version':True,'steps':[]}]
+    # Enum fields must reject unhashable JSON values through the real API, without 500s.
+    valid_mask=next(s for s in recipes[0]['steps'] if s['type']=='masks')['params']['layers'][0]
+    for value in ([], {}):
+        mask=copy.deepcopy(valid_mask);mask['type']=value
+        for step in [
+            {'type':'filter','params':{'name':value}},
+            {'type':'curve','params':{'channel':value,'points':[[0,0],[1,1]]}},
+            {'type':'hsl','params':{'band':value,'hue':0,'saturation':0,'luminance':0}},
+            {'type':'masks','params':{'layers':[mask]}},
+            {'type':value,'params':{}},
+        ]:
+            bad.append({'version':6,'steps':[step]})
     before=c.get('/api/recipes').get_json()['total']
     rejected=[c.post('/api/recipes',json={'recipe':dict(r,name='invalid')},headers=headers).status_code for r in bad]
     after=c.get('/api/recipes').get_json()['total']
