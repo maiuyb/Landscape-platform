@@ -59,15 +59,31 @@ sudo python3 /home/ezio/hmi-updater-upgrade/deploy/upgrade-updater.py
 
 代理判断：同日服务器并行测试，默认 Git 的 3 次读取中 1 次成功、2 次在 15 秒诊断期限内未完成；强制 HTTP/1.1 的 3 次也未完成。此前还看到连接重传、接收字节停滞和新的连接超时。这些是有限样本，不能当作长期可用率，亦不能确定具体线路或设备原因；但足以说明当前直连不适合依赖固定短时间自动上线。建议为更新服务准备可信专用代理以提高稳定性；网站本身无需全局代理。不使用未知公共代理、不关闭 TLS 验证、不固定第三方 GitHub IP。
 
-已预留 `/etc/landscape/update.env`，仅由更新服务加载，独立于应用密钥。当前没有配置代理。若有可信代理，管理员可在服务器用 `sudoedit /etc/landscape/update.env` 填写：
+已预留 `/etc/landscape/update.env`，仅由更新服务加载，独立于应用密钥。后续用户明确只让 GitHub 走代理，因此采用专用变量，仅传给读取 GitHub/下载 Git 对象的子进程，Python/Node 依赖下载仍直连：
 
 ```ini
-HTTPS_PROXY=http://YOUR_TRUSTED_PROXY_HOST:PORT
-HTTP_PROXY=http://YOUR_TRUSTED_PROXY_HOST:PORT
-NO_PROXY=127.0.0.1,localhost
+LANDSCAPE_GITHUB_PROXY=http://127.0.0.1:17890
 ```
 
-以上是模板，需替换地址后使用；服务器的 `127.0.0.1` 指服务器自己，不是用户电脑。含账号密码的代理地址只在服务器终端输入，不粘贴到聊天、issue 或仓库。配置文件由 root 持有并设为 `600`，随后重启更新任务。代理配置不会传给应用服务或影响 SSH/Nginx。没有可信可用地址时，保持直连和限次重试，不能宣称已解决链路不稳定。
+这个地址指服务器自己运行的代理，并非用户电脑的 Clash Verge。不要设置更新服务的通用 `HTTPS_PROXY/ALL_PROXY`；Git 子进程会移除这些宽泛变量，仅使用明确配置的 GitHub 专用出口。没有可用代理时保留直连和限次重试，不能宣称已解决链路不稳定。
+
+## 复用 Clash/Mihomo 订阅，仅代理 GitHub
+
+用户可以在服务器终端隐藏输入 Clash/Mihomo 格式的 HTTPS 订阅，服务器运行无图形界面的官方 Mihomo 内核。部署源码不含订阅、节点、账号或凭据；不会读取、复制用户电脑上的 Clash 配置。服务器暂存的官方内核为 `v1.19.32`，amd64-v1 压缩包摘要为 `306f81e723e60ce6b828899a6fe83e1d00e9ecefb2dc8d4d849312a5bc00efdc`，依据 [官方 Release](https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.32) 的资产摘要核对，二进制本身不纳入 Git。
+
+专用安装器会要求管理员权限，并在服务器终端隐藏询问订阅链接：
+
+```sh
+sudo python3 /home/ezio/hmi-updater-upgrade/deploy/install-github-proxy.py
+```
+
+订阅源须可返回 Clash/Mihomo 节点；格式或节点不兼容时安装不会宣称成功。订阅 URL 只写入服务器 root 持有的 `600` 私有配置，通过 systemd `LoadCredential` 提供给独立 DynamicUser 服务，原始服务输出不进日志；诊断 API 仅使用私有数据目录的 Unix socket，没有网络控制端口或管理面板。状态检查只看节点是否存在、所选节点是否真实和 GitHub 是否可访问，禁止输出 API 响应、节点或订阅。
+
+代理监听 `127.0.0.1:17890`，未启用 TUN、系统代理、转发或 DNS 监听。只有 `github.com`、`githubusercontent.com`、`githubassets.com` 域及子域使用订阅节点，其余 `MATCH,DIRECT`；订阅刷新本身也直连。节点检测使用 GitHub 地址。仅 Git 更新子进程设置代理环境，网站、AI、pip/npm、SSH/Nginx 和安全组保持原有网络行为。规则与订阅参数依据 [Mihomo 官方 provider 文档](https://wiki.metacubex.one/en/config/proxy-providers/) 和 [路由规则文档](https://wiki.metacubex.one/en/config/rules/)。
+
+安装器先核对官方包摘要及内核配置，备份即将修改的文件，测试真实订阅是否存在节点且没有退回 DIRECT，再检查 GitHub。成功后才启用 GitHub 专用环境配置并启动更新器；失败则停用新增代理并恢复文件。此安装器用于首次安装，已有同名代理服务时会停止等待复核，避免覆盖已有配置。可用的节点、订阅格式和服务器出口效果仍须实际验收，合成分流测试不能替代真实订阅验收。
+
+回退为直连：管理员从 `/etc/landscape/update.env` 移除 `LANDSCAPE_GITHUB_PROXY` 一行，再停止 `landscape-github-proxy.service` 并重启更新任务。订阅配置和代理缓存均为私有资料，不要上传或粘贴到聊天。没有通过订阅验收时保留直连运行。
 
 ## 验证范围
 

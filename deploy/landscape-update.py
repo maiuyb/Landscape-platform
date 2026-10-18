@@ -182,7 +182,10 @@ def run(args, *, stage='local_command', timeout=600, **kwargs):
 
 
 def fetch_repository(repository, env):
-    proxy = any(env.get(key) for key in ('HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy'))
+    # Opt-in applies to these GitHub Git subprocesses only. Pip/npm and the
+    # application must not inherit a general HTTPS_PROXY from this feature.
+    env = github_environment(env)
+    proxy = bool(env.get('https_proxy'))
     base = ['git', '-c', 'http.lowSpeedLimit=1', '-c', 'http.lowSpeedTime=' + str(LOW_SPEED_SECONDS),
             '--git-dir', str(repository)]
     for attempt in (1, 2):
@@ -215,6 +218,19 @@ def fetch_repository(repository, env):
                 raise error
             report('retry', 'retrying_after_backoff', state='retrying', seconds=5)
             time.sleep(5)
+
+
+def github_environment(environment):
+    env = {key: value for key, value in environment.items()
+           if key.lower() not in ('http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')}
+    proxy = environment.get('LANDSCAPE_GITHUB_PROXY', '')
+    if proxy:
+        from urllib.parse import urlsplit
+        parsed = urlsplit(proxy)
+        if parsed.scheme not in ('http', 'https', 'socks5h') or not parsed.hostname or any(c.isspace() for c in proxy):
+            raise UpdateError('invalid_proxy_configuration')
+        env.update(https_proxy=proxy, http_proxy=proxy, no_proxy='127.0.0.1,localhost')
+    return env
 
 
 def revision():

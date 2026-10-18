@@ -1,0 +1,28 @@
+[Unit]
+Description=Loopback Mihomo proxy for Landscape GitHub updates
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=true
+StateDirectory=landscape-github-proxy
+StateDirectoryMode=0700
+LoadCredential=config:/etc/landscape/github-proxy.json
+ExecStart=/usr/local/bin/landscape-mihomo -d /var/lib/landscape-github-proxy -f %d/config
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=256M
+# Subscription/provider errors can contain private URLs; never journal them.
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

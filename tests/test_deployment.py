@@ -173,6 +173,27 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(result.exception.category, 'invalid_remote_revision')
         self.assertTrue(all('fetch' not in call.args[0] for call in run.call_args_list))
 
+    def test_github_proxy_is_scoped_to_git_and_does_not_mutate_parent_environment(self):
+        u = self.updater
+        original = {'LANDSCAPE_GITHUB_PROXY': 'http://127.0.0.1:17890', 'PATH': 'kept', 'HTTPS_PROXY': 'http://unrelated.invalid'}
+        result = u.github_environment(original)
+        self.assertEqual(result['https_proxy'], 'http://127.0.0.1:17890')
+        self.assertEqual(result['no_proxy'], '127.0.0.1,localhost')
+        self.assertNotIn('HTTPS_PROXY', result)
+        self.assertNotIn('https_proxy', original)
+        self.assertEqual(original['HTTPS_PROXY'], 'http://unrelated.invalid')
+        self.assertEqual(result['PATH'], 'kept')
+
+    def test_no_github_proxy_does_not_accidentally_use_broad_proxy(self):
+        result = self.updater.github_environment({'HTTPS_PROXY': 'http://other.invalid', 'ALL_PROXY': 'socks5://other.invalid', 'PATH': 'kept'})
+        self.assertFalse(any('proxy' in key.lower() for key in result))
+
+    def test_bad_github_proxy_is_rejected_without_exposing_its_value(self):
+        u = self.updater
+        with self.assertRaises(u.UpdateError) as result:
+            u.github_environment({'LANDSCAPE_GITHUB_PROXY': 'PRIVATE-SENTINEL\ninvalid'})
+        self.assertEqual(str(result.exception), 'invalid_proxy_configuration')
+
 
 if __name__ == '__main__':
     unittest.main()
