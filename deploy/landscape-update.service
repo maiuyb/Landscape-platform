@@ -8,7 +8,9 @@ Type=oneshot
 User=landscape
 Group=landscape
 ExecStart=/usr/bin/python3 /usr/local/libexec/landscape-update.py
-TimeoutStartSec=15min
+# Optional administrator-only proxy for this updater, never application secrets.
+EnvironmentFile=-/etc/landscape/update.env
+TimeoutStartSec=45min
 UMask=0027
 # This service uses one narrowly scoped sudoers rule to restart the app.
 PrivateTmp=true

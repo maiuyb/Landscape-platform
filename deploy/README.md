@@ -36,6 +36,39 @@ curl -fsS http://127.0.0.1:5051/api/health
 
 管理员手动触发一次检查用 `sudo systemctl start landscape-update.service`。暂停更新可用 `sudo systemctl stop landscape-update.timer`；测试站本身保持运行。Nginx 原配置备份位于 `/var/backups/landscape/`。
 
+## 更新进度、网络恢复与专用代理
+
+2026-10-18 补充：新版更新器先读取 main 的远端提交，再下载 Git 对象。连接/读取远端版本最多等待 45 秒；下载开启 `--progress`，由 Git/libcurl 在持续低于 1 字节/秒达 45 秒时判定传输停滞。有进度的慢下载允许继续，单次下载仍保留 10 分钟上限。每轮最多尝试两次，间隔 5 秒；失败后由每分钟定时器继续检查。整轮服务上限 45 分钟，包含依赖准备和就绪检查，超时会清理 Git 子进程。
+
+阶段包括连接、Git 对象下载、解包、Python 环境和依赖、Node 依赖、前端准备、数据库备份、切换、重启、健康检查或回退。每 10 秒输出一次心跳；Git 提供进度时显示对象数量、百分比、接收字节和距离上次进度变化的时间。依赖进程没有可解析下载数值时明确显示等待及输出活动计数，不把输出字节数当下载量，不凭安静日志终止正常工作。
+
+```sh
+cat /opt/landscape/update-status.json
+sudo journalctl -u landscape-update.service -n 40 --no-pager
+```
+
+状态文件采用原子写入，内容仅含已知阶段、提交号、计数和错误类别；可供本机普通账号读取，未通过网站提供。日志不打印原始子进程输出、命令环境、代理 URL 或凭据。Git 的百分比属于当前处理阶段，不是整轮部署百分比。同版本仅读取远端版本，不下载对象、不构建或重启。
+
+已安装的服务器使用专用升级器，避免重新安装依赖或修改 Nginx/应用配置。在上传本目录新版源码后，由管理员运行：
+
+```sh
+sudo python3 /home/ezio/hmi-updater-upgrade/deploy/upgrade-updater.py
+```
+
+升级器先检查 Python 语法与 systemd unit，备份旧更新器和 unit，仅暂停更新任务进行替换，网站保持运行；安装失败会恢复原文件及原定时器运行状态。安装成功会启动一次新版更新检查。首次安装器同时采用新版 unit 的 45 分钟等待上限。
+
+代理判断：同日服务器并行测试，默认 Git 的 3 次读取中 1 次成功、2 次在 15 秒诊断期限内未完成；强制 HTTP/1.1 的 3 次也未完成。此前还看到连接重传、接收字节停滞和新的连接超时。这些是有限样本，不能当作长期可用率，亦不能确定具体线路或设备原因；但足以说明当前直连不适合依赖固定短时间自动上线。建议为更新服务准备可信专用代理以提高稳定性；网站本身无需全局代理。不使用未知公共代理、不关闭 TLS 验证、不固定第三方 GitHub IP。
+
+已预留 `/etc/landscape/update.env`，仅由更新服务加载，独立于应用密钥。当前没有配置代理。若有可信代理，管理员可在服务器用 `sudoedit /etc/landscape/update.env` 填写：
+
+```ini
+HTTPS_PROXY=http://YOUR_TRUSTED_PROXY_HOST:PORT
+HTTP_PROXY=http://YOUR_TRUSTED_PROXY_HOST:PORT
+NO_PROXY=127.0.0.1,localhost
+```
+
+以上是模板，需替换地址后使用；服务器的 `127.0.0.1` 指服务器自己，不是用户电脑。含账号密码的代理地址只在服务器终端输入，不粘贴到聊天、issue 或仓库。配置文件由 root 持有并设为 `600`，随后重启更新任务。代理配置不会传给应用服务或影响 SSH/Nginx。没有可信可用地址时，保持直连和限次重试，不能宣称已解决链路不稳定。
+
 ## 验证范围
 
 ```powershell
