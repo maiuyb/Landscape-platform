@@ -9,7 +9,7 @@
   const Effects = typeof module === 'object' && module.exports ? require('./editor-effects.js') : globalThis.EditorEffects;
   const Masks = typeof module === 'object' && module.exports ? require('./editor-masks.js') : globalThis.EditorMasks;
   const controls = [
-    { key: 'exposure', label: '曝光', group: 'light', min: -3, max: 3, step: 0.05, unit: 'EV', hint: '整体曝光；正值更亮，负值更暗' },
+    { key: 'exposure', label: '曝光', group: 'light', min: -3, max: 3, step: 0.01, unit: 'EV', hint: '整体曝光；正值更亮，负值更暗；方向键每次微调 0.01 EV' },
     { key: 'contrast', label: '对比度', group: 'light', hint: '调整明暗之间的差异' },
     { key: 'highlights', label: '高光', group: 'light', hint: '正值提亮亮部，负值压暗亮部' },
     { key: 'shadows', label: '阴影', group: 'light', hint: '正值提亮暗部，负值压暗暗部' },
@@ -65,7 +65,7 @@
       try { recipe = JSON.parse(recipe); } catch { throw new Error('配方格式无法读取，请尝试其他方案。'); }
     }
     const version = Array.isArray(recipe) ? 1 : recipe?.version ?? 1;
-    if (![1, 2, 3, 4, 5, 6].includes(version)) throw new Error('暂不支持此配方版本，请使用版本 1 到 6 的配方。');
+    if (![1, 2, 3, 4, 5, 6, 7].includes(version)) throw new Error('暂不支持此配方版本，请使用版本 1 到 7 的配方。');
     let steps = Array.isArray(recipe) ? recipe : recipe?.steps;
     if (typeof steps === 'string') {
       try { steps = JSON.parse(steps); } catch { throw new Error('配方格式无法读取，请尝试其他方案。'); }
@@ -99,12 +99,14 @@
         state.hsl[p.band] = Object.fromEntries(['hue','saturation','luminance'].map(k=>[k,clamp(p[k],-100,100)]));
       } else if (version >= 3 && step?.type === 'curve' && Tools.channels.includes(p.channel) && Tools.validCurve(p.points)) {
         state.curves[p.channel] = clone(p.points);
-      } else if (version >= 6 && step?.type === 'effects' && Effects.valid(p)) {
+      } else if (version >= 6 && step?.type === 'effects' && Effects.valid(p) && !(version<7&&p.vignette.profile==='corner'&&p.vignette.amount)) {
         state.effects = clone(p);
       } else if (version >= 6 && step?.type === 'masks' && Array.isArray(p.layers) && p.layers.length<=Masks.limits.layers && p.layers.every(Masks.valid) && new Set(p.layers.map(m=>m.id)).size===p.layers.length) {
         state.masks = clone(p.layers);
       } else if (version >= 4 && step?.type === 'detail' && Detail.controls.every(c=>Number.isFinite(p[c.key])&&p[c.key]>=c.min&&p[c.key]<=c.max)) {
         state.detail = Object.fromEntries(Detail.controls.map(c=>[c.key,p[c.key]]));
+      } else if (version >= 7 && step?.type === 'perspective' && [p.vertical,p.horizontal].every(v=>Number.isFinite(v)&&Math.abs(v)<=60) && typeof p.autoCrop==='boolean') {
+        state.geometry.push({type:'perspective',params:{vertical:p.vertical,horizontal:p.horizontal,autoCrop:p.autoCrop}});
       } else if (version >= 4 && step?.type === 'straighten' && Number.isFinite(p.angle) && Math.abs(p.angle)<=45 && typeof p.autoCrop==='boolean') {
         state.geometry.push({type:'straighten',params:{angle:p.angle,autoCrop:p.autoCrop}});
       } else if (step?.type === 'filter' && (p.name === null || allowedFilters.has(p.name))) {
@@ -127,7 +129,7 @@
   }
   function toRecipe(state) {
     return {
-      version: 6,
+      version: state.geometry.some(g=>g.type==='perspective')||state.effects.vignette.profile==='corner'&&state.effects.vignette.amount!==0?7:6,
       rendering: { legacyTone: clone(state.legacyTone) },
       steps: [
         ...clone(state.geometry),
@@ -187,10 +189,41 @@
     }
     return data;
   }
+  function perspectiveMatrix(w,h,{vertical,horizontal,autoCrop}){
+    // Projective denominator changes converging lines; keep it positive over
+    // the full image. Fit the quadrilateral, then crop an inscribed rectangle.
+    const u=horizontal*.005,v=vertical*.005;
+    if(!u&&!v)return[1,0,0,0,1,0,0,0,1];
+    let m=[1+u,w*v/h,-w*(u+v)/2,h*u/w,1+v,-h*(u+v)/2,2*u/w,2*v/h,1-u-v];
+    let corners=[[0,0],[w,0],[w,h],[0,h]].map(p=>Masks.transform(m,...p));
+    const xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1]),left=Math.min(...xs),top=Math.min(...ys),right=Math.max(...xs),bottom=Math.max(...ys),scale=Math.min(w/(right-left),h/(bottom-top));
+    m=Masks.multiply([scale,0,0,scale,(w-scale*(right+left))/2,(h-scale*(top+bottom))/2],m);
+    if(autoCrop){
+      corners=[[0,0],[w,0],[w,h],[0,h]].map(p=>Masks.transform(m,...p));
+      const inside=(x,y)=>corners.every((a,i)=>{const b=corners[(i+1)%4];return(b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0])>=-1e-7;});
+      let low=0,high=1;
+      for(let i=0;i<32;i++){const k=(low+high)/2;if([[1,1],[-1,1],[-1,-1],[1,-1]].every(([x,y])=>inside(w/2+x*w*k/2,h/2+y*h*k/2)))low=k;else high=k;}
+      const k=Math.max(.01,low*.99999);m=Masks.multiply([1/k,0,0,1/k,w/2*(1-1/k),h/2*(1-1/k)],m);
+    }
+    return m;
+  }
+  function warpPerspective(canvas,p){
+    if(!p.vertical&&!p.horizontal)return canvas;
+    const w=canvas.width,h=canvas.height,next=makeCanvas(w,h),ctx=next.getContext('2d'),source=canvas.getContext('2d').getImageData(0,0,w,h).data,pixels=ctx.createImageData(w,h),out=pixels.data,inv=Masks.inverse(perspectiveMatrix(w,h,p));
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const denominator=inv[6]*(x+.5)+inv[7]*(y+.5)+inv[8],sx=(inv[0]*(x+.5)+inv[1]*(y+.5)+inv[2])/denominator-.5,sy=(inv[3]*(x+.5)+inv[4]*(y+.5)+inv[5])/denominator-.5;if(sx<-.5||sy<-.5||sx>w-.5||sy>h-.5)continue;
+      const px=clamp(sx,0,w-1),py=clamp(sy,0,h-1),ix=Math.floor(px),iy=Math.floor(py),fx=px-ix,fy=py-iy,j=(y*w+x)*4;
+      const a=(iy*w+ix)*4,b=(iy*w+Math.min(ix+1,w-1))*4,c=(Math.min(iy+1,h-1)*w+ix)*4,d=(Math.min(iy+1,h-1)*w+Math.min(ix+1,w-1))*4;
+      const wa=(1-fx)*(1-fy)*source[a+3],wb=fx*(1-fy)*source[b+3],wc=(1-fx)*fy*source[c+3],wd=fx*fy*source[d+3],alpha=wa+wb+wc+wd;out[j+3]=alpha;
+      if(alpha)for(let channel=0;channel<3;channel++)out[j+channel]=(source[a+channel]*wa+source[b+channel]*wb+source[c+channel]*wc+source[d+channel]*wd)/alpha;
+    }
+    ctx.putImageData(pixels,0,0);return next;
+  }
   function geometryFrame(sourceWidth,sourceHeight,geometry,width=sourceWidth,height=sourceHeight){
     let matrix=[width/sourceWidth,0,0,height/sourceHeight,0,0];
     for(const step of geometry){const p=step.params,oldW=width,oldH=height;({width,height}=outputSize(width,height,[step]));let op;
       if(step.type==='rotate'||step.type==='straighten'){const r=p.angle*Math.PI/180,c=Math.cos(r),s=Math.sin(r);op=[c,s,-s,c,width/2-c*oldW/2+s*oldH/2,height/2-s*oldW/2-c*oldH/2];}
+      else if(step.type==='perspective')op=perspectiveMatrix(oldW,oldH,p);
       else if(step.type==='flip')op=p.direction==='h'?[-1,0,0,1,width,0]:[1,0,0,-1,0,height];
       else if(step.type==='crop'){const sx=width/(oldW*p.width),sy=height/(oldH*p.height);op=[sx,0,0,sy,-oldW*p.x*sx,-oldH*p.y*sy];}
       if(op)matrix=Masks.multiply(op,matrix);
@@ -315,6 +348,8 @@
         ctx.translate(next.width / 2, next.height / 2);
         ctx.rotate(p.angle * Math.PI / 180);
         ctx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
+      } else if (step.type === 'perspective') {
+        next = warpPerspective(canvas,p);
       } else if (step.type === 'flip') {
         next = makeCanvas(canvas.width, canvas.height);
         const ctx = next.getContext('2d');
@@ -348,5 +383,5 @@
     original.getContext('2d').drawImage(raw,left,top,width,height,0,0,width,height);
     return {edited,original,left,top,width,height};
   }
-  return { effects:Effects,masks:Masks,geometryFrame,prepareContext,spatialPadding,syncWhiteBalance, setWhiteBalance, detail: Detail, processPixels, renderRegion, straightenSize, controls, filters, clone, clamp, createState, createHistory, recipeState, toRecipe, outputSize, adjustPixels, render, tools: Tools };
+  return { perspectiveMatrix,effects:Effects,masks:Masks,geometryFrame,prepareContext,spatialPadding,syncWhiteBalance, setWhiteBalance, detail: Detail, processPixels, renderRegion, straightenSize, controls, filters, clone, clamp, createState, createHistory, recipeState, toRecipe, outputSize, adjustPixels, render, tools: Tools };
 });

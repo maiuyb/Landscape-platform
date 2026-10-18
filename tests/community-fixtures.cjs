@@ -7,7 +7,7 @@ function fixtures(){
   Object.assign(s.effects,{clarity:11,dehaze:8});s.effects.vignette.amount=-25;s.effects.calibration.red.hue=12;s.effects.calibration.blue.saturation=-8;
   for(const [i,b] of Core.tools.bands.entries())s.hsl[b.key]={hue:i-3,saturation:i+7,luminance:-i};
   for(const [i,ch] of Core.tools.channels.entries())s.curves[ch]=[[0,0],[.4,.43+i*.02],[1,1]];
-  s.geometry=[{type:'rotate',params:{angle:90}},{type:'flip',params:{direction:'h'}},{type:'crop',params:{unit:'normalized',x:.1,y:.1,width:.8,height:.7}},{type:'straighten',params:{angle:3.5,autoCrop:true}}];
+  s.geometry=[{type:'rotate',params:{angle:90}},{type:'flip',params:{direction:'h'}},{type:'crop',params:{unit:'normalized',x:.1,y:.1,width:.8,height:.7}},{type:'straighten',params:{angle:3.5,autoCrop:true}},{type:'perspective',params:{vertical:12,horizontal:-8,autoCrop:true}}];
   s.masks=['brush','linear','radial'].map((type,i)=>{const m=Core.masks.create(type,'fixture-'+i);m.adjustments.exposure=.25+i*.1;m.adjustments.saturation=8;m.opacity=75;return m;});
   s.masks[0].strokes=[{erase:false,radius:.08,feather:.6,points:[[.2,.3],[.4,.6]]}];
   s.filter='film';s.filterStrength=65;

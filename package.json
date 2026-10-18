@@ -23,7 +23,8 @@
     "review:presets": "node scripts/review-presets.cjs",
     "review:e3": "node scripts/review-e3-photos.cjs",
     "review:e2": "node scripts/review-e2-photos.cjs",
-    "test:collection": "node tests/editor-welcome-browser.cjs"
+    "test:collection": "node tests/editor-welcome-browser.cjs",
+    "test:tester-feedback": "node tests/tester-feedback-browser.cjs"
   },
   "dependencies": {
     "vue": "3.5.43"

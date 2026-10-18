@@ -9,8 +9,8 @@ createApp({
   components: {
     AdjustmentControl: {
       props: ['control', 'modelValue', 'disabled'],
-      emits: ['update:modelValue', 'start', 'commit', 'number-input', 'reset'],
-      setup() {
+      emits: ['update:modelValue', 'start', 'commit', 'number-input', 'reset', 'confirm', 'cancel'],
+      setup(props,{emit}) {
         const helpButton = ref(null), hintBox = ref(null), hintOpen = ref(false);
         const hintStyle = ref({ visibility: 'hidden' });
         function hideHint() {
@@ -48,18 +48,22 @@ createApp({
           if (document.activeElement !== helpButton.value) hideHint();
         }
         function escapeHint() { hideHint(); helpButton.value?.blur(); }
+        function confirmNumber(event){
+          const value=event.target.valueAsNumber,c=props.control,valid=Number.isFinite(value)&&value>=c.min&&value<=c.max&&(c.step!==1||!!c.precision||Number.isInteger(value));
+          event.target.blur();if(valid)emit('confirm');
+        }
         onBeforeUnmount(hideHint);
-        return { helpButton, hintBox, hintOpen, hintStyle, showHint, hideHint, leaveHint, escapeHint };
+        return { confirmNumber,helpButton, hintBox, hintOpen, hintStyle, showHint, hideHint, leaveHint, escapeHint };
       },
       template: `<div class="adjustment" :class="[control.rail ? 'rail-' + control.rail : '', {'custom-rail': control.gradient}]" :style="control.gradient ? {'--rail': control.gradient} : undefined">
         <div class="adjustment-heading"><div class="control-label"><label :for="control.key" @dblclick="$emit('reset', control.key)" title="双击复位">{{ control.label }}</label><button ref="helpButton" type="button" class="control-help" :aria-label="control.label + '说明'" :aria-describedby="control.key + '-hint'" @mouseenter="showHint" @mouseleave="leaveHint" @focus="showHint" @blur="hideHint" @click="showHint" @keydown.esc.stop.prevent="escapeHint">?</button><teleport to="body"><span ref="hintBox" v-show="hintOpen" class="control-hint floating-control-hint" :style="hintStyle" :id="control.key + '-hint'" role="tooltip">{{ control.hint }}</span></teleport></div>
-          <div class="value-entry"><input :id="control.key + '-value'" type="number" :min="control.min" :max="control.max" step="any"
+          <div class="value-entry"><input :id="control.key + '-value'" type="number" :min="control.min" :max="control.max" :step="control.step"
             :disabled="disabled" :value="control.precision || control.key === 'exposure' ? Number(modelValue).toFixed(control.precision || 2) : modelValue" :aria-label="control.label + '数值'"
             :aria-describedby="control.key + '-hint'" @change="$emit('number-input', control, $event)"
-            @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="$event.target.value = modelValue; $event.target.blur()">
+            @keydown.enter.stop.prevent="confirmNumber" @keydown.esc.stop.prevent="$event.target.value = modelValue; $event.target.blur(); $emit('cancel')">
             <span v-if="control.unit">{{ control.unit }}</span></div></div>
         <div class="range-row"><input :id="control.key" type="range" :min="control.min" :max="control.max" :step="control.step"
-          :disabled="disabled" :value="modelValue" @input="$emit('start'); $emit('update:modelValue', Number($event.target.value))" @change="$emit('commit')" @pointercancel="$emit('commit')"
+          :disabled="disabled" :value="modelValue" @input="$emit('start'); $emit('update:modelValue', Number($event.target.value))" @change="$emit('commit')" @pointerup="$emit('commit')" @pointercancel="$emit('commit')" @lostpointercapture="$emit('commit')" @blur="$emit('commit')"
           :aria-describedby="control.key + '-hint'" :title="control.hint">
           <button class="reset-control" @click="$emit('reset', control.key)" :aria-label="'复位' + (control.resetLabel || control.label)" :disabled="modelValue === (control.default || 0)">↺</button></div>
         </div>`
@@ -188,9 +192,27 @@ createApp({
     }
     const galleryLoading = ref(false), galleryResults = ref([]);
     const compareMode = ref('edited'), sliderPos = ref(50), zoom = ref(100);
+    let comparePointer = null;
+    function moveComparison(event){
+      if(comparePointer!==event.pointerId)return;
+      const bounds=mainCanvas.value.getBoundingClientRect();
+      sliderPos.value=Core.clamp((event.clientX-bounds.left)/bounds.width*100,0,100);
+    }
+    function startComparison(event){if(event.button!==0)return;event.preventDefault();comparePointer=event.pointerId;event.currentTarget.setPointerCapture(event.pointerId);moveComparison(event);}
+    function stopComparison(){comparePointer=null;}
+    function comparisonKey(event){if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();sliderPos.value=event.key==='Home'?0:event.key==='End'?100:Core.clamp(sliderPos.value+(event.key==='ArrowLeft'?-1:1)*(event.shiftKey?10:1),0,100);}
+    function wheelZoom(event){
+      if(!imageLoaded.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value||maskEditing.value||!event.deltaY)return;
+      event.preventDefault();const panel=canvasContainer.value,rect=panel.getBoundingClientRect(),px=event.clientX-rect.left,py=event.clientY-rect.top;
+      const stage=mainCanvas.value.getBoundingClientRect(),rx=(event.clientX-stage.left)/stage.width,ry=(event.clientY-stage.top)/stage.height;
+      zoom.value=Core.clamp(Math.round(zoom.value*Math.exp(-Core.clamp(event.deltaY,-100,100)*.002)),25,400);
+      nextTick(()=>{const changed=mainCanvas.value.getBoundingClientRect();panel.scrollLeft+=changed.left+rx*changed.width-rect.left-px;panel.scrollTop+=changed.top+ry*changed.height-rect.top-py;});
+    }
     const viewport = reactive({ width: 600, height: 400 });
     const cropOpen = ref(false), cropRatio = ref('free'), crop = reactive({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 });
     const cropDraft = reactive({});
+    const perspectiveOpen=ref(false),perspectiveDraft=reactive({vertical:0,horizontal:0,autoCrop:true});
+    const perspectiveControls=['vertical','horizontal'].map(key=>({key:'perspective-'+key,field:key,label:key==='vertical'?'垂直透视':'水平透视',min:-60,max:60,step:.1,precision:1,default:0,unit:'',hint:key==='vertical'?'校正仰拍、俯拍形成的上下收拢；结合辅助线观察立柱':'校正左右收拢；结合辅助线观察横向边缘'}));
     const showGuides = ref(true), straightenOpen = ref(false), straightenAngle = ref(0), straightenAutoCrop = ref(true);
     const inspectorBusy = ref(false), inspectorOpen = ref(false), inspectorBefore = ref(false), inspectorPosition = reactive({x:.5,y:.5}), inspectorCanvas = ref(null), inspectorOriginal = ref(null);
     const detailControls = Core.detail.controls.map(c=>({unit:'',...c}));
@@ -207,7 +229,15 @@ createApp({
     const maskFrame=computed(()=>sourceImage.value?Core.geometryFrame(sourceImage.value.naturalWidth,sourceImage.value.naturalHeight,state.value.geometry):null);
     function maskScreen(p){const f=maskFrame.value,q=Core.masks.transform(f.transform,p[0]*f.sourceWidth,p[1]*f.sourceHeight);return[q[0]/f.fullWidth,q[1]/f.fullHeight];}
     const maskHandles=computed(()=>{const m=selectedMask.value;if(!m||m.type==='brush'||!maskFrame.value)return[];return(m.type==='linear'?[['start',m.start,'渐变起点'],['end',m.end,'渐变终点']]:[['center',m.center,'径向中心'],['radius',[m.center[0]+m.radius[0],m.center[1]+m.radius[1]],'径向范围']]).map(([key,p,label])=>{const q=maskScreen(p);return{key,label,style:{left:q[0]*100+'%',top:q[1]*100+'%'}};});});
-    const maskGuide=computed(()=>{const m=selectedMask.value;if(!m||m.type==='brush'||!maskFrame.value)return null;const f=maskFrame.value;return{viewBox:`0 0 ${f.fullWidth} ${f.fullHeight}`,matrix:`matrix(${f.transform.join(' ')})`,sw:f.sourceWidth,sh:f.sourceHeight};});
+    const maskGuide=computed(()=>{
+      const m=selectedMask.value;if(!m||m.type==='brush'||!maskFrame.value)return null;const f=maskFrame.value;
+      let path=null;
+      if(f.transform.length===9){
+        const points=m.type==='linear'?[m.start,m.end]:Array.from({length:97},(_,i)=>{const a=i/96*Math.PI*2;return[m.center[0]+Math.cos(a)*m.radius[0],m.center[1]+Math.sin(a)*m.radius[1]];});
+        path=points.map((p,i)=>{const q=Core.masks.transform(f.transform,p[0]*f.sourceWidth,p[1]*f.sourceHeight);return(i?'L':'M')+q.join(' ');}).join(' ');
+      }
+      return{path,viewBox:`0 0 ${f.fullWidth} ${f.fullHeight}`,matrix:f.transform.length===6?`matrix(${f.transform.join(' ')})`:null,sw:f.sourceWidth,sh:f.sourceHeight};
+    });
     let cropDrag = null;
     const rotationAngle = ref(0), exportOpen = ref(false), exporting = ref(false);
     const exportOptions = reactive({ format: 'jpg', quality: 92, scale: 1 });
@@ -232,12 +262,13 @@ createApp({
     });
     const legacyBalanceValues = computed(()=>state.value.whiteBalance.model!=='relative'&&state.value.adjustments.temperature===0&&state.value.adjustments.tint===0&&state.value.whiteBalance.gains.some(v=>v!==1)?Core.tools.whiteBalanceValues(state.value.whiteBalance.gains):null);
     const colorControls = computed(()=>Core.controls.filter(c=>c.group==='color').map(c=>(state.value.whiteBalance.model==='relative'||legacyBalanceValues.value)&&['temperature','tint'].includes(c.key)?{...c,step:.1,precision:2}:c));
+    const legacyBrightnessControl={...Core.controls.find(c=>c.key==='brightness'),label:'整体亮度（兼容配方）'};
     function adjustmentValue(key) {return legacyBalanceValues.value&&['temperature','tint'].includes(key)?legacyBalanceValues.value[key]:state.value.adjustments[key];}
     const activeState = computed(() => {
       let base=preview.value?.state || hoveredState.value || state.value;
       if(compareGroup.value)base=withoutGroup(base,compareGroup.value);
-      if(!straightenOpen.value)return base;
-      const next=Core.clone(base);next.geometry.push({type:'straighten',params:{angle:straightenAngle.value,autoCrop:straightenAutoCrop.value}});return next;
+      if(!straightenOpen.value&&!perspectiveOpen.value)return base;
+      const next=Core.clone(base);next.geometry.push(perspectiveOpen.value?{type:'perspective',params:{...perspectiveDraft}}:{type:'straighten',params:{angle:straightenAngle.value,autoCrop:straightenAutoCrop.value}});return next;
     });
     const outputDimensions = computed(() => sourceImage.value ? Core.outputSize(sourceImage.value.naturalWidth, sourceImage.value.naturalHeight, activeState.value.geometry) : { width: 0, height: 0 });
     const exportDimensions = computed(() => sourceImage.value ? Core.outputSize(Math.max(1, Math.round(sourceImage.value.naturalWidth * exportOptions.scale)), Math.max(1, Math.round(sourceImage.value.naturalHeight * exportOptions.scale)), state.value.geometry) : { width: 0, height: 0 });
@@ -264,7 +295,7 @@ createApp({
       return `M0 ${height} `+values.map((v,i)=>`L${i} ${(height-Math.sqrt(v/max)*(height-3)).toFixed(1)}`).join(' ')+` L255 ${height} Z`;
     }
     const dirty = computed(() => JSON.stringify(state.value) !== JSON.stringify(Core.createState()));
-    const locked = computed(() => !imageLoaded.value || imageLoading.value || exporting.value || sharing.value || importing.value || frameExporting.value || !!preview.value || cropOpen.value || straightenOpen.value);
+    const locked = computed(() => !imageLoaded.value || imageLoading.value || exporting.value || sharing.value || importing.value || frameExporting.value || !!preview.value || cropOpen.value || straightenOpen.value || perspectiveOpen.value);
     function notify(text) { error.value = ''; message.value = text; }
     function fail(text) { message.value = ''; error.value = text; }
     function draw(target, result) {
@@ -354,12 +385,15 @@ createApp({
       historyVersion.value++; schedulePaint();requestThumbnails();
     }
     function restore(action) {
+      // Flush a pending gesture before stepping back, including keyboard ranges.
+      if(JSON.stringify(history.current())!==JSON.stringify(state.value))commit();
       maskPointerUp();maskEditing.value=false;
       dragging = false;
       hoverFilter.value=null;wbPicking.value=false;
       preview.value = null; cropOpen.value = false;
-      straightenOpen.value=false;
+      straightenOpen.value=false;perspectiveOpen.value=false;
       curveDrag=null;
+      selectedCurvePoint.value=0;
       const restored = history[action]();
       if (JSON.stringify(restored) !== JSON.stringify(state.value)) invalidateProposals();
       state.value = restored;thumbnailDirty=true; historyVersion.value++; schedulePaint();
@@ -420,7 +454,7 @@ createApp({
     }
     function canChangePhoto(){
       if(photoBusy.value)return false;
-      if(preview.value||cropOpen.value||straightenOpen.value){fail('请先应用或取消当前预览、裁剪或拉直，再切换照片。');return false;}
+      if(preview.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value){fail('请先应用或取消当前预览、裁剪或拉直，再切换照片。');return false;}
       return true;
     }
     async function activatePhoto(entry,internal=false){
@@ -437,7 +471,7 @@ createApp({
         renderer?.dispose();renderer=null;clearTimeout(thumbnailTimer);thumbnailGeneration++;
         sourcePreview=prepared;sourceImage.value=image;originalImageUrl.value=url;filename.value=entry.file.name;activePhotoId.value=entry.id;
         entry.width=image.naturalWidth;entry.height=image.naturalHeight;
-        dragging=false;hoverFilter.value=null;wbPicking.value=false;histogram.value=null;preview.value=null;cropOpen.value=false;straightenOpen.value=false;maskEditing.value=false;maskDrag=null;cropDrag=null;curveDrag=null;compareGroup.value=null;closeRecipeDetail();
+        dragging=false;hoverFilter.value=null;wbPicking.value=false;histogram.value=null;preview.value=null;cropOpen.value=false;straightenOpen.value=false;perspectiveOpen.value=false;maskEditing.value=false;maskDrag=null;cropDrag=null;curveDrag=null;compareGroup.value=null;closeRecipeDetail();
         restorePhoto(entry);currentView.value='editor';imageLoaded.value=true;thumbnailDirty=true;
         await nextTick();document.getElementById(entry.id)?.closest('.photo-tab')?.scrollIntoView({block:'nearest',inline:'nearest'});observeCanvas();draw(mainCanvas.value,prepared);draw(compareCanvas.value,prepared);previewSize.width=prepared.width;previewSize.height=prepared.height;
         if(panelScroller.value)panelScroller.value.scrollTop=panelScroll[panelTab.value];
@@ -547,7 +581,7 @@ createApp({
       if (!Number.isFinite(angle) || angle < -180 || angle > 180) return fail('旋转角度应在 -180° 到 180° 之间。');
       if (angle !== 0) transform('rotate', { angle }); rotationAngle.value = 0;
     }
-    function keepGeometryVisible(event){if(!event.currentTarget.open&&(cropOpen.value||straightenOpen.value))event.currentTarget.open=true;}
+    function keepGeometryVisible(event){if(!event.currentTarget.open&&(cropOpen.value||straightenOpen.value||perspectiveOpen.value))event.currentTarget.open=true;}
     function revealGeometryControls(){nextTick(()=>{const group=document.getElementById('composition-group'),panel=panelScroller.value;if(group&&panel)panel.scrollTop+=group.getBoundingClientRect().top-panel.getBoundingClientRect().top-8;if(innerWidth<=760)document.querySelector('.parameter-panel')?.scrollIntoView({block:'start',behavior:'smooth'});});}
     function focusGeometryTool(id){nextTick(()=>document.querySelector('#'+id+'>summary')?.focus({preventScroll:true}));}
     function cancelCrop(){cropDrag=null;cropOpen.value=false;focusGeometryTool('crop-tool');}
@@ -589,6 +623,10 @@ createApp({
       const rect = event.currentTarget.getBoundingClientRect();
       return { x: Core.clamp((event.clientX - rect.left) / rect.width, 0, 1), y: Core.clamp((event.clientY - rect.top) / rect.height, 0, 1) };
     }
+    function confirmCropNumber(key,event){
+      const value=event.target.valueAsNumber,valid=Number.isInteger(value)&&value>=(['width','height'].includes(key)?1:0);
+      event.target.blur();if(valid)applyCrop();
+    }
     function cropPointerDown(event) {
       if(event.button!==0)return;
       event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);
@@ -629,7 +667,7 @@ createApp({
     function resetDetails() {state.value.detail=Core.detail.defaults();state.value.effects.clarity=0;state.value.effects.dehaze=0;commit();notify('已复位细节，可撤销。');}
     function advancedTarget(control){return control.kind==='effect'?state.value.effects:control.kind==='vignette'?state.value.effects.vignette:control.kind==='calibration'?state.value.effects.calibration[control.band]:selectedMask.value?.adjustments;}
     function advancedValue(control){const value=advancedTarget(control)?.[control.field]??control.default;return control.kind==='vignette'&&control.field==='amount'?Math.abs(value):value;}
-    function setAdvanced(control,value){const target=advancedTarget(control);if(target){if(control.kind==='vignette'&&control.field==='amount'){vignetteDirection.value=vignetteMode.value;value=Math.abs(value)*(vignetteMode.value==='dark'?-1:1);}target[control.field]=value;}error.value='';}
+    function setAdvanced(control,value){const target=advancedTarget(control);if(target){if(control.kind==='vignette'){target.profile='corner';if(control.field==='amount'){vignetteDirection.value=vignetteMode.value;value=Math.abs(value)*(vignetteMode.value==='dark'?-1:1);}}target[control.field]=value;}error.value='';}
     function inputAdvanced(control,event){const v=event.target.valueAsNumber;if(!Number.isFinite(v)||v<control.min||v>control.max||(control.step===1&&!Number.isInteger(v))){event.target.value=advancedValue(control);return fail(`${control.label}请输入 ${control.min} 到 ${control.max} 之间的${control.step===1?'整数':'数值'}。`);}setAdvanced(control,Math.round(v*100)/100);commit();}
     function resetAdvanced(key){const c=[...effectControls,...vignetteControls.value,...calibrationControls,...maskControls].find(c=>c.key===key);if(c){setAdvanced(c,c.default);commit();}}
     function resetAdvancedGroup(kind){if(kind==='calibration')state.value.effects.calibration=Core.effects.defaults().calibration;else if(kind==='vignette'){vignetteDirection.value='dark';state.value.effects.vignette=Core.effects.defaults().vignette;}else if(selectedMask.value)selectedMask.value.adjustments=Core.masks.defaults();commit();}
@@ -667,7 +705,7 @@ createApp({
     function stageClick(event) {
       if(maskEditing.value)return;
       if(wbPicking.value)return pickWhiteBalance(event);
-      if(!inspectorOpen.value||cropOpen.value||straightenOpen.value)return;
+      if(!inspectorOpen.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value)return;
       const bounds=mainCanvas.value.getBoundingClientRect();Object.assign(inspectorPosition,{x:Core.clamp((event.clientX-bounds.left)/bounds.width,0,1),y:Core.clamp((event.clientY-bounds.top)/bounds.height,0,1)});
     }
     function beginStraighten() {
@@ -677,6 +715,21 @@ createApp({
       document.getElementById('composition-group').open=true;straightenAngle.value=0;straightenAutoCrop.value=true;straightenOpen.value=true;compareMode.value='edited';zoom.value=100;
       revealGeometryControls();
     }
+    function beginPerspective(){
+      maskPointerUp();maskEditing.value=false;
+      if(locked.value)return;inspectorOpen.value=false;hoverFilter.value=null;wbPicking.value=false;
+      Object.assign(perspectiveDraft,{vertical:0,horizontal:0,autoCrop:true});perspectiveOpen.value=true;
+      document.getElementById('composition-group').open=true;compareMode.value='edited';zoom.value=100;revealGeometryControls();
+    }
+    function inputPerspective(control,event){
+      const value=event.target.valueAsNumber;
+      if(!Number.isFinite(value)||Math.abs(value)>60){event.target.value=perspectiveDraft[control.field];return fail('透视数值应在 −60 到 60 之间。');}
+      perspectiveDraft[control.field]=Math.round(value*10)/10;dragging=false;schedulePaint();
+    }
+    function finishPerspective(apply){
+      if(apply&&(perspectiveDraft.vertical||perspectiveDraft.horizontal))state.value.geometry.push({type:'perspective',params:{...perspectiveDraft}});
+      perspectiveOpen.value=false;dragging=false;if(apply)commit();else schedulePaint();focusGeometryTool('perspective-tool');
+    }
     function inputStraighten(event) {
       const value=event.target.valueAsNumber;
       if(!Number.isFinite(value)||value< -45||value>45){event.target.value=straightenAngle.value;return fail('拉直角度应在 −45° 到 45° 之间。');}
@@ -684,7 +737,7 @@ createApp({
     }
     function finishStraighten(apply) {
       if(apply&&straightenAngle.value!==0)state.value.geometry.push({type:'straighten',params:{angle:straightenAngle.value,autoCrop:straightenAutoCrop.value}});
-      straightenOpen.value=false;dragging=false;
+      straightenOpen.value=false;perspectiveOpen.value=false;dragging=false;
       if(apply)commit();else schedulePaint();focusGeometryTool('straighten-tool');
     }
     function sourcePixels() {
@@ -746,6 +799,8 @@ createApp({
     }
     function curvePointerDown(event) {
       if(locked.value||event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);
+      // Pointer drawing must not leave keyboard undo focused in a number field.
+      event.currentTarget.focus({preventScroll:true});
       const bounds=event.currentTarget.getBoundingClientRect(),x=Core.clamp((event.clientX-bounds.left)/bounds.width,0,1),y=Core.clamp(1-(event.clientY-bounds.top)/bounds.height,0,1);
       let index=Number(event.target.dataset.point);if(!Number.isInteger(index)){
         index=curvePoints.value.findIndex(p=>Math.abs(p[0]-x)<.015);
@@ -776,7 +831,7 @@ createApp({
     }
     function beginPreview(recipe,options={}) {
       if (!imageLoaded.value) return fail('请先载入照片，再在自己的照片上预览。');
-      if (imageLoading.value || exporting.value || sharing.value || cropOpen.value || straightenOpen.value) return;
+      if (imageLoading.value || exporting.value || sharing.value || cropOpen.value || straightenOpen.value || perspectiveOpen.value) return;
       commit();
       error.value = '';
       try {
@@ -1022,8 +1077,15 @@ createApp({
     }
     function keydown(event) {
       if(frameOpen.value)return;
-      if(event.key==='Escape'){compareGroup.value=null;maskPointerUp();maskEditing.value=false;wbPicking.value=false;hoverFilter.value=null;if(straightenOpen.value)finishStraighten(false);}
-      if (/INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable || currentView.value !== 'editor' || locked.value || exportOpen.value) return;
+      if(currentView.value!=='editor'||exportOpen.value||shareOpen.value||recipeDetail.value)return;
+      if(event.key==='Enter'&&(event.target.closest('button,a')||event.target.tagName==='SUMMARY'&&!event.target.parentElement.classList.contains('geometry-tool')))return;
+      if(event.key==='Enter'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!(event.target.isContentEditable||/TEXTAREA|SELECT/.test(event.target.tagName))){
+        if(cropOpen.value){event.preventDefault();applyCrop();return;}
+        if(straightenOpen.value){event.preventDefault();finishStraighten(true);return;}
+        if(perspectiveOpen.value){event.preventDefault();finishPerspective(true);return;}
+      }
+      if(event.key==='Escape'){compareGroup.value=null;maskPointerUp();maskEditing.value=false;wbPicking.value=false;hoverFilter.value=null;if(straightenOpen.value)finishStraighten(false);if(perspectiveOpen.value)finishPerspective(false);if(cropOpen.value)cancelCrop();}
+      if (/TEXTAREA|SELECT/.test(event.target.tagName) || event.target.tagName==='INPUT'&&event.target.type!=='range' || event.target.isContentEditable || locked.value) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); restore(event.shiftKey ? 'redo' : 'undo'); }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
@@ -1037,14 +1099,15 @@ createApp({
     });
     return {
       openLogin,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
-      panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
+      legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
       maskId,maskEditing,showMask,maskErase,brushSize,brushFeather,maskCanvas,selectedMask,maskHandles,maskGuide,selectMask,addMask,editMask,deleteMask,clearBrush,maskPointerDown,maskPointerMove,maskPointerUp,maskHandleKey,
+      perspectiveOpen,perspectiveDraft,perspectiveControls,beginPerspective,inputPerspective,finishPerspective,
       mainCanvas, compareCanvas, canvasContainer, communityContainer, currentView, imageLoaded, imageLoading, originalImageUrl, filename, message, error,
       state, preview, hoverFilter, wbPicking, histogram, histogramPath, canUndo, canRedo, activeState, controls: Core.controls, colorControls, adjustmentValue, filters: Core.filters, locked, dirty,
-      compareMode, sliderPos, zoom, stageStyle, previewSize, outputDimensions, exportDimensions,
+      compareMode, sliderPos, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,zoom, stageStyle, previewSize, outputDimensions, exportDimensions,
       straightenControl:{key:'straighten-angle',label:'拉直角度',min:-45,max:45,step:.1,precision:1,unit:'°',hint:'微调倾斜地平线；应用保存一次构图，取消保持原样。'},detailControls,setDetail,inputDetail,resetDetail,resetDetails,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
-      keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
+      confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
       exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
       communityFrame,communityMounted,communityReady,connectCommunity,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,

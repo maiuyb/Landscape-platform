@@ -132,6 +132,19 @@ class AssistantTests(unittest.TestCase):
             with patch.object(self.ai.requests, 'post', return_value=response):
                 self.assertEqual(self.client.post('/api/ai/recommend', json=self.body).status_code, 502)
 
+    def test_known_misgrouped_model_parameters_are_rehomed_without_weakening_validation(self):
+        raw = {'name': 'natural', 'preset_id': None, 'adjustments': {'highlights': -20, 'shadows': 10, 'clarity': 8, 'radius': 1.2}}
+        with patch.object(self.ai.requests, 'post', return_value=self.upstream({'message': 'test', 'proposals': [raw]})):
+            response = self.client.post('/api/ai/recommend', json=self.body)
+        self.assertEqual(response.status_code, 200)
+        plan = response.json['proposals'][0]
+        self.assertEqual(plan['adjustments'], {'highlights': -20, 'shadows': 10})
+        self.assertEqual(plan['effects'], {'clarity': 8})
+        self.assertEqual(plan['detail'], {'radius': 1.2})
+        for invalid in [dict(raw, effects={'clarity': 4}), dict(raw, adjustments={'clarity': 999}), dict(raw, adjustments={'unknown': 1})]:
+            with patch.object(self.ai.requests, 'post', return_value=self.upstream({'message': 'test', 'proposals': [invalid]})):
+                self.assertEqual(self.client.post('/api/ai/recommend', json=self.body).status_code, 502)
+
     def test_cloud_errors_redacted_and_never_fall_back_to_demo(self):
         for upstream, expected in [(401, 503), (403, 503), (429, 429), (500, 502), (302, 502)]:
             with patch.object(self.ai.requests, 'post', return_value=self.upstream(status=upstream)) as post:

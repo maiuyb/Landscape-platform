@@ -12,7 +12,7 @@ test('18 distinct native presets cover six categories and roundtrip without priv
     const state=Presets.apply(Core.createState(),preset.id);signatures.add(JSON.stringify(Presets.snapshot(state)));
     assert.ok(Core.effects.valid(state.effects));assert.ok(Core.tools.channels.every(c=>Core.tools.validCurve(state.curves[c])));
     const recipe=Core.toRecipe(state),restored=Core.recipeState(Core.createState(),recipe);
-    assert.equal(recipe.version,6);assert.equal(JSON.stringify(recipe).includes('presetSession'),false);assert.deepEqual(restored.warnings,[]);
+    assert.equal(recipe.version,state.effects.vignette.amount?7:6);assert.equal(JSON.stringify(recipe).includes('presetSession'),false);assert.deepEqual(restored.warnings,[]);
     assert.deepEqual(Presets.snapshot(restored.state),Presets.snapshot(state));assert.deepEqual(pixels(restored.state),pixels(state));
   }
   assert.equal(signatures.size,18);
