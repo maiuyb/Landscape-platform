@@ -12,11 +12,36 @@ import pwd
 import shutil
 import socket
 import subprocess
+import time
 from urllib.parse import urlsplit
 
 
 def run(*args):
     subprocess.run(args, check=True)
+
+
+def start_release():
+    # A blocking systemctl start hides pip/npm output in the journal. Stream it
+    # in this root console so the first installation visibly reports progress.
+    since = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    run('systemctl', 'start', '--no-block', 'landscape-update.service')
+    journal = subprocess.Popen(['journalctl', '--follow', '--unit=landscape-update.service',
+                                '--since', since, '--output=cat', '--no-hostname'])
+    try:
+        deadline = time.monotonic() + 920
+        while time.monotonic() < deadline:
+            state = subprocess.check_output(['systemctl', 'show', 'landscape-update.service',
+                                             '--property=ActiveState', '--value'], text=True).strip()
+            if state != 'activating':
+                break
+            time.sleep(2)
+        result = subprocess.check_output(['systemctl', 'show', 'landscape-update.service',
+                                          '--property=Result', '--value'], text=True).strip()
+        if state == 'activating' or result != 'success':
+            raise RuntimeError('Release preparation failed; inspect journalctl -u landscape-update.service')
+    finally:
+        journal.terminate()
+        journal.wait(timeout=5)
 
 
 def main():
@@ -120,7 +145,7 @@ def main():
     run('systemctl', 'enable', 'landscape.service', 'landscape-update.timer')
     run('systemctl', 'reload', 'nginx')
     print('Preparing the first GitHub main release; the existing site remains available.', flush=True)
-    run('systemctl', 'start', 'landscape-update.service')
+    start_release()
     run('systemctl', 'start', 'landscape-update.timer')
     print('READY ' + args.origin.rstrip('/') + '/landscape/', flush=True)
     print('AI requires a server-side key in /etc/landscape/landscape.env; no local secrets were copied.')
