@@ -28,7 +28,7 @@ def start_release():
     journal = subprocess.Popen(['journalctl', '--follow', '--unit=landscape-update.service',
                                 '--since', since, '--output=cat', '--no-hostname'])
     try:
-        deadline = time.monotonic() + 920
+        deadline = time.monotonic() + 2720
         while time.monotonic() < deadline:
             state = subprocess.check_output(['systemctl', 'show', 'landscape-update.service',
                                              '--property=ActiveState', '--value'], text=True).strip()
