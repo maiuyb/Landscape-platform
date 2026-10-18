@@ -63,6 +63,20 @@ def text(value, maximum, required=False):
 
 
 def proposal(raw):
+    # Some compatible models place known detail/effect fields in adjustments.
+    # Rehome only these exact fields; never clamp, coerce or accept unknown keys.
+    if isinstance(raw, dict) and isinstance(raw.get('adjustments'), dict):
+        raw = dict(raw)
+        raw['adjustments'] = dict(raw['adjustments'])
+        for section, rules in (('effects', EFFECTS), ('detail', DETAIL)):
+            moved = {key: raw['adjustments'][key] for key in rules if key in raw['adjustments']}
+            if moved:
+                target = raw.get(section, {})
+                if not isinstance(target, dict) or target.keys() & moved.keys():
+                    raise AIError('建议的参数分组存在冲突。')
+                raw[section] = {**target, **moved}
+                for key in moved:
+                    del raw['adjustments'][key]
     allowed = {'name', 'description', 'preset_id', 'strength', 'adjustments', 'hsl', 'detail', 'effects', 'calibration'}
     if not isinstance(raw, dict) or not raw.keys() <= allowed:
         raise AIError('建议包含不支持的操作。')
@@ -136,6 +150,7 @@ SYSTEM = """你是面向修图新手的风景照片编辑助手。根据当前�
 每个方案可选一个目录内的preset_id和strength(0..100)，再给少量参数修正；无需预设的微调用preset_id:null。所有参数为最终绝对值，不是增量；未列出的字段保持当前值。先应用预设再覆盖参数，选预设会替换旧风格的HSL/曲线/细节等，保留曝光、白平衡、构图和蒙版；已有满意风格时优先少量微调。
 可选adjustments键：exposure(-3..3 EV)，brightness/contrast/highlights/shadows/whites/blacks/temperature/tint/saturation/vibrance(-100..100)。高光正值提亮、负值压暗；色温正暖负冷。可选hsl：red/orange/yellow/green/cyan/blue/purple/magenta，每个含部分hue/saturation/luminance(-100..100)。可选detail：sharpen/protection/luminance/color(0..100)、radius(.5..3源图像素)。参考图较小，不要声称已可靠判断细微噪点或锐度。可选effects：clarity/dehaze/vignette(-100..100)，vignette负值黑暗角、正值亮角。可选calibration：red/green/blue各部分hue/saturation(-100..100)。每方案最多24个参数。
 不要输出steps、曲线、白平衡增益、几何操作或蒙版。不能选区、换天、移除物体、生成像素；若用户请求此类能力，在message说明能力边界，并提供可用调色方向。不要编造执行结果或保证挽回原图缺失细节。不需要联网工具。"""
+SYSTEM += '\n字段分组必须准确：clarity、dehaze、vignette 只能放在 effects；sharpen、radius、protection、luminance、color 只能放在 detail，不能放入 adjustments。省略未使用的字段，不输出空操作方案。'
 
 
 class AIService:

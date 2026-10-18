@@ -53,7 +53,7 @@
     delete next.presetSession;
     const before=new Map(Core.toRecipe(base).steps.map(s=>[stepKey(s),JSON.stringify(s)]));
     const result=Core.toRecipe(next);
-    result.steps=result.steps.filter(s=>!['masks','crop','rotate','flip','straighten'].includes(s.type)&&before.get(stepKey(s))!==JSON.stringify(s));
+    result.steps=result.steps.filter(s=>!['masks','crop','rotate','flip','straighten','perspective'].includes(s.type)&&before.get(stepKey(s))!==JSON.stringify(s));
     return {...result,name:p.name,description:p.description,ai:true};
   }
   return {context,validate,recipe};

@@ -3,7 +3,7 @@ const Core=require('../风景调色协作平台/frontend/editor-core.js'),Preset
 test('AI accepts modern absolute parameters, signed vignette and partial HSL without resetting other channels',()=>{
  const base=Core.createState();base.adjustments.exposure=.8;base.adjustments.temperature=13;base.hsl.blue.hue=17;base.hsl.red.saturation=9;base.effects.vignette.feather=87;
  const r=AI.recipe(base,{name:'自然',adjustments:{exposure:1.05,highlights:-20},hsl:{blue:{saturation:12}},effects:{vignette:-25,dehaze:6}}),next=Core.recipeState(base,r).state;
- assert.equal(r.version,6);assert.deepEqual(Core.recipeState(base,r).warnings,[]);assert.equal(next.adjustments.exposure,1.05);assert.equal(next.adjustments.temperature,13);
+ assert.equal(r.version,7);assert.deepEqual(Core.recipeState(base,r).warnings,[]);assert.equal(next.adjustments.exposure,1.05);assert.equal(next.adjustments.temperature,13);
  assert.equal(next.hsl.blue.hue,17);assert.equal(next.hsl.blue.saturation,12);assert.equal(next.hsl.red.saturation,9);assert.equal(next.effects.vignette.amount,-25);assert.equal(next.effects.vignette.feather,87);assert.equal(base.adjustments.exposure,.8);
 });
 test('AI preset and overrides materialize identically to native preset; recipes never contain geometry/masks',()=>{

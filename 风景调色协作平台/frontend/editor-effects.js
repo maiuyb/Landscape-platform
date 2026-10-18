@@ -2,10 +2,10 @@
 (function(root,factory){const effects=factory();if(typeof module==='object'&&module.exports)module.exports=effects;else root.EditorEffects=effects;})(globalThis,function(){
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const smooth=v=>{v=clamp(v,0,1);return v*v*(3-2*v);};
-  const defaults=()=>({clarity:0,dehaze:0,calibration:Object.fromEntries(['red','green','blue'].map(k=>[k,{hue:0,saturation:0}])),vignette:{amount:0,midpoint:50,feather:70,roundness:0,centerX:50,centerY:50}});
+  const defaults=()=>({clarity:0,dehaze:0,calibration:Object.fromEntries(['red','green','blue'].map(k=>[k,{hue:0,saturation:0}])),vignette:{profile:'corner',amount:0,midpoint:50,feather:70,roundness:0,centerX:50,centerY:50}});
   const controls=[{key:'clarity',label:'清晰度',hint:'增强中等尺度的明暗层次；负值柔化',min:-100,max:100},{key:'dehaze',label:'去朦胧',hint:'减少雾感；负值增加雾感，过强可能压暗或放大噪点',min:-100,max:100}].map(c=>({step:1,default:0,unit:'',...c}));
   const vignetteControls=[['amount','暗角强度',-100,100,0,'负值压暗边缘，正值提亮边缘'],['midpoint','暗角范围',0,100,50,'调整保留的中心区域大小'],['feather','暗角羽化',0,100,70,'使边缘过渡更柔和'],['roundness','暗角圆度',0,100,0,'从跟随画面比例的椭圆变为圆形'],['centerX','暗角中心 · 水平',0,100,50,'按当前构图定位中心'],['centerY','暗角中心 · 垂直',0,100,50,'按当前构图定位中心']].map(([key,label,min,max,value,hint])=>({key,label,min,max,default:value,hint,step:1,unit:''}));
-  function valid(p){return p&&controls.every(c=>Number.isFinite(p[c.key])&&p[c.key]>=c.min&&p[c.key]<=c.max)&&vignetteControls.every(c=>Number.isFinite(p.vignette?.[c.key])&&p.vignette[c.key]>=c.min&&p.vignette[c.key]<=c.max)&&['red','green','blue'].every(k=>['hue','saturation'].every(c=>Number.isFinite(p.calibration?.[k]?.[c])&&Math.abs(p.calibration[k][c])<=100));}
+  function valid(p){return p&&[undefined,'legacy','corner'].includes(p.vignette?.profile)&&controls.every(c=>Number.isFinite(p[c.key])&&p[c.key]>=c.min&&p[c.key]<=c.max)&&vignetteControls.every(c=>Number.isFinite(p.vignette?.[c.key])&&p.vignette[c.key]>=c.min&&p.vignette[c.key]<=c.max)&&['red','green','blue'].every(k=>['hue','saturation'].every(c=>Number.isFinite(p.calibration?.[k]?.[c])&&Math.abs(p.calibration[k][c])<=100));}
   function calibrationMatrix(calibration){
     if(!calibration||Object.values(calibration).every(p=>!p.hue&&!p.saturation))return null;
     const weights=[.299,.587,.114],matrix=[1,0,0,0,1,0,0,0,1];
@@ -74,7 +74,8 @@
     const v=p.vignette;
     if(v.amount){
       const fw=frame.fullWidth||w,fh=frame.fullHeight||h,ox=frame.offsetX||0,oy=frame.offsetY||0,round=v.roundness/100,minimumSize=Math.min(fw,fh),rx=(fw*(1-round)+minimumSize*round)/2,ry=(fh*(1-round)+minimumSize*round)/2,inner=.05+v.midpoint*.009,span=.1+v.feather*.012;
-      for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(!data[i+3])continue;const d=Math.hypot((x+ox+.5-fw*v.centerX/100)/rx,(y+oy+.5-fh*v.centerY/100)/ry),weight=smooth((d-inner)/span),gain=2**(v.amount/100*1.5*weight);for(let c=0;c<3;c++)data[i+c]=v.amount<0?data[i+c]*gain:255-(255-data[i+c])/gain;}
+      const corner=v.profile==='corner',cornerInner=.52+v.midpoint*.006-Math.abs(v.amount)*.0018,cornerSpan=Math.max(.02,(1-cornerInner)*(.35+v.feather*.0065));
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(!data[i+3])continue;const d=Math.hypot((x+ox+.5-fw*v.centerX/100)/rx,(y+oy+.5-fh*v.centerY/100)/ry),weight=corner?smooth((d/Math.SQRT2-cornerInner)/cornerSpan):smooth((d-inner)/span),gain=2**(v.amount/100*1.5*weight);for(let c=0;c<3;c++)data[i+c]=v.amount<0?data[i+c]*gain:255-(255-data[i+c])/gain;}
     }
     return data;
   }

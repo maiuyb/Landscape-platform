@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""配方校验：按编辑器的配方格式（版本 1–6）校验发布内容。
+"""配方校验：按编辑器的配方格式（版本 1–7）校验发布内容。
 
 对齐主编辑器 `editor-core.js` 的 `recipeState` 所接受的操作与范围，
 但策略更严格：未知操作、非有限数值、越界值一律拒绝（400），
@@ -11,8 +11,8 @@
 import math
 import re
 
-# 支持的配方版本（editor-core.recipeState 允许 1–6）
-VERSIONS = {1, 2, 3, 4, 5, 6}
+# 支持的配方版本（editor-core.recipeState 允许 1–7）
+VERSIONS = {1, 2, 3, 4, 5, 6, 7}
 
 # 全局调整控制（type 即键名），params.value 的范围
 CONTROL_RANGES = {
@@ -121,6 +121,8 @@ def _validate_effects(p):
     vig = p.get('vignette')
     if not isinstance(vig, dict):
         return 'effects.vignette 无效'
+    if 'profile' in vig and vig['profile'] not in ('legacy', 'corner'):
+        return 'effects.vignette.profile 无效'
     for key, bounds in VIGNETTE_RANGES.items():
         if not _in(vig.get(key), bounds):
             return 'effects.vignette.%s 无效' % key
@@ -218,6 +220,9 @@ def _validate_step(step, version):
     elif stype == 'flip':
         if params.get('direction') not in ('h', 'v'):
             return 'flip 方向无效'
+    elif stype == 'perspective':
+        if version < 7 or not all(_in(params.get(k), (-60.0, 60.0)) for k in ('vertical', 'horizontal')) or not isinstance(params.get('autoCrop'), bool):
+            return 'perspective 参数无效'
     elif stype == 'straighten':
         if version < 4:
             return '版本 %d 不支持拉直' % version
@@ -266,6 +271,8 @@ def _validate_step(step, version):
     elif stype == 'effects':
         if version < 6:
             return '版本 %d 不支持特技' % version
+        if version < 7 and isinstance(params.get('vignette'), dict) and params['vignette'].get('profile') == 'corner' and params['vignette'].get('amount'):
+            return '新版暗角需要版本 7'
         return _validate_effects(params)
     elif stype == 'masks':
         if version < 6:
@@ -313,7 +320,7 @@ def validate_recipe(recipe):
         return None, '请求格式错误'
     version = _norm_version(recipe.get('version', 1))
     if version is None:
-        return None, '暂不支持此配方版本（支持 1–6）'
+        return None, '暂不支持此配方版本（支持 1–7）'
     steps = recipe.get('steps', [])
     err = _validate_steps(steps, version)
     if err:
