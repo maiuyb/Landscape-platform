@@ -13,6 +13,7 @@ const photo=path.resolve(__dirname,'../test-results/e1/photos/alpine.jpg');
   const page=await context.newPage(),checks=[],errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   const button=n=>page.getByRole('button',{name:n,exact:true}),tab=n=>page.getByRole('tab',{name:n,exact:true});
+  const apply=async name=>{await button(name).click();const dialog=page.getByRole('dialog',{name:'应用预设前确认'});if(await dialog.isVisible())await dialog.getByRole('button',{name:'应用预设',exact:true}).click();};
   const ready=()=>page.waitForFunction(()=>document.querySelector('#mainCanvas')?.dataset.previewStatus==='ready',null,{timeout:60000});
   const settle=async()=>{await page.mouse.move(400,100);await tab('预设').focus();await ready();};
   const pixels=async()=>crypto.createHash('sha256').update(await page.locator('#mainCanvas').evaluate(c=>c.toDataURL())).digest('hex');
@@ -47,9 +48,9 @@ const photo=path.resolve(__dirname,'../test-results/e1/photos/alpine.jpg');
     checks.push('18 presets / six categories, text search, empty state and local favorites do not alter the photo');
 
     await button('晴空通透').hover();await ready();const hover=await pixels();assert.notEqual(hover,before);await settle();assert.equal(await pixels(),before);
-    await button('晴空通透').click();await settle();assert.equal(await pixels(),hover);assert.equal(await button('晴空通透').getAttribute('aria-pressed'),'true');
+    await apply('晴空通透');await settle();assert.equal(await pixels(),hover);assert.equal(await button('晴空通透').getAttribute('aria-pressed'),'true');
     await range('preset-strength',0);assert.equal(await pixels(),before);await range('preset-strength',100);
-    await button('蓝调夜色').click();await settle();await button('清新明信片').click();await settle();
+    await apply('蓝调夜色');await settle();await apply('清新明信片');await settle();
     const clean=await recipe();const same=await page.evaluate(({initial,clean})=>{
       const base=EditorCore.recipeState(EditorCore.createState(),initial).state,expected=EditorPresets.apply(base,'airy-postcard'),actual=EditorCore.recipeState(EditorCore.createState(),clean).state;
       return JSON.stringify(EditorPresets.snapshot(expected))===JSON.stringify(EditorPresets.snapshot(actual));
@@ -70,7 +71,7 @@ const photo=path.resolve(__dirname,'../test-results/e1/photos/alpine.jpg');
     assert.equal(await page.locator('#contrast').inputValue(),'28');await button('撤销').click();await ready();assert.equal(await page.locator('#preset-strength').inputValue(),'0');
     checks.push('one strength gesture is one undo step; manual contrast/HSL survives later strength changes and removal; undo restores the session');
 
-    const legacyBase=await recipe();await tab('预设').click();await button('筛选全部预设').click();await button('金色晚霞').click();await settle();
+    const legacyBase=await recipe();await tab('预设').click();await button('筛选全部预设').click();await apply('金色晚霞');await settle();
     await reveal(page,'#legacy-presets');await page.waitForFunction(()=>document.querySelector('#legacy-presets button[aria-label="胶片"] canvas')?.dataset.thumbnailStatus&&document.querySelector('#legacy-presets button[aria-label="胶片"] canvas')?.dataset.thumbnailStatus!=='pending');const legacyError=await button('胶片').locator('canvas').getAttribute('data-thumbnail-error');assert.equal(legacyError,null);
     const legacyComparison=await page.evaluate(async({source,recipe})=>{
       const image=new Image();image.src='data:image/jpeg;base64,'+source;await image.decode();const s=EditorCore.recipeState(EditorCore.createState(),recipe).state;s.filter='film';s.filterStrength=100;
@@ -81,12 +82,12 @@ const photo=path.resolve(__dirname,'../test-results/e1/photos/alpine.jpg');
     },{source:(await fs.readFile(photo)).toString('base64'),recipe:legacyBase});
     assert.deepEqual(legacyComparison.actual,legacyComparison.expected);assert.equal(legacyComparison.max,0,'classic thumbnail must match the same ImageBitmap render path');
 
-    await button('胶片').click();await ready();assert.equal(await page.locator('#preset-strength').count(),0);assert.equal(await page.locator('#filter-strength').inputValue(),'100');
+    await apply('胶片');await ready();assert.equal(await page.locator('#preset-strength').count(),0);assert.equal(await page.locator('#filter-strength').inputValue(),'100');
     const legacyActual=await recipe();assert.deepEqual(await page.evaluate(({before,after})=>{const a=EditorCore.recipeState(EditorCore.createState(),before).state,b=EditorCore.recipeState(EditorCore.createState(),after).state;return Object.keys(a).filter(k=>JSON.stringify(a[k])!==JSON.stringify(b[k]));},{before:legacyBase,after:legacyActual}),['filter']);
     await button('撤销').click();await ready();assert.equal(await page.locator('#preset-strength').inputValue(),'100');await page.locator('#legacy-presets').evaluate(e=>e.open=false);
     checks.push('classic filter thumbnail matches its application baseline after a new preset; undo restores the new preset session');
 
-    await button('筛选黑白影调预设').click();await button('黑白层次').click();await settle();await closeNotice();
+    await button('筛选黑白影调预设').click();await apply('黑白层次');await settle();await closeNotice();
     await page.waitForFunction(()=>[...document.querySelectorAll('[data-preset-id] canvas')].every(c=>c.dataset.thumbnailStatus==='ready'));
     await page.screenshot({path:path.join(folder,'desktop-presets.png')});
     const activeRecipe=await recipe();assert.equal(activeRecipe.version,6);assert.equal(JSON.stringify(activeRecipe).includes('presetSession'),false);

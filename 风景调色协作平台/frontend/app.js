@@ -5,9 +5,29 @@ const AI = EditorAI;
 const Community = EditorCommunity;
 const Workspace=EditorWorkspace, Frames=EditorFrames;
 
+// A native range can emit change/blur before a pointer gesture has ended.
+// Keep these notifications inside one transaction, including releases outside it.
+const historyRange = {
+  mounted(el, binding) {
+    const owner=el.ownerDocument.defaultView;
+    let pointer=null, callback=binding.value;
+    const commit=()=>callback();
+    function detach(){owner.removeEventListener('pointerup',finish,true);owner.removeEventListener('pointercancel',finish,true);owner.removeEventListener('blur',finish);}
+    function finish(event){if(pointer===null||event.type!=='blur'&&event.pointerId!==pointer)return;pointer=null;detach();commit();}
+    function start(event){if(event.button!==0||pointer!==null)return;pointer=event.pointerId;owner.addEventListener('pointerup',finish,true);owner.addEventListener('pointercancel',finish,true);owner.addEventListener('blur',finish);}
+    function settled(){if(pointer===null)commit();}
+    el.addEventListener('pointerdown',start);el.addEventListener('change',settled);el.addEventListener('blur',settled);
+    el.__historyRange={update:value=>callback=value,dispose(){detach();el.removeEventListener('pointerdown',start);el.removeEventListener('change',settled);el.removeEventListener('blur',settled);if(pointer!==null){pointer=null;commit();}}};
+  },
+  updated(el,binding){el.__historyRange.update(binding.value);},
+  beforeUnmount(el){el.__historyRange.dispose();delete el.__historyRange;}
+};
+
 createApp({
+  directives: { historyRange },
   components: {
     AdjustmentControl: {
+      directives: { historyRange },
       props: ['control', 'modelValue', 'disabled'],
       emits: ['update:modelValue', 'start', 'commit', 'number-input', 'reset', 'confirm', 'cancel'],
       setup(props,{emit}) {
@@ -63,7 +83,7 @@ createApp({
             @keydown.enter.stop.prevent="confirmNumber" @keydown.esc.stop.prevent="$event.target.value = modelValue; $event.target.blur(); $emit('cancel')">
             <span v-if="control.unit">{{ control.unit }}</span></div></div>
         <div class="range-row"><input :id="control.key" type="range" :min="control.min" :max="control.max" :step="control.step"
-          :disabled="disabled" :value="modelValue" @input="$emit('start'); $emit('update:modelValue', Number($event.target.value))" @change="$emit('commit')" @pointerup="$emit('commit')" @pointercancel="$emit('commit')" @lostpointercapture="$emit('commit')" @blur="$emit('commit')"
+          :disabled="disabled" :value="modelValue" @input="$emit('start'); $emit('update:modelValue', Number($event.target.value))" v-history-range="() => $emit('commit')"
           :aria-describedby="control.key + '-hint'" :title="control.hint">
           <button class="reset-control" @click="$emit('reset', control.key)" :aria-label="'复位' + (control.resetLabel || control.label)" :disabled="modelValue === (control.default || 0)">↺</button></div>
         </div>`
@@ -101,6 +121,23 @@ createApp({
     const aiConnection=ref('checking');
     const panelTabs=[{key:'edit',label:'编辑'},{key:'presets',label:'预设'},{key:'ai',label:'AI 助手'}],panelScroll={edit:0,presets:0,ai:0};
     const presetCategory=ref('all'),presetSearch=ref(''),presetFavorites=ref([]);
+    const pendingPreset=ref(null),presetConfirmDialog=ref(null);
+    let cancelledPresetHover=null;
+    watch(pendingPreset,async pending=>{await nextTick();const dialog=presetConfirmDialog.value;if(pending){if(!dialog.open)dialog.showModal();dialog.querySelector('button')?.focus();}else if(dialog.open){dialog.close();hoverFilter.value=null;}});
+    function cancelPreset(){const preset=pendingPreset.value?.preset;cancelledPresetHover=preset?.id||preset?.name;pendingPreset.value=null;hoverFilter.value=null;}
+    function requestPreset(preset,legacy=false){
+      hoverFilter.value=null;
+      if(JSON.stringify(Core.toRecipe(state.value))!==JSON.stringify(Core.toRecipe(Core.createState()))){pendingPreset.value={preset,legacy};return;}
+      commitPreset(preset,legacy);
+    }
+    function commitPreset(preset,legacy=false){
+      if(locked.value)return;
+      hoverFilter.value=null;
+      if(legacy){if(state.value.presetSession)state.value=Presets.remove(state.value);delete state.value.presetSession;state.value.filter=preset.name;state.value.filterStrength=100;}
+      else state.value=Presets.apply(state.value,preset.id);
+      commit();notify(`已应用「${preset.label}」，可以继续调整或撤销。`);
+    }
+    function confirmPreset(){const pending=pendingPreset.value;pendingPreset.value=null;if(pending)commitPreset(pending.preset,pending.legacy);}
     try { const saved=JSON.parse(localStorage.getItem('landscape-preset-favorites')||'[]');if(Array.isArray(saved))presetFavorites.value=saved.filter(id=>Presets.byId.has(id)); } catch {}
     const presetCategories=[{key:'all',label:'全部'},...Presets.categories,{key:'favorites',label:'我的收藏'}];
     const legacyPresets=Core.filters.map(f=>({...f,recipe:{version:6,steps:[{type:'filter',params:{name:f.name,strength:100}}]}}));
@@ -111,7 +148,7 @@ createApp({
     function applyPreset(preset){
       if(locked.value)return;
       if(activePreset.value?.id===preset.id)return removePreset();
-      state.value=Presets.apply(state.value,preset.id);commit();notify(`已应用「${preset.label}」，强度和参数都可以继续调整。`);
+      requestPreset(preset);
     }
     function setPresetAmount(amount){if(locked.value||!activePreset.value)return;beginAdjustment();state.value=Presets.setAmount(state.value,amount);}
     function resetPresetAmount(){setPresetAmount(100);commit();}
@@ -844,19 +881,17 @@ createApp({
       } catch (e) { fail(e.message); }
     }
     function hoverStyle(filter,event) {
-      if(locked.value||wbPicking.value||(event?.pointerType&&event.pointerType!=='mouse'))return;
+      if(locked.value||pendingPreset.value||cancelledPresetHover===(filter.id||filter.name)||wbPicking.value||(event?.pointerType&&event.pointerType!=='mouse'))return;
       // Hover/focus on the selected card must preserve its current strength and manual edits.
       if(filter.id?activePreset.value?.id===filter.id:state.value.filter===filter.name){hoverFilter.value=null;return;}
       hoverFilter.value=filter;compareMode.value='edited';
     }
-    function leaveStyle(filter) { if(hoverFilter.value==filter||(filter.id?hoverFilter.value?.id===filter.id:hoverFilter.value?.name===filter.name))hoverFilter.value=null; }
+    function leaveStyle(filter) { if(cancelledPresetHover===(filter.id||filter.name))cancelledPresetHover=null;if(hoverFilter.value==filter||(filter.id?hoverFilter.value?.id===filter.id:hoverFilter.value?.name===filter.name))hoverFilter.value=null; }
     function applyFilter(filter) {
       if(locked.value)return;
       hoverFilter.value=null;
       if(state.value.filter===filter.name){removeFilter();notify(`已移除「${filter.label}」，保留手动调整。`);return;}
-      if(state.value.presetSession)state.value=Presets.remove(state.value);
-      delete state.value.presetSession;state.value.filter=filter.name;state.value.filterStrength=100;
-      commit();notify(`已应用「${filter.label}」，可以调整强度或撤销。`);
+      requestPreset(filter,true);
     }
     function applyPreview() {
       if (!preview.value) return; const name = preview.value.name;
@@ -1077,7 +1112,7 @@ createApp({
     }
     function keydown(event) {
       if(frameOpen.value)return;
-      if(currentView.value!=='editor'||exportOpen.value||shareOpen.value||recipeDetail.value)return;
+      if(currentView.value!=='editor'||exportOpen.value||shareOpen.value||recipeDetail.value||pendingPreset.value)return;
       if(event.key==='Enter'&&(event.target.closest('button,a')||event.target.tagName==='SUMMARY'&&!event.target.parentElement.classList.contains('geometry-tool')))return;
       if(event.key==='Enter'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!(event.target.isContentEditable||/TEXTAREA|SELECT/.test(event.target.tagName))){
         if(cropOpen.value){event.preventDefault();applyCrop();return;}
@@ -1098,6 +1133,7 @@ createApp({
       window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
     });
     return {
+      pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       openLogin,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
       legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
