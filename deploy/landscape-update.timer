@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Landscape GitHub main every minute
+
+[Timer]
+OnBootSec=60s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Unit=landscape-update.service
+
+[Install]
+WantedBy=timers.target

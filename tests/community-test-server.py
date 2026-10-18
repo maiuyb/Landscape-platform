@@ -6,6 +6,8 @@ import tempfile
 import threading
 from unittest.mock import patch
 from werkzeug.serving import make_server
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.wrappers import Response
 
 with tempfile.TemporaryDirectory(prefix='hmi-community-browser-') as tmp:
     os.environ['LANDSCAPE_DB']=str(Path(tmp)/'recipes.db')
@@ -15,10 +17,12 @@ with tempfile.TemporaryDirectory(prefix='hmi-community-browser-') as tmp:
     import ai_service
     with patch.object(ai_service,'dotenv_values',return_value={}):
         import app
-    server=make_server('127.0.0.1',0,app.app)
+    prefix = os.environ.get('HMI_TEST_PREFIX', '')
+    application = DispatcherMiddleware(Response('Other site', status=404), {prefix: app.app}) if prefix else app.app
+    server=make_server('127.0.0.1',0,application)
     def stop():
         sys.stdin.readline()
         server.shutdown()
     threading.Thread(target=stop,daemon=True).start()
-    print('READY http://127.0.0.1:'+str(server.server_port),flush=True)
+    print('READY http://127.0.0.1:'+str(server.server_port)+(prefix+'/' if prefix else ''),flush=True)
     server.serve_forever()

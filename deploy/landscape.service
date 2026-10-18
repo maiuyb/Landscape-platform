@@ -1,0 +1,24 @@
+[Unit]
+Description=Landscape photo editor and community
+After=network.target
+
+[Service]
+Type=simple
+User=landscape
+Group=landscape
+EnvironmentFile=/etc/landscape/landscape.env
+ExecStart=/usr/bin/python3 /usr/local/libexec/landscape-start.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=35
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/landscape
+MemoryMax=1G
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

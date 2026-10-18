@@ -1,0 +1,2 @@
+-r ../风景调色协作平台/backend/requirements.txt
+gunicorn==26.2.0

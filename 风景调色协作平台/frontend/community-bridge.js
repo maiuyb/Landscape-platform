@@ -1,5 +1,9 @@
 /* Editor-owned adapter around the unchanged community app from 87a0ae1. */
 (() => {
+  // Hosting prefix belongs to this adapter, leaving the member's API unchanged.
+  const prefix = new URL('../', location.href).pathname.replace(/\/$/, '');
+  const originalApi = api;
+  api = (path, options) => originalApi(prefix + path, options);
   if (parent === window) return;
   let channel='',sequence=0,previewRequest=0,pendingPublish=false;const seenShares=new Set();
   const originalAuth=submitAuth;
