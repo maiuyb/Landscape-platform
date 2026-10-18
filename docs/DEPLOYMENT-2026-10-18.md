@@ -21,7 +21,9 @@
 
 首次部署因 PyPI 下载较慢，Pillow 6.9 MB 依赖出现数分钟无前台输出；实际仍在下载。安装器随后补充实时日志显示，避免只显示 preparing。服务器暂存安装器更新后可供以后安装使用，基础设施的 root 文件仍按管理员安装机制维护，日常应用代码自动更新。
 
-当前已确认首次部署后立即发生的第二次检查正常结束且应用未重启。后续 main 提交还将用于验证自动发现新版本、切换和就绪状态，最终结果以该次交付记录为准；不能仅凭 timer active 宣称新提交更新验收通过。
+**自动更新实测已通过。** [PR #12](https://github.com/maiuyb/Landscape-platform/pull/12) 合入后，未手动触发更新或重启，服务器自行发现 main 并从 `887aa39` 切换到 `ff0acb3000971856f65c438c5a14d68ca29f4f1d`，回环与公网就绪接口返回一致的新提交，首页/独立社区均为 HTTP 200。更新构建期间旧版继续提供服务。
+
+15:09:20–15:09:22（北京时间）的后续同提交检查正常结束，应用 PID 保持不变，证明无更新时没有重复重启。数据目录 inode/权限保持一致，原 Lumi 根页内容哈希不变；数据库写入与回退语义由隔离单元测试覆盖，没有在公网写入测试数据来验收。部署和进度修复的 PR 均已合入，相关已合入的本地/远端交付分支已清理。
 
 ## 已执行检查
 
@@ -33,6 +35,8 @@
 
 ## 社区后续
 
-已看到新分支 `codex/community-issue-4-pairing/28a61a7` 和成员在 [#4](https://github.com/maiuyb/Landscape-platform/issues/4) 的回复。该分支尚未独立验收，未混入本次云端部署，也未提前关闭 issue。当前部署沿用已验收的同源组合流程。后续验证需包含 HTTP 与 `/landscape/` 前缀环境，再决定合入。
+已看到新分支 `codex/community-issue-4-pairing/28a61a7` 和成员在 [#4](https://github.com/maiuyb/Landscape-platform/issues/4) 的回复。该分支尚未完成独立验收，未混入本次云端部署，也未提前关闭 issue。当前部署沿用已验收的同源组合流程。
+
+本机提取该分支的原函数、用临时目录独立复现：相同内容的根路径 `/uploads/...` 能去重，部署前缀 `/landscape/uploads/...` 被跳过。同时实际公网 HTTP 浏览器没有 `crypto.subtle`，不能依赖前端哈希弥补。已在 [#4 的部署复验评论](https://github.com/maiuyb/Landscape-platform/issues/4#issuecomment-6246960023) 请社区负责人修复并补对应回归，未改写其业务模块。后续验收需包含 HTTP 与应用前缀环境，再决定合入。
 
 服务器命令、更新恢复机制和配置说明见 [deploy/README.md](../deploy/README.md)。
