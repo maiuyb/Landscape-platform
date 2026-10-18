@@ -1,0 +1,17 @@
+[Unit]
+Description=Check GitHub main and update Landscape atomically
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=landscape
+Group=landscape
+ExecStart=/usr/bin/python3 /usr/local/libexec/landscape-update.py
+TimeoutStartSec=15min
+UMask=0027
+# This service uses one narrowly scoped sudoers rule to restart the app.
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/landscape /var/lib/landscape

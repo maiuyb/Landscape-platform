@@ -10,6 +10,7 @@ from datetime import datetime
 from flask import Flask, Request, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 class UploadRequest(Request):
     """Close spooled parts even when a size limit interrupts multipart parsing."""
@@ -28,6 +29,9 @@ class UploadRequest(Request):
 
 app = Flask(__name__)
 app.request_class = UploadRequest
+if os.environ.get('LANDSCAPE_TRUST_PROXY') == '1':
+    # Enable only behind our loopback reverse proxy, which replaces these headers.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_prefix=1)
 CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +45,12 @@ MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_FILE_BYTES + 1024 * 1024
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Local frontend and API share one origin; the editor also works without a CDN.
+@app.route('/api/health')
+def health():
+    response = jsonify({'status': 'ok', 'revision': os.environ.get('LANDSCAPE_REVISION', 'development')})
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
 @app.route('/')
 def frontend_index():
     return send_from_directory(FRONTEND_DIR, 'index.html')
@@ -140,7 +150,7 @@ def upload():
     filename = f"{uuid.uuid4().hex}.{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     file.save(filepath)
-    return json_ok({'url': f'/uploads/{filename}'})
+    return json_ok({'url': f'{request.script_root}/uploads/{filename}'})
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):

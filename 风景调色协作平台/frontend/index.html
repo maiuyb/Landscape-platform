@@ -168,7 +168,7 @@
     <section class="community-view" ref="communityContainer" v-show="currentView === 'community'" aria-label="社区配方">
       <div class="community-heading"><div><p class="eyebrow">来自风景的灵感</p><h1>浏览社区配方</h1><p>先看效果与说明，再在自己的照片上尝试。</p></div><button @click="currentView = 'editor'">返回编辑器</button></div>
       <p v-if="!communityReady" role="status">正在连接社区… <button @click="connectCommunity">重试连接</button></p>
-      <iframe v-if="communityMounted" ref="communityFrame" src="/community/" title="风景配方社区" class="community-frame" @load="connectCommunity"></iframe>
+      <iframe v-if="communityMounted" ref="communityFrame" src="community/" title="风景配方社区" class="community-frame" @load="connectCommunity"></iframe>
     </section>
 
     <dialog ref="exportDialog" @cancel.prevent="!exporting && (exportOpen = false)" aria-labelledby="export-title">

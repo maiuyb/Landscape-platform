@@ -64,6 +64,19 @@ class UploadTests(unittest.TestCase):
         finally:
             saved.close()
 
+    def test_reverse_proxy_prefix_is_preserved_in_upload_urls(self):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        original = self.backend.app.wsgi_app
+        self.backend.app.wsgi_app = ProxyFix(original, x_prefix=1)
+        try:
+            response = self.upload(64, headers={'X-Forwarded-Prefix': '/landscape'})
+            self.assertTrue(response.get_json()['url'].startswith('/landscape/uploads/'))
+            health = self.client.get('/api/health')
+            self.assertEqual(health.get_json()['status'], 'ok')
+            self.assertEqual(health.headers['Cache-Control'], 'no-store')
+        finally:
+            self.backend.app.wsgi_app = original
+
     def test_exactly_twenty_mib_is_accepted_with_multipart_overhead(self):
         limit = self.backend.MAX_UPLOAD_FILE_BYTES
         response = self.upload(limit)

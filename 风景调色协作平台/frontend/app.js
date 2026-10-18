@@ -851,7 +851,7 @@ createApp({
     }
     async function api(path, options = {}) {
       const token=localStorage.getItem('landscape:token')||localStorage.getItem('cd_token');
-      const response = await fetch(`/api${path}`, { ...options, headers:{...(token?{Authorization:'Bearer '+token}:{}),...options.headers}, signal: options.signal||AbortSignal.timeout(65000) });
+      const response = await fetch(`api${path}`, { ...options, headers:{...(token?{Authorization:'Bearer '+token}:{}),...options.headers}, signal: options.signal||AbortSignal.timeout(65000) });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || `服务暂不可用（${response.status}）`); return data;
     }
@@ -995,7 +995,18 @@ createApp({
     }
     async function copyRecipe() {
       if (locked.value) return;
-      try { await navigator.clipboard.writeText(JSON.stringify(Core.toRecipe(state.value), null, 2)); notify('当前配方已复制，可在其他照片上复用。'); }
+      try {
+        const text=JSON.stringify(Core.toRecipe(state.value), null, 2);
+        if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+        else {
+          // Public-IP HTTP pages do not expose the async Clipboard API.
+          const input=document.createElement('textarea'),previous=document.activeElement;
+          input.value=text;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.append(input);input.select();
+          try { if(!document.execCommand('copy')) throw new Error('Copy unavailable'); }
+          finally { input.remove();previous?.focus(); }
+        }
+        notify('当前配方已复制，可在其他照片上复用。');
+      }
       catch { fail('剪贴板不可用，请使用“下载配方”保存文件。'); }
     }
     function downloadRecipe() {
