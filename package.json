@@ -5,7 +5,7 @@
   "scripts": {
     "prepare": "node scripts/prepare-frontend.cjs",
     "start": "node scripts/start.cjs",
-    "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs tests/editor-detail.test.cjs tests/editor-effects.test.cjs tests/editor-presets.test.cjs tests/editor-ai.test.cjs tests/editor-community.test.cjs tests/editor-collection.test.cjs",
+    "test": "node --test tests/editor-core.test.cjs tests/editor-tools.test.cjs tests/editor-detail.test.cjs tests/editor-effects.test.cjs tests/editor-presets.test.cjs tests/editor-ai.test.cjs tests/editor-community.test.cjs tests/editor-collection.test.cjs tests/editor-upright.test.cjs",
     "test:ai": "node tests/editor-ai-browser.cjs",
     "test:workspace": "node tests/editor-workspace-browser.cjs",
     "test:community": "node tests/editor-community-browser.cjs",
@@ -25,7 +25,8 @@
     "review:e2": "node scripts/review-e2-photos.cjs",
     "test:collection": "node tests/editor-welcome-browser.cjs",
     "test:tester-feedback": "node tests/tester-feedback-browser.cjs",
-    "test:history-gesture": "node tests/editor-history-gesture-browser.cjs"
+    "test:history-gesture": "node tests/editor-history-gesture-browser.cjs",
+    "test:upright": "node tests/editor-upright-browser.cjs"
   },
   "dependencies": {
     "vue": "3.5.43"

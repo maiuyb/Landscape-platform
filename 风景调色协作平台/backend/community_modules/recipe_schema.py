@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""配方校验：按编辑器的配方格式（版本 1–7）校验发布内容。
+"""配方校验：按编辑器的配方格式（版本 1–8）校验发布内容。
 
 对齐主编辑器 `editor-core.js` 的 `recipeState` 所接受的操作与范围，
 但策略更严格：未知操作、非有限数值、越界值一律拒绝（400），
@@ -11,8 +11,8 @@
 import math
 import re
 
-# 支持的配方版本（editor-core.recipeState 允许 1–7）
-VERSIONS = {1, 2, 3, 4, 5, 6, 7}
+# 支持的配方版本（editor-core.recipeState 允许 1–8）
+VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8}
 
 # 全局调整控制（type 即键名），params.value 的范围
 CONTROL_RANGES = {
@@ -75,6 +75,28 @@ def _is_choice(value, allowed):
 
 def _in(value, bounds):
     return _num(value) and bounds[0] <= value <= bounds[1]
+
+
+def _upright_matrix(m):
+    if not isinstance(m, list) or len(m) != 9 or not all(_in(v, (-16, 16)) for v in m) or abs(m[8] - 1) > 1e-8:
+        return False
+    det = m[0]*(m[4]*m[8]-m[5]*m[7])-m[1]*(m[3]*m[8]-m[5]*m[6])+m[2]*(m[3]*m[7]-m[4]*m[6])
+    if det < 1e-5:
+        return False
+    points = []
+    for x, y in ((0, 0), (1, 0), (1, 1), (0, 1)):
+        denominator = m[6]*x+m[7]*y+1
+        if denominator < .08:
+            return False
+        p = ((m[0]*x+m[1]*y+m[2])/denominator, (m[3]*x+m[4]*y+m[5])/denominator)
+        if any(abs(v) > 16 for v in p):
+            return False
+        points.append(p)
+    for i, a in enumerate(points):
+        b, c = points[(i+1) % 4], points[(i+2) % 4]
+        if (b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]) <= 1e-5:
+            return False
+    return True
 
 
 def _norm_version(raw):
@@ -220,6 +242,9 @@ def _validate_step(step, version):
     elif stype == 'flip':
         if params.get('direction') not in ('h', 'v'):
             return 'flip 方向无效'
+    elif stype == 'upright':
+        if version < 8 or set(params) != {'matrix', 'autoCrop'} or not _upright_matrix(params.get('matrix')) or not isinstance(params.get('autoCrop'), bool):
+            return 'upright 参数无效'
     elif stype == 'perspective':
         if version < 7 or not all(_in(params.get(k), (-60.0, 60.0)) for k in ('vertical', 'horizontal')) or not isinstance(params.get('autoCrop'), bool):
             return 'perspective 参数无效'
@@ -320,7 +345,7 @@ def validate_recipe(recipe):
         return None, '请求格式错误'
     version = _norm_version(recipe.get('version', 1))
     if version is None:
-        return None, '暂不支持此配方版本（支持 1–7）'
+        return None, '暂不支持此配方版本（支持 1–8）'
     steps = recipe.get('steps', [])
     err = _validate_steps(steps, version)
     if err:
