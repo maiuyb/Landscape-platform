@@ -1,5 +1,5 @@
 /* The preview uses the exact same color pipeline as full-size export. */
-importScripts('editor-tools.js','editor-detail.js','editor-effects.js','editor-masks.js','editor-core.js','editor-presets.js');
+importScripts('editor-tools.js','editor-detail.js','editor-effects.js','editor-masks.js','editor-upright.js','editor-core.js','editor-presets.js');
 let source = null;
 let nativeGeometry = null;
 const geometryCache = new Map();

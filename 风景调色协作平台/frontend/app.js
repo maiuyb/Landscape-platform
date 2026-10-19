@@ -249,6 +249,16 @@ createApp({
     const cropOpen = ref(false), cropRatio = ref('free'), crop = reactive({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 });
     const cropDraft = reactive({});
     const perspectiveOpen=ref(false),perspectiveDraft=reactive({vertical:0,horizontal:0,autoCrop:true});
+    const uprightMode=ref('manual'),uprightSolution=ref(null),uprightGuides=ref([]),uprightAxis=ref('vertical'),uprightSelected=ref(null),uprightStatus=ref(''),uprightInvalid=ref(false),uprightBusy=ref(false),uprightDrawing=ref(false);
+    let uprightDrag=null,uprightSequence=0,uprightJob=null,uprightVersion=0;
+    const uprightSize=computed(()=>sourceImage.value?Core.outputSize(sourceImage.value.naturalWidth,sourceImage.value.naturalHeight,state.value.geometry):{width:1,height:1});
+    const uprightFrame=computed(()=>{
+      const {width,height}=uprightSize.value;
+      const base=uprightSolution.value?Core.upright.pixelMatrix(width,height,{matrix:uprightSolution.value,autoCrop:perspectiveDraft.autoCrop}):[1,0,0,0,1,0,0,0,1];
+      return Core.masks.multiply(Core.perspectiveMatrix(width,height,perspectiveDraft),base);
+    });
+    const uprightDisplay=computed(()=>uprightGuides.value.map(g=>({...g,points:[g.a,g.b].map(p=>{const q=Core.masks.transform(uprightFrame.value,p[0]*uprightSize.value.width,p[1]*uprightSize.value.height);return[q[0]/uprightSize.value.width,q[1]/uprightSize.value.height];})})));
+    const uprightApplyBlocked=computed(()=>uprightBusy.value||uprightDrawing.value||uprightMode.value==='guided'&&(uprightInvalid.value||!uprightSolution.value));
     const perspectiveControls=['vertical','horizontal'].map(key=>({key:'perspective-'+key,field:key,label:key==='vertical'?'垂直透视':'水平透视',min:-60,max:60,step:.1,precision:1,default:0,unit:'',hint:key==='vertical'?'校正仰拍、俯拍形成的上下收拢；结合辅助线观察立柱':'校正左右收拢；结合辅助线观察横向边缘'}));
     const showGuides = ref(true), straightenOpen = ref(false), straightenAngle = ref(0), straightenAutoCrop = ref(true);
     const inspectorBusy = ref(false), inspectorOpen = ref(false), inspectorBefore = ref(false), inspectorPosition = reactive({x:.5,y:.5}), inspectorCanvas = ref(null), inspectorOriginal = ref(null);
@@ -305,7 +315,8 @@ createApp({
       let base=preview.value?.state || hoveredState.value || state.value;
       if(compareGroup.value)base=withoutGroup(base,compareGroup.value);
       if(!straightenOpen.value&&!perspectiveOpen.value)return base;
-      const next=Core.clone(base);next.geometry.push(perspectiveOpen.value?{type:'perspective',params:{...perspectiveDraft}}:{type:'straighten',params:{angle:straightenAngle.value,autoCrop:straightenAutoCrop.value}});return next;
+      const next=Core.clone(base);
+      if(perspectiveOpen.value)next.geometry.push(...perspectiveSteps());else next.geometry.push({type:'straighten',params:{angle:straightenAngle.value,autoCrop:straightenAutoCrop.value}});return next;
     });
     const outputDimensions = computed(() => sourceImage.value ? Core.outputSize(sourceImage.value.naturalWidth, sourceImage.value.naturalHeight, activeState.value.geometry) : { width: 0, height: 0 });
     const exportDimensions = computed(() => sourceImage.value ? Core.outputSize(Math.max(1, Math.round(sourceImage.value.naturalWidth * exportOptions.scale)), Math.max(1, Math.round(sourceImage.value.naturalHeight * exportOptions.scale)), state.value.geometry) : { width: 0, height: 0 });
@@ -422,6 +433,7 @@ createApp({
       historyVersion.value++; schedulePaint();requestThumbnails();
     }
     function restore(action) {
+      cancelUprightAnalysis();uprightDrag=null;uprightDrawing.value=false;
       // Flush a pending gesture before stepping back, including keyboard ranges.
       if(JSON.stringify(history.current())!==JSON.stringify(state.value))commit();
       maskPointerUp();maskEditing.value=false;
@@ -755,7 +767,7 @@ createApp({
     function beginPerspective(){
       maskPointerUp();maskEditing.value=false;
       if(locked.value)return;inspectorOpen.value=false;hoverFilter.value=null;wbPicking.value=false;
-      Object.assign(perspectiveDraft,{vertical:0,horizontal:0,autoCrop:true});perspectiveOpen.value=true;
+      resetUpright();perspectiveOpen.value=true;
       document.getElementById('composition-group').open=true;compareMode.value='edited';zoom.value=100;revealGeometryControls();
     }
     function inputPerspective(control,event){
@@ -764,8 +776,54 @@ createApp({
       perspectiveDraft[control.field]=Math.round(value*10)/10;dragging=false;schedulePaint();
     }
     function finishPerspective(apply){
-      if(apply&&(perspectiveDraft.vertical||perspectiveDraft.horizontal))state.value.geometry.push({type:'perspective',params:{...perspectiveDraft}});
-      perspectiveOpen.value=false;dragging=false;if(apply)commit();else schedulePaint();focusGeometryTool('perspective-tool');
+      if(apply&&uprightApplyBlocked.value)return;
+      if(apply)state.value.geometry.push(...perspectiveSteps());
+      cancelUprightAnalysis();uprightDrag=null;uprightDrawing.value=false;perspectiveOpen.value=false;dragging=false;if(apply)commit();else schedulePaint();focusGeometryTool('perspective-tool');
+    }
+    function perspectiveSteps(){
+      const steps=[];
+      if(uprightSolution.value)steps.push({type:'upright',params:{matrix:Core.clone(uprightSolution.value),autoCrop:perspectiveDraft.autoCrop}});
+      if(perspectiveDraft.vertical||perspectiveDraft.horizontal)steps.push({type:'perspective',params:{...perspectiveDraft}});
+      return steps;
+    }
+    function cancelUprightAnalysis(){uprightVersion++;if(uprightJob){clearTimeout(uprightJob.timer);uprightJob.worker?.terminate();uprightJob.resolve(null);uprightJob=null;}uprightBusy.value=false;}
+    function resetUpright(){cancelUprightAnalysis();uprightDrag=null;uprightDrawing.value=false;uprightMode.value='manual';uprightSolution.value=null;uprightGuides.value=[];uprightSelected.value=null;uprightStatus.value='';uprightInvalid.value=false;Object.assign(perspectiveDraft,{vertical:0,horizontal:0,autoCrop:true});}
+    function beginUprightGuides(){resetUpright();uprightMode.value='guided';uprightStatus.value='沿同一主体的两条竖直边或两条水平边画线；端点可拖动。';}
+    function solveUprightGuides(){
+      try{uprightSolution.value=Core.upright.solve(uprightGuides.value,uprightSize.value.width/uprightSize.value.height);uprightInvalid.value=false;uprightStatus.value='已按参考线矫正，继续调整端点或按 Enter 应用。';}
+      catch(error){uprightSolution.value=null;uprightInvalid.value=true;uprightStatus.value=error.message;}
+    }
+    function uprightPoint(event,inverse){const rect=event.currentTarget.getBoundingClientRect(),{width,height}=uprightSize.value;const p=Core.masks.transform(inverse,(event.clientX-rect.left)/rect.width*width,(event.clientY-rect.top)/rect.height*height);return[Core.clamp(p[0]/width,0,1),Core.clamp(p[1]/height,0,1)];}
+    function uprightPointerDown(event){
+      if(event.button!==0||uprightBusy.value||uprightDrag)return;event.preventDefault();event.currentTarget.focus({preventScroll:true});
+      const inverse=Core.masks.inverse(uprightFrame.value),point=uprightPoint(event,inverse),target=event.target.closest('[data-upright-guide]'),before=Core.clone(uprightGuides.value);
+      let id=target?.dataset.uprightGuide,endpoint=target?.dataset.uprightEndpoint;
+      if(!id){if(uprightGuides.value.filter(g=>g.axis===uprightAxis.value).length>=2){uprightStatus.value='这个方向已有两条参考线，可拖动端点或删除后重画。';return;}id='guide-'+(++uprightSequence);endpoint='b';uprightGuides.value.push({id,axis:uprightAxis.value,a:point,b:point});}
+      uprightSelected.value=id;uprightDrawing.value=true;uprightDrag={id,endpoint,pointerId:event.pointerId,inverse,before,solution:Core.clone(uprightSolution.value)};event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    function uprightPointerMove(event){if(!uprightDrag||event.pointerId!==uprightDrag.pointerId)return;const guide=uprightGuides.value.find(g=>g.id===uprightDrag.id);if(guide)guide[uprightDrag.endpoint]=uprightPoint(event,uprightDrag.inverse);}
+    function uprightPointerUp(event){if(!uprightDrag||event.pointerId!==uprightDrag.pointerId)return;if(event.type==='pointercancel'||event.type==='lostpointercapture'){uprightGuides.value=uprightDrag.before;uprightSolution.value=uprightDrag.solution;}else{uprightPointerMove(event);const g=uprightGuides.value.find(g=>g.id===uprightDrag.id);if(g&&Math.hypot(g.a[0]-g.b[0],g.a[1]-g.b[1])<.025)uprightGuides.value=uprightGuides.value.filter(v=>v.id!==g.id);solveUprightGuides();}uprightDrag=null;uprightDrawing.value=false;}
+    function deleteUprightGuide(id){uprightGuides.value=uprightGuides.value.filter(g=>g.id!==id);uprightSelected.value=null;solveUprightGuides();}
+    function uprightGuideKey(id,endpoint,event){
+      if(uprightBusy.value)return;
+      if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();event.stopPropagation();deleteUprightGuide(id);return;}
+      if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();event.stopPropagation();const g=uprightGuides.value.find(g=>g.id===id);if(!g)return;const p=g[endpoint],step=event.shiftKey?.01:.002;g[endpoint]=[Core.clamp(p[0]+(event.key==='ArrowRight'?step:event.key==='ArrowLeft'?-step:0),0,1),Core.clamp(p[1]+(event.key==='ArrowDown'?step:event.key==='ArrowUp'?-step:0),0,1)];solveUprightGuides();
+    }
+    async function automaticPerspective(){
+      if(uprightBusy.value)return;cancelUprightAnalysis();const version=uprightVersion;uprightBusy.value=true;uprightStatus.value='正在本机分析照片中的直线…';
+      try{
+        const image=Core.render(sourcePreview,state.value,{maxSide:480,color:false}),data=image.getContext('2d').getImageData(0,0,image.width,image.height);
+        const result=await new Promise(resolve=>{
+          if(typeof Worker==='undefined'){setTimeout(()=>{try{resolve(Core.upright.automatic(data.data,data.width,data.height));}catch{resolve(null);}},0);return;}
+          const worker=new Worker('editor-upright-worker.js'),job={worker,resolve,timer:null};uprightJob=job;
+          const done=result=>{clearTimeout(job.timer);worker.terminate();if(uprightJob===job)uprightJob=null;resolve(result);};
+          worker.onmessage=e=>done(e.data.result||null);worker.onerror=e=>{e.preventDefault();done(null);};job.timer=setTimeout(()=>done(null),8000);worker.postMessage({pixels:data.data.buffer,width:data.width,height:data.height},[data.data.buffer]);
+        });
+        if(version!==uprightVersion||!perspectiveOpen.value)return;
+        if(!result){uprightStatus.value='未找到足够可靠的直线，保留当前预览。可改用导引式，沿主体边缘画线。';return;}
+        uprightMode.value='auto';uprightSolution.value=result.matrix;uprightGuides.value=result.guides.map(g=>({...g,id:'guide-'+(++uprightSequence)}));uprightInvalid.value=false;perspectiveDraft.vertical=0;perspectiveDraft.horizontal=0;uprightStatus.value='已根据照片直线生成矫正预览，可应用或使用导引式自行画线。';
+      }catch{if(version===uprightVersion)uprightStatus.value='分析暂未完成，请使用导引式矫正。';}
+      finally{if(version===uprightVersion)uprightBusy.value=false;}
     }
     function inputStraighten(event) {
       const value=event.target.valueAsNumber;
@@ -1127,12 +1185,14 @@ createApp({
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
     onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
     onBeforeUnmount(() => {
+      cancelUprightAnalysis();
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
       window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
     });
     return {
+      uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       openLogin,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
       legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},

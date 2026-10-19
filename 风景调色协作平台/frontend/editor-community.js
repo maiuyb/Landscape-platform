@@ -9,7 +9,7 @@
     const record=object(raw?.recipe)?raw.recipe:raw;
     if(!object(record)||!hasSteps(record))throw Error('社区作品尚未提供可读取的配方，请稍后重试。');
     const version=record.version??1;
-    if(![1,2,3,4,5,6,7].includes(version))throw Error('这份社区配方的版本暂不支持，请联系作者更新。');
+    if(![1,2,3,4,5,6,7,8].includes(version))throw Error('这份社区配方的版本暂不支持，请联系作者更新。');
     let steps=record.steps,rendering=record.rendering;
     try{if(typeof steps==='string')steps=JSON.parse(steps);if(typeof rendering==='string')rendering=JSON.parse(rendering);}catch{throw Error('社区配方的数据格式无效。');}
     if(!Array.isArray(steps)||steps.some(s=>!object(s)))throw Error('社区配方的操作列表无效。');
@@ -32,7 +32,7 @@
       if(metadata[key]!==undefined)recipe[key]=Core.clone(metadata[key]);
     return {recipe};
   }
-  const geometryTypes=new Set(['crop','rotate','flip','straighten','perspective']);
+  const geometryTypes=new Set(['crop','rotate','flip','straighten','perspective','upright']);
   function reuse(raw,{geometry=false,masks=false}={}){
     const recipe=normalize(raw);
     recipe.steps=recipe.steps.filter(s=>(geometry||!geometryTypes.has(s.type))&&(masks||s.type!=='masks'));

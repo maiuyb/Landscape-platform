@@ -425,7 +425,7 @@ function parseRecipeJson(text) {
   const recipe = (data && typeof data === 'object' && data.recipe && typeof data.recipe === 'object') ? data.recipe : data;
   if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) return { error: '配方格式无效' };
   const version = recipe.version == null ? 1 : recipe.version;
-  if (![1, 2, 3, 4, 5, 6, 7].includes(version)) return { error: '暂不支持的配方版本：' + version };
+  if (![1, 2, 3, 4, 5, 6, 7, 8].includes(version)) return { error: '暂不支持的配方版本：' + version };
   if (!Array.isArray(recipe.steps)) return { error: '配方缺少 steps 数组' };
   return { recipe };
 }

@@ -10,6 +10,15 @@ spec.loader.exec_module(schema)
 
 
 class VersionTests(unittest.TestCase):
+    def test_upright_v8_matrix_round_trip_and_strict_boundaries(self):
+        params = {'matrix': [1, .1, 0, 0, 1, 0, .1, .1, 1], 'autoCrop': True}
+        recipe = {'version': 8, 'steps': [{'type': 'upright', 'params': params}]}
+        self.assertIsNone(schema.validate_recipe(recipe)[1])
+        self.assertEqual(schema.validate_recipe(recipe)[0]['steps'], recipe['steps'])
+        self.assertIsNotNone(schema.validate_recipe({**recipe, 'version': 7})[1])
+        for patch in ({'matrix': [0]*9}, {'matrix': [1, 0, 0, 0, 1, 0, -2, 0, 1]}, {'matrix': [True, 0, 0, 0, 1, 0, 0, 0, 1]}, {'matrix': [float('nan')]*9}, {'autoCrop': 1}, {'extra': 'unsupported'}):
+            self.assertIsNotNone(schema.validate_recipe({**recipe, 'steps': [{'type': 'upright', 'params': {**params, **patch}}]})[1])
+
     def test_perspective_requires_v7_and_rejects_invalid_numeric_or_crop_values(self):
         params = {'vertical': 20, 'horizontal': -15, 'autoCrop': True}
         recipe = {'version': 7, 'steps': [{'type': 'perspective', 'params': params}]}
