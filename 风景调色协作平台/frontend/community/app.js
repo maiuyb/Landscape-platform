@@ -5,9 +5,8 @@ const TOKEN_KEY = 'landscape:token';
 const USER_KEY = 'landscape:user';
 const LEGACY_TOKEN_KEY = 'cd_token';
 const LEGACY_USER_KEY = 'cd_user';
-const SHARE_KEY = 'landscape:share-recipe';        // 编辑器写入，社区发布时读取
-const PREVIEW_KEY = 'landscape:preview-recipe';    // 社区写入，编辑器预览时读取
-const EDITOR_URL = window.EDITOR_URL || '';        // 配了编辑器地址则新标签页打开
+const SHARE_KEY = 'landscape:share-recipe';        // 编辑器写入，社区发布时读取（同源）
+const EDITOR_URL = window.EDITOR_URL || '';        // 独立部署时仅用于打开编辑器，不自动传照片
 
 const state = {
   view: 'community',
@@ -22,6 +21,7 @@ const state = {
   token: readToken(),
   user: readUser(),
   authMode: 'login',
+  pairing: 'manual',
 };
 
 const DEMO = { username: 'demo', password: 'demo1234' };
@@ -65,76 +65,11 @@ function copyText(text) {
   return Promise.resolve();
 }
 
-/* ---------------- 与编辑器的 iframe / postMessage 交接 ---------------- */
-const BRIDGE_CHANNEL = new URLSearchParams(location.search).get('channel') || 'landscape-community';
-const BRIDGE_EMBEDDED = !!(window.parent && window.parent !== window);
-const BRIDGE_SEEN = new Set();
-const BRIDGE_MAX_AGE = 5 * 60 * 1000;
-
-function bridgeId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
-
-function bridgeOriginAllowed(origin) {
-  if (origin === location.origin) return true;
-  const extra = window.LANDSCAPE_ALLOWED_ORIGINS;
-  return Array.isArray(extra) && extra.indexOf(origin) >= 0;
-}
-
-function bridgeValid(data) {
-  if (!data || typeof data !== 'object') return false;
-  if (data.channel !== BRIDGE_CHANNEL) return false;
-  if (typeof data.id !== 'string' || !data.id || BRIDGE_SEEN.has(data.id)) return false;
-  if (typeof data.ts !== 'number' || Math.abs(Date.now() - data.ts) > BRIDGE_MAX_AGE) return false;
-  return true;
-}
-
-function applySharedRecipe(recipe, metadata) {
-  if (!recipe || typeof recipe !== 'object') return false;
-  try { $('#pRecipeJson').value = JSON.stringify(recipe); } catch (e) { return false; }
-  const meta = metadata || {};
-  if (!$('#pName').value && (meta.name || recipe.name)) $('#pName').value = meta.name || recipe.name;
-  if (!$('#pDesc').value && (meta.description || recipe.description)) $('#pDesc').value = meta.description || recipe.description;
-  if (!$('#pCategory').value && (meta.category || recipe.category)) $('#pCategory').value = meta.category || recipe.category;
-  if (!$('#pTags').value) {
-    const tags = meta.tags || recipe.tags;
-    if (Array.isArray(tags)) $('#pTags').value = tags.join(',');
-  }
-  updateRecipeStatus();
-  if (state.user) $('#publishModal').classList.add('open');
-  else openAuth('login');
-  return true;
-}
-
-function initBridge() {
-  window.addEventListener('message', (ev) => {
-    if (!bridgeOriginAllowed(ev.origin)) return;
-    if (BRIDGE_EMBEDDED && ev.source !== window.parent) return;
-    const data = ev.data;
-    if (!data || data.type !== 'landscape:share-recipe') return;
-    if (!bridgeValid(data)) return;
-    BRIDGE_SEEN.add(data.id);
-    const recipe = (data.recipe && typeof data.recipe === 'object') ? data.recipe : data;
-    if (applySharedRecipe(recipe, data.metadata || data.meta)) toast('已从编辑器载入配方');
-  });
-  if (BRIDGE_EMBEDDED) {
-    window.parent.postMessage({ type: 'landscape:community-ready', channel: BRIDGE_CHANNEL, id: bridgeId(), ts: Date.now() }, location.origin);
-  }
-}
-
-function sendPreviewToEditor(recipe, meta) {
-  if (!BRIDGE_EMBEDDED) return false;
-  window.parent.postMessage({
-    type: 'landscape:preview-recipe', channel: BRIDGE_CHANNEL, id: bridgeId(), ts: Date.now(),
-    recipe, meta,
-  }, location.origin);
-  return true;
-}
-
-function notifyPublished(recipeId) {
-  if (!BRIDGE_EMBEDDED) return;
-  window.parent.postMessage({
-    type: 'landscape:published', channel: BRIDGE_CHANNEL, id: bridgeId(), ts: Date.now(), recipeId,
-  }, location.origin);
-}
+/* ---------------- 编辑器交接 ----------------
+ * 已交付协议（landscape:connect/ready、landscape:share、landscape:preview）
+ * 由 community-bridge.js 在组合应用中处理；社区原生只保留页面逻辑，
+ * 不再另起一套消息协议，避免形成两套。
+ */
 
 /* ---------------- 认证 ---------------- */
 function renderAuth() {
@@ -297,20 +232,26 @@ async function toggleFavorite(rec, btn) {
 function previewImage(rec) {
   const before = rec.cover_before || '';
   const after = rec.cover_after || '';
-  const isPair = before && after && before !== after;
-  if (isPair) {
+  const hasPair = before && after && before !== after;
+  if (!hasPair) {
     return {
-      pair: true,
-      html: `<div class="detail-imgs">
-        <figure><img class="detail-img" style="width:180px" src="${esc(before)}" alt="调色前"><figcaption class="muted">调色前</figcaption></figure>
-        <figure><img class="detail-img" style="width:180px" src="${esc(after)}" alt="调色后"><figcaption class="muted">调色后</figcaption></figure>
-      </div>`,
+      pair: false,
+      html: `<div class="detail-imgs"><figure><img class="detail-img" src="${esc(after || before)}" alt="${esc(rec.name)}">
+        <figcaption class="muted">单图 · 未提供前后对比</figcaption></figure></div>`,
     };
   }
+  const verified = rec.pairing === 'editor';
+  const capA = verified ? '调色前' : '图 A（人工上传）';
+  const capB = verified ? '调色后' : '图 B（人工上传）';
+  const note = verified
+    ? ''
+    : '<div class="hint">人工上传的前后图 · 未验证为同一照片/同一构图，仅作参考</div>';
   return {
-    pair: false,
-    html: `<div class="detail-imgs"><figure><img class="detail-img" src="${esc(after || before)}" alt="${esc(rec.name)}">
-      <figcaption class="muted">单图 · 该作者未提供前后对比</figcaption></figure></div>`,
+    pair: true,
+    html: `<div class="detail-imgs">
+        <figure><img class="detail-img" style="width:180px" src="${esc(before)}" alt="${esc(capA)}"><figcaption class="muted">${esc(capA)}</figcaption></figure>
+        <figure><img class="detail-img" style="width:180px" src="${esc(after)}" alt="${esc(capB)}"><figcaption class="muted">${esc(capB)}</figcaption></figure>
+      </div>${note}`,
   };
 }
 
@@ -372,7 +313,7 @@ async function openDetail(id) {
   $('#detailModal').classList.add('open');
 }
 
-/* 把完整配方交给编辑器预览；新标签页打开以保留社区浏览状态 */
+/* 预览：同源组合由 community-bridge.js 接管；独立部署只复制配方，不假装能传照片 */
 async function previewInEditor(id) {
   const r = await api('/api/recipes/' + id, { auth: true });
   if (!r.ok) { toast('作品不存在'); return; }
@@ -381,20 +322,15 @@ async function previewInEditor(id) {
   const recipe = { version: rec.version || 1 };
   if (rec.rendering != null) recipe.rendering = rec.rendering;
   recipe.steps = rec.steps;
-  const meta = { id: rec.id, name: rec.name, author: rec.author };
 
-  // 1) 同源 / iframe：用 postMessage 交给编辑器
-  if (sendPreviewToEditor(recipe, meta)) { toast('已把配方交给编辑器预览'); return; }
-
-  // 2) 独立部署兜底：localStorage + EDITOR_URL / 复制
-  const payload = { recipe, meta };
-  try { localStorage.setItem(PREVIEW_KEY, JSON.stringify(payload)); } catch (e) { /* ignore */ }
-  if (EDITOR_URL) {
-    window.open(EDITOR_URL, '_blank', 'noopener');
-    toast('已把配方送到编辑器，在你的照片上预览');
-  } else {
-    copyText(JSON.stringify(recipe, null, 2)).then(() => toast('已复制配方；在编辑器里粘贴即可套用'), () => toast('复制失败'));
-  }
+  copyText(JSON.stringify(recipe, null, 2)).then(() => {
+    if (EDITOR_URL) {
+      window.open(EDITOR_URL, '_blank', 'noopener');
+      toast('已打开编辑器；独立部署无法自动传递照片/历史，请粘贴配方套用');
+    } else {
+      toast('已复制配方；独立部署无法自动传递照片/历史，请在编辑器粘贴套用');
+    }
+  }, () => toast('复制失败，请手动复制配方'));
 }
 
 /* ---------------- 发布 ---------------- */
@@ -416,6 +352,20 @@ function imageSize(file) {
     img.onerror = () => { resolve(null); URL.revokeObjectURL(url); };
     img.src = url;
   });
+}
+
+async function fileSha256(file) {
+  if (!(window.crypto && window.crypto.subtle) || typeof file.arrayBuffer !== 'function') return null;
+  try {
+    const buf = await file.arrayBuffer();
+    const digest = await window.crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) { return null; }
+}
+
+async function sameContent(a, b) {
+  const [x, y] = await Promise.all([fileSha256(a), fileSha256(b)]);
+  return !!(x && y && x === y);
 }
 
 function parseRecipeJson(text) {
@@ -441,8 +391,9 @@ function updateRecipeStatus() {
 
 function loadHandoff() {
   const raw = localStorage.getItem(SHARE_KEY);
-  if (!raw) { toast('编辑器还没有送来配方'); return; }
+  if (!raw) { toast('没有可读取的编辑器配方；独立部署请直接粘贴配方 JSON'); return; }
   $('#pRecipeJson').value = raw;
+  state.pairing = 'editor';   // 来自编辑器分享：受控配对
   try {
     const data = JSON.parse(raw);
     const recipe = (data.recipe && typeof data.recipe === 'object') ? data.recipe : data;
@@ -469,8 +420,8 @@ async function submitPublish() {
   if (!name) { err.textContent = '请填写名称'; return; }
   try {
     $('#publishSubmit').disabled = true;
-    const beforeFile = $('#pBefore').files[0];
-    const afterFile = $('#pAfter').files[0];
+    let beforeFile = $('#pBefore').files[0];
+    let afterFile = $('#pAfter').files[0];
     // 前后图配对保证：仅凭 URL 不同不足以确认，须校验尺寸一致（同一照片/同一构图）
     if (beforeFile && afterFile) {
       const [a, b] = await Promise.all([imageSize(beforeFile), imageSize(afterFile)]);
@@ -478,9 +429,15 @@ async function submitPublish() {
         err.textContent = `前后图尺寸不一致（${a.w}×${a.h} vs ${b.w}×${b.h}），无法确认是同一张照片、同一构图；请使用同尺寸图片，或只上传单张封面。`;
         return;
       }
+      // 内容完全相同 → 不是前后对比，按单图发布
+      if (await sameContent(beforeFile, afterFile)) {
+        afterFile = null;
+        toast('检测到前后图内容相同，将按单图发布');
+      }
     }
     const cover_before = beforeFile ? await uploadFile($('#pBefore')) : '';
     const cover_after = afterFile ? await uploadFile($('#pAfter')) : '';
+    const pairing = !cover_after ? 'single' : (state.pairing === 'editor' ? 'editor' : 'manual');
     // 元数据附加在完整配方之上；version/rendering/steps 来自编辑器
     const recipe = Object.assign({}, parsed.recipe, {
       name,
@@ -488,12 +445,12 @@ async function submitPublish() {
       category: $('#pCategory').value.trim(),
       tags: $('#pTags').value.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
       cover_before, cover_after,
+      pairing,
     });
     const r = await api('/api/recipes', { method: 'POST', body: { recipe }, auth: true });
     if (!r.ok) { err.textContent = r.data.error || '发布失败'; return; }
     $('#publishModal').classList.remove('open');
     toast('发布成功');
-    notifyPublished(r.data.id);
     resetPublishForm();
     loadCategories(); loadStats(); loadRecommend(); reloadCurrentView();
   } catch (e) {
@@ -505,6 +462,7 @@ async function submitPublish() {
 
 function resetPublishForm() {
   ['#pName', '#pDesc', '#pCategory', '#pTags', '#pRecipeJson', '#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
+  state.pairing = 'manual';
   updateRecipeStatus();
 }
 
@@ -582,7 +540,6 @@ function switchView(view) {
 /* ---------------- 事件 ---------------- */
 document.addEventListener('DOMContentLoaded', () => {
   renderAuth();
-  initBridge();
   loadStats(); loadCategories(); loadRecommend(); loadRecipes(true);
   updateRecipeStatus();
 
@@ -595,6 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#loadMore').onclick = () => { state.page += 1; loadRecipes(false); };
   $('#publishBtn').onclick = () => {
     if (!state.user) { toast('请先登录'); openAuth('login'); return; }
+    state.pairing = 'manual';           // 手动发布默认视为人工来源
     $('#publishError').textContent = '';
     updateRecipeStatus();
     $('#publishModal').classList.add('open');
@@ -603,8 +561,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#authToggle').onclick = () => openAuth(state.authMode === 'login' ? 'register' : 'login');
   $('#publishSubmit').onclick = submitPublish;
   $('#pLoadHandoff').onclick = loadHandoff;
-  $('#pRecipeJson').oninput = updateRecipeStatus;
-  $('#pClearRecipe').onclick = () => { $('#pRecipeJson').value = ''; updateRecipeStatus(); };
+  $('#pRecipeJson').oninput = () => { state.pairing = 'manual'; updateRecipeStatus(); };
+  $('#pClearRecipe').onclick = () => { $('#pRecipeJson').value = ''; state.pairing = 'manual'; updateRecipeStatus(); };
 
   document.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => b.closest('.modal').classList.remove('open'); });
   document.querySelectorAll('.modal').forEach((m) => { m.onclick = (e) => { if (e.target === m) m.classList.remove('open'); }; });
