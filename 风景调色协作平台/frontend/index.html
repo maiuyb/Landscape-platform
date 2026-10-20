@@ -20,7 +20,14 @@
           {{ importing || imageLoading ? '读取中…' : imageLoaded ? '添加照片' : '选择照片' }}
           <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" :disabled="photoBusy || photos.length >= 6" multiple @change="handleUpload" aria-label="选择照片">
         </label>
-      <button v-if="!imageLoaded" @click="openLogin">登录 / 注册</button><button v-if="imageLoaded" @click="openShare" :disabled="locked">分享到社区</button><button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button></nav>
+      <div class="user-center" v-if="authUser" @click.stop>
+        <button class="user-chip" type="button" @click.stop="toggleUserMenu" :aria-expanded="userMenuOpen">{{ authUser.username }} <span aria-hidden="true">▾</span></button>
+        <div class="user-menu" v-if="userMenuOpen" role="menu">
+          <button role="menuitem" type="button" @click="openCommunity(); userMenuOpen = false">进入社区</button>
+          <button role="menuitem" type="button" @click="logout">退出登录</button>
+        </div>
+      </div>
+      <button v-else-if="!imageLoaded" @click="openLogin">登录 / 注册</button><button v-if="imageLoaded" @click="openShare" :disabled="locked">分享到社区</button><button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button></nav>
     </header>
     <div class="notice error" v-if="error" role="alert"><span>{{ error }}</span><button type="button" class="notice-close" aria-label="关闭错误提示" @click="error = ''">×</button></div>
     <div class="notice" v-else-if="message" role="status"><span>{{ message }}</span><button type="button" class="notice-close" aria-label="关闭提示" @click="message = ''">×</button></div>

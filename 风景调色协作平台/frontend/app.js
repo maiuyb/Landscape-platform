@@ -1091,6 +1091,19 @@ createApp({
       }catch(e){if(version===recipeDetailVersion)recipeDetailError.value=e.message;}
       finally{if(version===recipeDetailVersion)recipeDetailLoading.value=false;}
     }
+    // ---- 登录态 / 用户中心 ----
+    const authUser = ref(readAuthUser());
+    const userMenuOpen = ref(false);
+    function readAuthUser(){ try { const raw=localStorage.getItem('landscape:user')||localStorage.getItem('cd_user'); return raw?JSON.parse(raw):null; } catch { return null; } }
+    function refreshAuthUser(){ authUser.value=readAuthUser(); }
+    function authStorageChanged(event){ if(!event.key||['landscape:token','landscape:user','cd_token','cd_user'].includes(event.key)) refreshAuthUser(); }
+    function toggleUserMenu(){ userMenuOpen.value=!userMenuOpen.value; }
+    function closeUserMenu(){ userMenuOpen.value=false; }
+    async function logout(){
+      try { await api('/api/auth/logout',{method:'POST'}); } catch(e){ /* ignore */ }
+      for(const k of ['landscape:token','landscape:user','cd_token','cd_user']) localStorage.removeItem(k);
+      refreshAuthUser(); userMenuOpen.value=false; notify('已退出登录');
+    }
     function openLogin(){loginRequested=true;openCommunity();sendLogin();}
     function sendLogin(){if(!loginRequested||!communityReady.value)return;loginRequested=false;communityFrame.value.contentWindow.postMessage({type:'landscape:auth',channel:communityChannel,id:handoffId(),sentAt:Date.now()},location.origin);}
     function openCommunity() { communityMounted.value=true;currentView.value='community'; }
@@ -1208,13 +1221,13 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
+    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
     onBeforeUnmount(() => {
       cancelUprightAnalysis();
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
+      window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('storage', authStorageChanged); document.removeEventListener('click', closeUserMenu);
     });
     return {
       uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
@@ -1235,7 +1248,7 @@ createApp({
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe
+      openCommunity, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe, authUser, userMenuOpen, toggleUserMenu, logout
     };
   }
 }).mount('#app');
