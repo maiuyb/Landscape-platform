@@ -28,14 +28,183 @@
     <div class="notice" v-if="waitingRecipe && !imageLoaded"><span>待用配方「{{ waitingRecipe.name }}」· 选择自己的照片后再预览。</span><button @click="waitingRecipe=null">取消待用配方</button></div>
     <main class="workspace" :class="{'welcome-mode':!imageLoaded}" v-show="currentView === 'editor'">
       <section class="welcome-page" v-if="!imageLoaded" @dragover.prevent @drop.prevent="handleDrop" aria-label="照片导入">
-        <div class="welcome-hero">
-          <div class="welcome-copy"><p class="eyebrow">风景，值得再看一眼</p><h1>留住那一刻，<br>也留住<span>你的感觉。</span></h1><p class="welcome-lead">让山色更清透，让晚霞更温柔。<br>从一张照片开始，慢慢调出喜欢的风景。</p><div class="welcome-actions"><label class="button primary welcome-upload">{{ importing || imageLoading ? '正在读取…' : '开始调色' }}<span aria-hidden="true">↗</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple :disabled="photoBusy" @change="handleUpload" aria-label="选择一张照片"></label><button class="welcome-try" @click="trySample(samples[0])" :disabled="photoBusy">先用示例试试看 <span aria-hidden="true">→</span></button></div><p class="welcome-upload-note">可拖放 1—6 张照片 · JPG / PNG / WebP · 每张最大 20MB</p><div class="welcome-promise"><span>无需登录即可编辑</span><span>每一步都能撤销</span><span>原照片保持不变</span></div></div>
-          <div class="welcome-gallery"><div class="hero-note"><span class="note-dot"></span>同一张风景，换一种心情</div><div class="welcome-comparison" :style="{'--split':heroPosition+'%'}"><img src="assets/welcome/alpine-lake.jpg" alt="清晨的山湖与水面倒影" width="1600" height="1068" fetchpriority="high"><canvas ref="heroCanvas" v-show="heroReady" class="hero-edited" aria-label="使用本项目调色后的山湖示例"></canvas><span class="hero-tag tag-before">示例原图</span><span class="hero-tag tag-after">清透一点</span><div class="hero-divider" :style="{left:heroPosition+'%'}" v-show="heroReady"><span>↔</span></div></div><label class="hero-range">拖动，看看光与色的变化<input type="range" min="0" max="100" v-model.number="heroPosition" aria-label="首页效果对比" :disabled="!heroReady"></label><div class="welcome-caption"><span>山湖之间</span><a :href="samples[0].source" target="_blank" rel="noopener noreferrer">摄影 / Ales Krivec ↗</a></div><div class="floating-palette" aria-hidden="true"><i></i><i></i><i></i><i></i><span>一点光，一点色。</span></div></div>
+        <!-- Section 01: Centered Curatorial Manifesto -->
+        <div class="exhibition-intro">
+          <span class="exhibition-kicker">EXHIBITION &amp; COLOR DARKROOM</span>
+          <h1 class="exhibition-title">在静谧留白之中，<br>重现山川与暮海的呼吸。</h1>
+          <p class="exhibition-lead">
+            像对待一幅收藏级银盐印相那样对待你的风光摄影。提供克制而精准的色彩重塑、天际线局部蒙版、木纹卡纸装裱，以及摄影师之间的公开配方流转。
+          </p>
+          <div class="intro-cta-group">
+            <label class="btn-pill solid welcome-upload" :class="{ disabled: photoBusy }">
+              {{ importing || imageLoading ? '正在读取…' : '选择本地照片开始显影' }}
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple :disabled="photoBusy" @change="handleUpload" aria-label="选择一张照片">
+            </label>
+            <button type="button" class="btn-pill welcome-try" @click="trySample(activeHeroEdition)" :disabled="photoBusy">
+              先用示例试试看
+            </button>
+            <button type="button" class="btn-pill" @click="openCommunity">
+              浏览社区公开作品 →
+            </button>
+          </div>
+          <p class="quiet-promise">本地浏览器即可完成全部精修与导出，无需先行注册或登录 · 可直接拖放 1—6 张 JPG / PNG / WebP（每张 ≤ 20MB）</p>
         </div>
-        <div class="welcome-section-heading"><div><p class="eyebrow">不必等下一次旅行</p><h2>选一张风景，先找找感觉</h2></div><span>示例也能自由编辑和导出</span></div>
-        <div class="welcome-samples"><article v-for="sample in samples" :key="sample.id"><button class="sample-image" @click="trySample(sample)" :disabled="photoBusy"><img :src="'assets/welcome/'+sample.file" :alt="sample.name" loading="lazy" width="600" height="400"><span>试着调一调 ↗</span></button><div class="sample-caption"><button @click="trySample(sample)" :disabled="photoBusy">{{sample.name}} <span>→</span></button><a :href="sample.source" target="_blank" rel="noopener noreferrer">{{sample.author}}</a></div></article></div>
-        <div class="welcome-features"><div><span>01</span><h3>从自然开始</h3><p>试试预设，再按自己的感觉微调光线与颜色。</p></div><div><span>02</span><h3>几张照片，从容切换</h3><p>每张照片的编辑单独保留，挑选相似风景更轻松。</p></div><div><span>03</span><h3>给喜欢的风景装个框</h3><p>看看留白与边框的效果，也可以另存带框图片。</p></div></div>
-        <footer class="welcome-footer"><span>风景调色 · 为普通人的风景照片而做</span><p>编辑照片在本机处理；只有主动使用 AI 建议或社区发布时，才发送对应内容。<br>当前工作区仅在本次打开期间保留，刷新或关闭前请及时导出。</p><a href="assets/welcome/CREDITS.md" target="_blank" rel="noopener">示例照片来源与授权 ↗</a></footer>
+
+        <!-- Matted Passepartout Hero Print (Center Handle ONLY) -->
+        <div class="hero-print-section" id="main-print">
+          <div class="passepartout-frame">
+            <div
+              class="print-window welcome-comparison"
+              ref="welcomeStage"
+              :class="{ dragging: heroDragging }"
+              :style="{ '--split': heroPosition + '%' }"
+              @pointerdown="startHeroDrag"
+              @pointermove="moveHeroDrag"
+              @pointerup="stopHeroDrag"
+              @pointercancel="stopHeroDrag"
+              aria-label="画廊作品调色前后对比"
+            >
+              <img :src="'assets/welcome/' + activeHeroEdition.file" :alt="activeHeroEdition.name" width="1600" height="1068" fetchpriority="high">
+              <canvas ref="heroCanvas" v-show="heroReady" class="hero-edited" aria-label="使用本项目调色后的山湖示例"></canvas>
+
+              <span class="print-whisper-tag left">Original Negative · 原片</span>
+              <span class="print-whisper-tag right">{{ activeHeroEdition.tag }}</span>
+
+              <div class="print-divider" v-show="heroReady"></div>
+              <button
+                type="button"
+                class="print-handle"
+                v-show="heroReady"
+                role="slider"
+                aria-label="拖动中央手柄对比作品显影前后效果"
+                aria-valuemin="5"
+                aria-valuemax="95"
+                :aria-valuenow="Math.round(heroPosition)"
+                @keydown="heroHandleKey"
+                @click.stop
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </button>
+            </div>
+
+            <div class="print-placard">
+              <div class="placard-caption">
+                {{ activeHeroEdition.fig }}
+                <span>{{ activeHeroEdition.sub }} · <a :href="activeHeroEdition.source" target="_blank" rel="noopener noreferrer">作品来源 ↗</a></span>
+              </div>
+              <div class="edition-pills" role="group" aria-label="切换主展框馆藏印相">
+                <button type="button" class="edition-btn" :class="{ active: heroEditionKey === 'alpine-lake' }" @click="selectHeroEdition('alpine-lake')">Fig. 01 晨雾湖岸</button>
+                <button type="button" class="edition-btn" :class="{ active: heroEditionKey === 'devils-tower' }" @click="selectHeroEdition('devils-tower')">Fig. 02 怀俄明孤峰</button>
+                <button type="button" class="edition-btn" :class="{ active: heroEditionKey === 'gulmarg-snow' }" @click="selectHeroEdition('gulmarg-snow')">Fig. 03 克什米尔雪杉</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 02: Curated Exhibition Wall (Panorama + Vertical Diptych) -->
+        <div class="exhibition-wall" id="curated-wall">
+          <div class="wall-inner">
+            <div class="wall-heading">
+              <span class="exhibition-kicker">CURATED ASPECT WALL</span>
+              <h2>多画幅馆藏展墙：从全境横幅到竖构图联作</h2>
+              <p>每一幅风光作品都保有其原生画幅比例与留白卡纸，点击任意馆藏即可在暗房中打开并体验完整调色参数。</p>
+            </div>
+
+            <div class="welcome-samples curated-wall-grid">
+              <!-- Fig. 04: 21:9 Panorama Framed Exhibit -->
+              <article class="panorama-exhibit">
+                <button type="button" class="sample-image-frame" @click="trySample(heroEditions['alpine-panorama'])" :disabled="photoBusy">
+                  <img src="assets/welcome/alpine-panorama-after.jpg" alt="21:9 高山冰川全景" loading="lazy" width="1280" height="606">
+                </button>
+                <div class="exhibit-label">
+                  <div>
+                    <strong>Fig. 04 — 《高海拔冰川全境横幅》（21:9 宽幅印相）</strong>
+                    <span><a :href="heroEditions['alpine-panorama'].source" target="_blank" rel="noopener noreferrer">Hannes Röst (CC BY-SA 3.0) ↗</a> · 空气透视去雾 +22 · 冰川高光柔化</span>
+                  </div>
+                  <div class="exhibit-actions">
+                    <button class="btn-pill" type="button" @click="selectHeroEdition('alpine-panorama', true)">在主展框对比</button>
+                    <button class="btn-pill solid" type="button" @click="trySample(heroEditions['alpine-panorama'])" :disabled="photoBusy">以此作品进入暗房</button>
+                  </div>
+                </div>
+              </article>
+
+              <!-- Fig. 05: 2:3 Vertical Diptych Left -->
+              <article class="diptych-frame">
+                <button type="button" class="sample-image-frame vertical" @click="trySample(samples[1])" :disabled="photoBusy">
+                  <img src="assets/welcome/mountain-light-after.jpg" :alt="samples[1].name" loading="lazy" width="1400" height="2100">
+                </button>
+                <div class="exhibit-label">
+                  <div>
+                    <strong>Fig. 05 — 《多洛米蒂逆光山脊 · {{ samples[1].name }}》（2:3 竖幅）</strong>
+                    <span><a :href="samples[1].source" target="_blank" rel="noopener noreferrer">{{ samples[1].author }} ↗</a> · 柔光氛围 +18 · 暖金冷影</span>
+                  </div>
+                  <button class="btn-pill" type="button" @click="trySample(samples[1])" :disabled="photoBusy">试用此竖幅</button>
+                </div>
+              </article>
+
+              <!-- Fig. 06: 2:3 Vertical Diptych Right (Offset Down) -->
+              <article class="diptych-frame offset-down">
+                <button type="button" class="sample-image-frame vertical" @click="trySample(samples[2])" :disabled="photoBusy">
+                  <img src="assets/welcome/coastal-sunset-after.jpg" :alt="samples[2].name" loading="lazy" width="1422" height="2133">
+                </button>
+                <div class="exhibit-label">
+                  <div>
+                    <strong>Fig. 06 — 《北大西洋暮色礁岸 · {{ samples[2].name }}》（2:3 竖幅）</strong>
+                    <span><a :href="samples[2].source" target="_blank" rel="noopener noreferrer">{{ samples[2].author }} ↗</a> · 慢门海雾 · 洋红与深海蓝分离</span>
+                  </div>
+                  <button class="btn-pill" type="button" @click="trySample(samples[2])" :disabled="photoBusy">试用此竖幅</button>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 03: Quiet Three-Column Curatorial Essay -->
+        <div class="curatorial-notes" id="curatorial-essay">
+          <div class="notes-grid">
+            <div>
+              <span class="note-num">I.</span>
+              <h3 class="note-title">忠于自然光影的阶调控制</h3>
+              <p class="note-text">
+                从高光平滑滚降到八通道山川色彩分离，辅以海平面自动扶正与多画幅胶片条队列，让每一张原片恢复肉眼所见的通透层次。
+              </p>
+            </div>
+            <div>
+              <span class="note-num">II.</span>
+              <h3 class="note-title">天际线蒙版与自然语言意图</h3>
+              <p class="note-text">
+                用渐变与径向蒙版细致平衡天空与前景光比；或以一句“晨雾微光”生成可自由微调的参数配方，始终保持创作者对画面的主导。
+              </p>
+            </div>
+            <div>
+              <span class="note-num">III.</span>
+              <h3 class="note-title">社区灵感配方与画框装裱</h3>
+              <p class="note-text">
+                在社区展厅探索风光摄影师公开的调色配方并一键复用；完成显影后，可附加上博物馆留白卡纸或温润木框直接导出典藏。
+              </p>
+            </div>
+          </div>
+
+          <div class="closing-invitation">
+            <h2>走入暗房，装裱你的第一幅作品</h2>
+            <p>你可以直接从电脑或手机中选择照片开始本地精修，也可以先漫步社区展厅寻找灵感。</p>
+            <div class="intro-cta-group">
+              <label class="btn-pill solid welcome-upload" :class="{ disabled: photoBusy }">
+                选择本地照片
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple :disabled="photoBusy" @change="handleUpload" aria-label="从底部选择照片">
+              </label>
+              <button class="btn-pill" type="button" @click="openCommunity">进入社区展厅</button>
+              <button class="btn-pill" type="button" @click="openLogin">登录 / 注册账号</button>
+            </div>
+          </div>
+
+          <footer class="gallery-colophon">
+            <span>山川显影 · Fine-Art Print Lab — 编辑照片在本机处理，无需先行注册登录</span>
+            <a href="assets/welcome/CREDITS.md" target="_blank" rel="noopener">馆藏示例照片来源与授权说明 ↗</a>
+          </footer>
+        </div>
       </section>
       <template v-else>
         <section class="canvas-panel" aria-label="照片画布" @dragover.prevent @drop.prevent="handleDrop">
