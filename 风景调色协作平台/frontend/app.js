@@ -111,7 +111,75 @@ createApp({
       'gulmarg-snow':{key:'gulmarg-snow',id:'snow',name:'克什米尔雪杉',file:'gulmarg-snow.jpg',afterFile:'gulmarg-snow-after.jpg',tag:'Print Edition · 清冷蓝调',fig:'Fig. 03 — 《克什米尔蓝调雪杉》，Gayatri Priyadarshini (CC BY-SA 4.0)',sub:'色温 -16K · 雪地高光保护 -20 · 拖动画面中央手柄可检视原片',author:'Gayatri Priyadarshini',source:'https://commons.wikimedia.org/wiki/File:Snow_covered_gulmarg_landscape_3.jpg',setup(s){s.adjustments.temperature=-16;s.adjustments.highlights=-20;s.adjustments.whites=14;s.effects.clarity=18;s.effects.dehaze=14;}},
       'alpine-panorama':{key:'alpine-panorama',id:'panorama',name:'高海拔冰川全境横幅',file:'alpine-panorama.jpg',afterFile:'alpine-panorama-after.jpg',tag:'Print Edition · 冰川全境宽幅',fig:'Fig. 04 — 《高海拔冰川全境横幅》，Hannes Röst (CC BY-SA 3.0)',sub:'21:9 宽幅印相 · 远山空气去雾 +22 · 拖动画面中央手柄可检视原片',author:'Hannes Röst',source:'https://commons.wikimedia.org/wiki/File:Fronalpstock_big.jpg',setup(s){s.adjustments.exposure=.18;s.adjustments.contrast=16;s.adjustments.highlights=-24;s.adjustments.whites=16;s.effects.dehaze=22;s.effects.clarity=18;}}
     };
-    const heroPosition=ref(50),heroCanvas=ref(null),heroReady=ref(false),heroEditionKey=ref('alpine-lake'),heroDragging=ref(false),welcomeStage=ref(null);let welcomeVersion=0;
+    const heroPosition=ref(50),heroCanvas=ref(null),heroReady=ref(false),heroEditionKey=ref('alpine-lake'),heroDragging=ref(false),welcomeStage=ref(null),editionSwitching=ref(false);let welcomeVersion=0,editionSwitchTimer=null,revealObserver=null;
+    const curtain=reactive({
+      visible:false,
+      entering:false,
+      phase:'idle',
+      progress:0,
+      code:'EXHIBITION ARCHIVE // 2026 EDITION',
+      title:'山 川 显 影',
+      sub:'Fine-Art Landscape Print & Color Darkroom',
+      coord:"GALLERY // 46°37'N · 12°17'E"
+    });
+    let curtainTimerA=null,curtainTimerB=null,curtainTick=null;
+    function runCurtainSequence(opts={},forceManual=false){
+      if(typeof navigator!=='undefined'&&navigator.webdriver&&!location.search.includes('intro=1')&&!location.search.includes('curtain=1')&&!forceManual)return;
+      clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);
+      curtain.code=opts.code||'EXHIBITION ARCHIVE // 2026 EDITION';
+      curtain.title=opts.title||'山 川 显 影';
+      curtain.sub=opts.sub||'Fine-Art Landscape Print & Color Darkroom';
+      curtain.coord=opts.coord||"GALLERY // 46°37'N · 12°17'E";
+      const holdMs=opts.holdMs||640;
+      curtain.progress=12;
+      curtain.entering=!opts.startClosed;
+      curtain.phase='active';
+      curtain.visible=true;
+      const stepMs=Math.max(24,Math.floor(holdMs/12));
+      curtainTick=setInterval(()=>{
+        curtain.progress=Math.min(100,curtain.progress+9);
+        if(curtain.progress>=100)clearInterval(curtainTick);
+      },stepMs);
+      curtainTimerA=setTimeout(()=>{
+        curtain.progress=100;
+        curtain.entering=false;
+        curtain.phase='parting';
+      },holdMs);
+      curtainTimerB=setTimeout(()=>{
+        curtain.visible=false;
+        curtain.entering=false;
+        curtain.phase='idle';
+      },holdMs+600);
+    }
+    function playIntroCurtain(){
+      runCurtainSequence({
+        code:'EXHIBITION ARCHIVE // 2026 EDITION',
+        title:'山 川 显 影',
+        sub:'在静谧留白之中，重现山川与暮海的呼吸 · Fine-Art Print Lab',
+        coord:"GALLERY // 46°37'N · 12°17'E",
+        holdMs:880,
+        startClosed:true
+      },true);
+    }
+    function updateMatSpotlight(event){
+      const el=event.currentTarget;if(!el)return;
+      const rect=el.getBoundingClientRect();if(!rect.width||!rect.height)return;
+      el.style.setProperty('--spot-x',`${Math.round(((event.clientX-rect.left)/rect.width)*100)}%`);
+      el.style.setProperty('--spot-y',`${Math.round(((event.clientY-rect.top)/rect.height)*100)}%`);
+    }
+    function initScrollReveal(){
+      revealObserver?.disconnect();
+      if(typeof IntersectionObserver==='undefined')return;
+      revealObserver=new IntersectionObserver(entries=>{
+        for(const entry of entries){
+          if(entry.isIntersecting){
+            entry.target.classList.add('is-revealed');
+            revealObserver.unobserve(entry.target);
+          }
+        }
+      },{threshold:0.14});
+      document.querySelectorAll('[data-reveal]').forEach(el=>revealObserver.observe(el));
+    }
     const activeHeroEdition=computed(()=>heroEditions[heroEditionKey.value]||heroEditions['alpine-lake']);
     const photoBusy=computed(()=>imageLoading.value||importing.value||exporting.value||sharing.value||frameExporting.value);
     const frameDimensions=computed(()=>Frames.layout(Math.max(1,Math.round(outputDimensions.value.width*frameScale.value)),Math.max(1,Math.round(outputDimensions.value.height*frameScale.value)),frameOptions.value));
@@ -588,16 +656,32 @@ createApp({
     watch(closePhotoId,async id=>{await nextTick();if(id)closePhotoDialog.value.showModal();else closePhotoDialog.value.close();});
     async function trySample(sample){
       if(!canChangePhoto())return;
+      if(!imageLoaded.value){
+        runCurtainSequence({
+          code:'CHAMBER I // NON-DESTRUCTIVE DARKROOM',
+          title:'走 入 暗 房 显 影',
+          sub:`正在装入馆藏印相《${sample.name}》与无损阶调参数`,
+          coord:"DARKROOM // 46°37'N · 12°17'E",
+          holdMs:520
+        });
+      }
       const existing=photos.value.find(p=>p.sampleId===sample.id);if(existing)return activatePhoto(existing);
       try{const r=await fetch('assets/welcome/'+sample.file);if(!r.ok)throw Error('示例暂时无法读取');const file=new File([await r.blob()],sample.name+'.jpg',{type:'image/jpeg',lastModified:1});await addPhotos([file]);const entry=photos.value.find(p=>p.file===file);if(entry)entry.sampleId=sample.id;}catch(e){fail('示例载入失败：'+e.message+'，也可以选择自己的照片。');}
     }
     async function drawWelcome(){
       const version=++welcomeVersion;await nextTick();if(imageLoaded.value||!heroCanvas.value)return;
+      initScrollReveal();
       const ed=activeHeroEdition.value;
       try{const image=new Image();image.src='assets/welcome/'+ed.file;await image.decode();if(version!==welcomeVersion||!heroCanvas.value)return;const s=Core.createState();if(ed.setup)ed.setup(s);draw(heroCanvas.value,Core.render(image,s,{maxSide:1200}));heroReady.value=true;}catch{heroReady.value=false;}
     }
     function selectHeroEdition(key,scroll=false){
-      if(!heroEditions[key])return;heroEditionKey.value=key;drawWelcome();
+      if(!heroEditions[key])return;
+      if(heroEditionKey.value!==key){
+        editionSwitching.value=true;
+        clearTimeout(editionSwitchTimer);
+        editionSwitchTimer=setTimeout(()=>{editionSwitching.value=false;},460);
+      }
+      heroEditionKey.value=key;drawWelcome();
       if(scroll)document.getElementById('main-print')?.scrollIntoView({behavior:'smooth'});
     }
     function setHeroSplitFromClientX(clientX){
@@ -613,7 +697,13 @@ createApp({
       if(e.key==='ArrowLeft'){e.preventDefault();heroPosition.value=Math.max(5,heroPosition.value-5);}
       else if(e.key==='ArrowRight'){e.preventDefault();heroPosition.value=Math.min(95,heroPosition.value+5);}
     }
-    watch(imageLoaded,loaded=>{if(!loaded)drawWelcome();});onMounted(drawWelcome);
+    watch(imageLoaded,loaded=>{if(!loaded)drawWelcome();});
+    onMounted(()=>{
+      drawWelcome();
+      if(typeof navigator==='undefined'||!navigator.webdriver||location.search.includes('intro=1')){
+        playIntroCurtain();
+      }
+    });
     function openFrames(){if(locked.value)return;commit();frameOpen.value=true;}
     function registerFrameThumb(id,canvas){if(canvas)frameThumbs.set(id,canvas);else frameThumbs.delete(id);}
     function paintFrame(){
@@ -1093,7 +1183,30 @@ createApp({
     }
     function openLogin(){loginRequested=true;openCommunity();sendLogin();}
     function sendLogin(){if(!loginRequested||!communityReady.value)return;loginRequested=false;communityFrame.value.contentWindow.postMessage({type:'landscape:auth',channel:communityChannel,id:handoffId(),sentAt:Date.now()},location.origin);}
-    function openCommunity() { communityMounted.value=true;currentView.value='community'; }
+    function openCommunity() {
+      const wasCommunity=currentView.value==='community';
+      communityMounted.value=true;currentView.value='community';
+      if(!wasCommunity){
+        runCurtainSequence({
+          code:'CHAMBER II // CURATED COMMUNITY ARCHIVE',
+          title:'漫 步 社 区 展 厅',
+          sub:'探索风光摄影师公开的调色配方与前后对比印相',
+          coord:"ARCHIVE // 46°37'N · 12°17'E",
+          holdMs:520
+        });
+      }
+    }
+    function switchToEditor() {
+      if(currentView.value==='editor')return;
+      currentView.value='editor';
+      runCurtainSequence({
+        code:'CHAMBER I // FINE-ART PRINT DARKROOM',
+        title:imageLoaded.value?'返 回 暗 房 工 作 区':'返 回 画 廊 主 展 厅',
+        sub:'本地无损阶调显影 · 留白卡纸装裱',
+        coord:"DARKROOM // 35°41'N · 139°41'E",
+        holdMs:480
+      });
+    }
     function connectCommunity(){communityReady.value=false;communityFrame.value?.contentWindow?.postMessage({type:'landscape:connect',channel:communityChannel},location.origin);}
     function sendShare(){
       if(!sharePackage||!communityReady.value)return;
@@ -1211,6 +1324,7 @@ createApp({
     onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
     onBeforeUnmount(() => {
       cancelUprightAnalysis();
+      clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);clearTimeout(editionSwitchTimer);revealObserver?.disconnect();
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
@@ -1219,6 +1333,7 @@ createApp({
     return {
       uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
+      curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,
       openLogin,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
       legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
