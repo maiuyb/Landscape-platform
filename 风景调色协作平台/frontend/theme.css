@@ -149,16 +149,31 @@ button[aria-current=page] {
 
 /* Darkroom Canvas Panel & Exhibition Stage */
 .canvas-panel {
-  background: radial-gradient(ellipse at 50% 42%, #F8F6F1 0%, #EAE6DC 100%);
+  background:
+    radial-gradient(circle at 50% 36%, #FAF9F6 0%, #EFECE4 62%, #E5E0D5 100%);
+  position: relative;
 }
 
 .canvas-heading {
-  padding: 14px 22px 10px;
+  padding: 14px 28px 8px;
+  border-bottom: 1px solid rgba(23, 24, 23, 0.06);
+  background: rgba(250, 249, 246, 0.65);
+  backdrop-filter: blur(12px);
+}
+
+.file-info::before {
+  content: 'EXHIBITION DARKROOM · 馆藏暗房显影台';
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--bronze);
+  margin-bottom: 2px;
 }
 
 .file-info strong {
   font-family: var(--gallery-serif);
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.01em;
@@ -167,22 +182,40 @@ button[aria-current=page] {
 .file-info span {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+  font-size: 12px;
 }
 
 .canvas-heading .ai-shortcut {
   border-radius: 999px;
-  color: var(--bronze);
-  background: #FFFFFF;
-  border: 1px solid rgba(140, 101, 62, 0.32);
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #8C653E 0%, #6E4D2C 100%);
+  border: 1px solid rgba(140, 101, 62, 0.5);
   font-weight: 600;
-  padding: 5px 14px;
-  box-shadow: 0 4px 12px rgba(20, 22, 20, 0.05);
+  padding: 6px 16px;
+  box-shadow: 0 8px 20px -8px rgba(140, 101, 62, 0.5);
 }
 
 .canvas-heading .ai-shortcut:hover {
-  background: #FAF6F0;
+  background: linear-gradient(135deg, #9B7248 0%, #7A5632 100%);
   border-color: var(--bronze);
+  color: #FFFFFF;
   transform: translateY(-1px);
+}
+
+.canvas-toolbar {
+  padding: 10px 24px 4px;
+  display: flex;
+  justify-content: center;
+}
+
+.canvas-toolbar .canvas-view-tools {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(23, 24, 23, 0.1);
+  border-radius: 999px;
+  padding: 4px 12px 4px 6px;
+  box-shadow: 0 12px 32px -14px rgba(20, 22, 20, 0.14);
 }
 
 .canvas-toolbar button,
@@ -197,8 +230,8 @@ button[aria-current=page] {
 }
 
 .canvas-toolbar .segmented {
-  background: rgba(23, 24, 23, 0.06);
-  border: 1px solid rgba(23, 24, 23, 0.09);
+  background: #F3F0EA;
+  border: 1px solid rgba(23, 24, 23, 0.08);
   border-radius: 999px;
   padding: 3px;
   gap: 2px;
@@ -206,30 +239,36 @@ button[aria-current=page] {
 
 .canvas-toolbar .segmented button {
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 4px 14px;
 }
 
 .canvas-toolbar .segmented button[aria-pressed=true] {
-  background: #FFFFFF;
-  color: var(--green);
+  background: var(--green);
+  color: #FFFFFF;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(20, 22, 20, 0.1);
+  box-shadow: 0 4px 12px -4px rgba(29, 77, 60, 0.45);
 }
 
 .canvas-footer {
-  border-color: rgba(23, 24, 23, 0.09);
-  background: rgba(250, 249, 246, 0.72);
-  backdrop-filter: blur(8px);
+  border-color: rgba(23, 24, 23, 0.08);
+  background: rgba(250, 249, 246, 0.86);
+  backdrop-filter: blur(12px);
+  font-family: var(--gallery-serif);
+  color: var(--muted);
 }
 
 .canvas-footer button {
+  font-family: var(--gallery-sans);
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 4px 14px;
+  background: #FFFFFF;
+  border: 1px solid rgba(23, 24, 23, 0.14);
 }
 
 .canvas-footer button:hover:not(:disabled) {
-  background: #FFFFFF;
-  border-color: rgba(23, 24, 23, 0.18);
+  background: var(--green);
+  color: #FFFFFF;
+  border-color: var(--green);
 }
 
 .geometry-menu[open] > summary {
@@ -246,34 +285,40 @@ button[aria-current=page] {
 /* Right Parameter Panel & Curatorial Hierarchy */
 .parameter-panel {
   background: var(--paper);
-  border-left: 1px solid rgba(23, 24, 23, 0.09);
+  border-left: 1px solid rgba(23, 24, 23, 0.1);
+  box-shadow: -12px 0 36px -24px rgba(20, 22, 20, 0.08);
 }
 
 .workspace-tabs {
-  background: #F3F0EA;
-  border-bottom: 1px solid rgba(23, 24, 23, 0.09);
-  padding: 8px 12px 0;
-  gap: 6px;
+  background: #FAF9F6;
+  border-bottom: 1px solid rgba(23, 24, 23, 0.08);
+  padding: 10px 14px;
+  gap: 8px;
 }
 
 .workspace-tabs button {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  border-radius: 8px 8px 0 0;
+  border-radius: 999px;
+  min-height: 34px;
+  border: 1px solid rgba(23, 24, 23, 0.12);
+  background: #FFFFFF;
   color: var(--muted);
-  transition: all 0.2s var(--ease-out-quart);
+  transition: all 0.24s var(--ease-apple);
 }
 
 .workspace-tabs button:hover {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.5);
+  border-color: var(--ink);
+  background: #FFFFFF;
 }
 
 .workspace-tabs button[aria-selected=true] {
-  background: var(--paper);
-  color: var(--green);
+  background: var(--green);
+  color: #FFFFFF;
   font-weight: 600;
-  border-bottom-color: var(--green);
+  border-color: var(--green);
+  box-shadow: 0 6px 16px -6px rgba(29, 77, 60, 0.45);
 }
 
 .panel-scroll,
@@ -287,6 +332,7 @@ button[aria-current=page] {
 }
 
 .workspace-output > summary {
+  font-family: var(--gallery-serif);
   color: var(--ink);
   font-weight: 600;
 }
@@ -295,14 +341,31 @@ button[aria-current=page] {
   border-color: #EAE7DF;
 }
 
-/* Distinct Passepartout Tool Groups */
+/* Distinct Passepartout Tool Groups with Curatorial Roman Numerals */
 .panel-scroll {
-  padding: 18px 12px;
+  padding: 18px 14px;
+}
+
+#panel-edit > .panel-heading {
+  position: relative;
+  padding-top: 14px;
+  margin-bottom: 14px;
+}
+
+#panel-edit > .panel-heading::before {
+  content: 'CURATORIAL DARKROOM CONTROLS';
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--bronze);
 }
 
 .panel-heading h2 {
   font-family: var(--gallery-serif);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.01em;
@@ -317,25 +380,38 @@ button[aria-current=page] {
   margin: 0 0 12px;
   padding: 0;
   border: 1px solid rgba(23, 24, 23, 0.1);
-  border-radius: 10px;
+  border-radius: 6px;
   background: #FFFFFF;
-  box-shadow: 0 6px 18px -12px rgba(20, 22, 20, 0.08);
-  transition: border-color 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 10px 24px -16px rgba(20, 22, 20, 0.1);
+  transition: transform 0.24s var(--ease-apple), border-color 0.22s ease, box-shadow 0.22s ease;
 }
 
 #panel-edit .tool-group:hover {
-  border-color: rgba(23, 24, 23, 0.2);
+  border-color: rgba(140, 101, 62, 0.38);
 }
 
 #panel-edit .tool-group > summary {
   padding: 12px 14px;
   min-height: 48px;
-  gap: 6px;
-  font-size: 15px;
+  gap: 8px;
+  font-family: var(--gallery-serif);
+  font-size: 16px;
   font-weight: 600;
-  border-radius: 9px;
+  border-radius: 5px;
   color: var(--ink);
   transition: background-color 0.2s ease;
+}
+
+#basic-group > summary > span:first-child::before { content: 'I. '; color: var(--bronze); font-weight: 600; margin-right: 4px; }
+#fine-group > summary > span:first-child::before { content: 'II. '; color: var(--bronze); font-weight: 600; margin-right: 4px; }
+#detail-group > summary > span:first-child::before { content: 'III. '; color: var(--bronze); font-weight: 600; margin-right: 4px; }
+#vignette-group > summary > span:first-child::before { content: 'IV. '; color: var(--bronze); font-weight: 600; margin-right: 4px; }
+#composition-group > summary > span:first-child::before { content: 'V. '; color: var(--bronze); font-weight: 600; margin-right: 4px; }
+#masks-group > summary > span:first-child::before { content: 'VI. '; color: var(--bronze); font-weight: 600; margin-right: 4px; }
+
+#panel-edit .tool-group > summary > .tool-actions,
+#panel-edit .tool-group > summary > .tool-state {
+  font-family: var(--gallery-sans);
 }
 
 #panel-edit .tool-group > summary > .tool-actions::before,
@@ -344,16 +420,16 @@ button[aria-current=page] {
 }
 
 #panel-edit .tool-group[open] {
-  padding-bottom: 12px;
-  border-color: rgba(29, 77, 60, 0.34);
-  box-shadow: inset 3px 0 0 var(--green), 0 12px 28px -16px rgba(20, 22, 20, 0.12);
+  padding-bottom: 14px;
+  border-color: rgba(29, 77, 60, 0.36);
+  box-shadow: inset 3px 0 0 var(--bronze), 0 16px 36px -18px rgba(20, 22, 20, 0.14);
 }
 
 #panel-edit .tool-group[open] > summary {
-  color: var(--green);
-  background: #F4F2EC;
+  color: var(--ink);
+  background: linear-gradient(90deg, #F7F5EF 0%, #FFFFFF 100%);
   border-bottom: 1px solid rgba(23, 24, 23, 0.08);
-  border-radius: 9px 9px 0 0;
+  border-radius: 5px 5px 0 0;
 }
 
 #panel-edit .tool-group > :not(summary) {
@@ -405,11 +481,64 @@ button[aria-current=page] {
   margin-top: 12px;
 }
 
+.adjustment label > span:first-child {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* Porcelain & Forest Optical Dials (Range Sliders) */
+.adjustment input[type=range] {
+  accent-color: var(--green);
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #E2DFD7 0%, #D2CEC2 50%, #1D4D3C 100%);
+  cursor: pointer;
+}
+
+.adjustment input[type=range]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 2.5px solid var(--green);
+  box-shadow: 0 2px 8px rgba(20, 22, 20, 0.22);
+  transition: transform 0.18s var(--ease-apple), box-shadow 0.18s var(--ease-apple);
+}
+
+.adjustment input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.16);
+  box-shadow: 0 4px 12px rgba(29, 77, 60, 0.35);
+}
+
+.adjustment input[type=number] {
+  font-variant-numeric: tabular-nums;
+  border-radius: 6px;
+  background: #FAF9F6;
+  border: 1px solid rgba(23, 24, 23, 0.14);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.editor-histogram {
+  background: #FFFFFF;
+  border-bottom: 1px solid rgba(23, 24, 23, 0.08);
+  padding: 10px 14px 12px;
+}
+
+.histogram-disclosure > summary {
+  font-family: var(--gallery-serif);
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .group-compare,
 .group-reset {
   min-height: 30px;
   font-size: 12px;
-  padding: 4px 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
 }
 
 .tool-state {
@@ -875,9 +1004,52 @@ dialog::backdrop {
   background: repeating-conic-gradient(#E2DFD7 0% 25%, #F5F3EE 0% 50%) 0 0 / 16px 16px;
 }
 
+.canvas-stage {
+  padding: 26px;
+}
+
+/* Museum Passepartout Mat Frame around the Editor Photograph (Zero Layout Box Impact) */
 .image-stage {
-  box-shadow: 0 28px 64px -20px rgba(20, 22, 20, 0.22), 0 2px 10px rgba(20, 22, 20, 0.06);
-  transition: box-shadow 0.3s ease;
+  box-shadow:
+    0 0 0 1px rgba(23, 24, 23, 0.18),
+    0 0 0 16px #FFFFFF,
+    0 0 0 17px rgba(23, 24, 23, 0.14),
+    0 36px 84px -18px rgba(20, 22, 20, 0.28),
+    0 12px 28px -10px rgba(20, 22, 20, 0.14);
+  transition: box-shadow 0.36s var(--ease-apple);
+}
+
+/* Curatorial Contact Sheet (Bottom Filmstrip) */
+.photo-strip {
+  background: rgba(250, 249, 246, 0.96);
+  border-top: 1px solid rgba(23, 24, 23, 0.1);
+}
+
+.photo-strip-bar strong {
+  font-family: var(--gallery-serif);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.photo-strip-bar strong::before {
+  content: 'CONTACT SHEET · ';
+  font-family: var(--gallery-sans);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--bronze);
+}
+
+.photo-thumb {
+  background: #FFFFFF;
+  border: 1px solid rgba(23, 24, 23, 0.12);
+  border-radius: 6px;
+  padding: 5px;
+  box-shadow: 0 8px 20px -14px rgba(20, 22, 20, 0.16);
+}
+
+.photo-thumb.active {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(29, 77, 60, 0.2), 0 12px 24px -12px rgba(29, 77, 60, 0.25);
 }
 
 .compare-handle {
@@ -897,11 +1069,14 @@ dialog::backdrop {
 }
 
 .image-badge {
-  background: rgba(23, 24, 23, 0.8);
+  background: rgba(23, 24, 23, 0.84);
   backdrop-filter: blur(10px);
   color: #FAF9F6;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  padding: 5px 12px;
+  padding: 5px 14px;
+  font-family: var(--gallery-serif);
+  letter-spacing: 0.04em;
 }
 
 /* Community Host Wrapper inside Main App */

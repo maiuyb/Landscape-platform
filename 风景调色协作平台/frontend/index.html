@@ -15,37 +15,78 @@
     <div
       v-if="curtain.visible"
       class="hg-curtain-stage"
-      :class="{ 'is-entering': curtain.entering, 'is-active': curtain.phase === 'active', 'is-parting': curtain.phase === 'parting' }"
+      :class="{ 'is-entering': curtain.entering, 'is-active': curtain.phase === 'active', 'is-parting': curtain.phase === 'parting', 'is-peak': curtain.progress >= 92 }"
       :style="{ '--hg-progress': curtain.progress + '%' }"
       aria-hidden="true"
     >
       <div class="hg-shutter-leaf hg-shutter-top">
         <div class="hg-shutter-grid"></div>
+        <svg class="hg-topo-waves" viewBox="0 0 1440 500" preserveAspectRatio="none">
+          <path d="M-100 180 C 260 60, 620 290, 980 140 C 1220 40, 1380 190, 1560 110" />
+          <path d="M-100 260 C 310 130, 680 350, 1040 200 C 1260 100, 1410 240, 1560 170" />
+          <path d="M-100 340 C 360 210, 740 410, 1100 260 C 1300 170, 1440 290, 1560 230" />
+        </svg>
+        <div class="hg-kinetic-marquee top">
+          <span>EXHIBITION ARCHIVE // 46°37'N 12°17'E // FINE-ART SILVER HALIDE PRINT LAB // PASSEPARTOUT N° 01–04</span>
+        </div>
       </div>
+
       <div class="hg-shutter-leaf hg-shutter-bottom">
         <div class="hg-shutter-grid"></div>
+        <div class="hg-scan-beam"></div>
+        <div class="hg-kinetic-marquee bottom">
+          <span>OPTICAL CALIBRATION // LUMIÈRE &amp; HORIZON // CURATORIAL DARKROOM PROTOCOL // 100% LOCAL RAW ENGINE</span>
+        </div>
       </div>
-      <div class="hg-shutter-seam"></div>
+
+      <!-- Large Backdrop Counter-Rotating Celestial Astrolabe -->
+      <svg class="hg-backdrop-astrolabe" viewBox="0 0 500 500">
+        <circle class="bd-ring-outer" cx="250" cy="250" r="228"></circle>
+        <circle class="bd-ring-mid" cx="250" cy="250" r="184"></circle>
+        <circle class="bd-ring-inner" cx="250" cy="250" r="138"></circle>
+        <line class="bd-axis" x1="20" y1="250" x2="480" y2="250"></line>
+        <line class="bd-axis" x1="250" y1="20" x2="250" y2="480"></line>
+      </svg>
+
+      <div class="hg-shutter-seam">
+        <span class="hg-iris-flare"></span>
+      </div>
 
       <div class="hg-curtain-core">
         <i class="hg-corner tl"></i><i class="hg-corner tr"></i>
         <i class="hg-corner bl"></i><i class="hg-corner br"></i>
         <div class="hg-telemetry-row">
           <span>{{ curtain.coord }}</span>
-          <span>OPTICALSYNC // {{ String(curtain.progress).padStart(2, '0') }}%</span>
+          <span class="hg-telemetry-live">
+            <i class="hg-live-dot"></i>
+            OPTICALSYNC // {{ String(curtain.progress).padStart(2, '0') }}%
+          </span>
         </div>
         <div class="hg-astrolabe-wrap">
           <svg class="hg-astrolabe-svg" viewBox="0 0 100 100">
-            <circle class="ring-outer" cx="50" cy="50" r="44"></circle>
-            <circle class="ring-inner" cx="50" cy="50" r="35"></circle>
+            <circle class="ring-outer" cx="50" cy="50" r="46"></circle>
+            <circle class="ring-compass" cx="50" cy="50" r="40"></circle>
+            <circle class="ring-inner" cx="50" cy="50" r="33"></circle>
+            <line class="crosshair" x1="4" y1="50" x2="96" y2="50"></line>
+            <line class="crosshair" x1="50" y1="4" x2="50" y2="96"></line>
             <circle class="sun-disc" cx="62" cy="34" r="4.2"></circle>
             <path class="mountain-path" d="M22 60 L40 36 L53 51 L65 39 L78 60 Z"></path>
             <path class="water-lines" d="M28 67 H72 M35 73 H65"></path>
           </svg>
         </div>
         <span class="hg-chapter-code">{{ curtain.code }}</span>
-        <h2 class="hg-chapter-title">{{ curtain.title }}</h2>
+        <h2 class="hg-chapter-title" :aria-label="curtain.title">
+          <span
+            v-for="(ch, idx) in curtain.title.replace(/\s+/g, '').split('')"
+            :key="idx"
+            class="hg-char"
+            :style="{ '--char-idx': idx }"
+          >{{ ch }}</span>
+        </h2>
         <p class="hg-chapter-sub">{{ curtain.sub }}</p>
+        <div class="hg-spectrum-bars">
+          <span v-for="n in 16" :key="n" :style="{ '--bar-idx': n }"></span>
+        </div>
         <div class="hg-progress-track">
           <div class="hg-progress-fill"></div>
         </div>
@@ -96,7 +137,7 @@
 
         <!-- Matted Passepartout Hero Print (Center Handle ONLY) -->
         <div class="hero-print-section" id="main-print">
-          <div class="passepartout-frame" @pointermove="updateMatSpotlight">
+          <div class="passepartout-frame" @pointermove="updateMatSpotlight" @pointerleave="resetMatSpotlight">
             <div
               class="print-window welcome-comparison"
               ref="welcomeStage"
@@ -158,7 +199,7 @@
 
             <div class="welcome-samples curated-wall-grid">
               <!-- Fig. 04: 21:9 Panorama Framed Exhibit -->
-              <article class="panorama-exhibit" data-reveal @pointermove="updateMatSpotlight">
+              <article class="panorama-exhibit" data-reveal @pointermove="updateMatSpotlight" @pointerleave="resetMatSpotlight">
                 <button type="button" class="sample-image-frame" @click="trySample(heroEditions['alpine-panorama'])" :disabled="photoBusy">
                   <img src="assets/welcome/alpine-panorama-after.jpg" alt="21:9 高山冰川全景" loading="lazy" width="1280" height="606">
                 </button>
@@ -175,7 +216,7 @@
               </article>
 
               <!-- Fig. 05: 2:3 Vertical Diptych Left -->
-              <article class="diptych-frame" data-reveal @pointermove="updateMatSpotlight">
+              <article class="diptych-frame" data-reveal @pointermove="updateMatSpotlight" @pointerleave="resetMatSpotlight">
                 <button type="button" class="sample-image-frame vertical" @click="trySample(samples[1])" :disabled="photoBusy">
                   <img src="assets/welcome/mountain-light-after.jpg" :alt="samples[1].name" loading="lazy" width="1400" height="2100">
                 </button>
@@ -189,7 +230,7 @@
               </article>
 
               <!-- Fig. 06: 2:3 Vertical Diptych Right (Offset Down) -->
-              <article class="diptych-frame offset-down" data-reveal @pointermove="updateMatSpotlight">
+              <article class="diptych-frame offset-down" data-reveal @pointermove="updateMatSpotlight" @pointerleave="resetMatSpotlight">
                 <button type="button" class="sample-image-frame vertical" @click="trySample(samples[2])" :disabled="photoBusy">
                   <img src="assets/welcome/coastal-sunset-after.jpg" :alt="samples[2].name" loading="lazy" width="1422" height="2133">
                 </button>

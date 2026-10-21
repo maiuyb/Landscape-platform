@@ -597,70 +597,91 @@
 .frame-error{text-align:center;font-size:14px;color:#9E3A33}.frame-error button{margin:12px auto 0}.frame-display>p{color:#595C59}
 
 /* ============================================================================
-   Apple-Grade Choreographed Motion, Spotlight Sheen & Micro-Interactions
+   Apple-Grade Choreographed Motion, Scroll Parallax, 3D Tilt & Optical Sheen
    ============================================================================ */
 @keyframes apple-spring-rise {
   0% {
-    opacity: 0.92;
-    transform: translate3d(0, 18px, 0) scale(0.988);
+    opacity: 0;
+    transform: translate3d(0, 46px, 0) scale(0.945);
+    filter: blur(10px);
   }
   100% {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
   }
 }
 
 @keyframes gallery-scroll-bloom {
   0% {
-    transform: translate3d(0, 22px, 0) scale(0.985);
+    opacity: 0;
+    transform: translate3d(0, 64px, 0) scale(0.94);
+    filter: blur(10px);
   }
   100% {
-    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+    transform: translate3d(0, var(--card-parallax-y, 0px), 0) scale(1);
+    filter: blur(0);
   }
 }
 
 @keyframes handle-ring-breathe {
   0%, 100% {
     transform: translate(-50%, -50%) scale(1);
-    opacity: 0.55;
+    opacity: 0.72;
   }
   50% {
-    transform: translate(-50%, -50%) scale(1.32);
+    transform: translate(-50%, -50%) scale(1.42);
     opacity: 0;
   }
 }
 
 @keyframes edition-optical-focus {
   0% {
-    filter: blur(4px) brightness(1.04);
-    transform: scale(1.012);
+    filter: blur(8px) brightness(1.08) contrast(0.94);
+    transform: scale(1.028);
   }
   100% {
-    filter: blur(0) brightness(1);
+    filter: blur(0) brightness(1) contrast(1);
     transform: scale(1);
   }
 }
 
+/* Synchronized Hero Entrance (Re-runs whenever Opening Curtain unveils) */
 .exhibition-intro .exhibition-kicker {
-  animation: apple-spring-rise 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.02s both;
+  animation: apple-spring-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
 }
 .exhibition-intro .exhibition-title {
-  animation: apple-spring-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+  animation: apple-spring-rise 1.05s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
 }
 .exhibition-intro .exhibition-lead {
-  animation: apple-spring-rise 0.88s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both;
+  animation: apple-spring-rise 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both;
 }
 .exhibition-intro .intro-cta-group {
-  animation: apple-spring-rise 0.92s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-}
-.hero-print-section .passepartout-frame {
-  animation: apple-spring-rise 0.98s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: apple-spring-rise 1.15s cubic-bezier(0.16, 1, 0.3, 1) 0.30s both;
 }
 
-/* Interactive Gallery Track-Light Sheen on Passepartout Mat */
+.hero-print-section {
+  perspective: 1600px;
+}
+
+.hero-print-section .passepartout-frame {
+  animation: apple-spring-rise 1.25s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
+  position: relative;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  transform:
+    perspective(1600px)
+    translate3d(0, var(--hero-parallax-y, 0px), 0)
+    scale(var(--hero-scroll-scale, 1))
+    rotateX(var(--tilt-x, 0deg))
+    rotateY(var(--tilt-y, 0deg));
+  transition:
+    transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Interactive Museum Glass Specular Glare + Track-Light Sheen */
 .passepartout-frame::before,
 .panorama-exhibit::before,
 .diptych-frame::before {
@@ -669,13 +690,15 @@
   inset: 0;
   pointer-events: none;
   background: radial-gradient(
-    560px circle at var(--spot-x, 50%) var(--spot-y, 20%),
-    rgba(140, 101, 62, 0.065),
-    transparent 65%
+    640px circle at var(--spot-x, 50%) var(--spot-y, 20%),
+    rgba(255, 253, 247, 0.72) 0%,
+    rgba(200, 157, 102, 0.16) 34%,
+    transparent 68%
   );
   opacity: 0;
-  transition: opacity 0.45s ease;
-  z-index: 1;
+  transition: opacity 0.38s ease;
+  z-index: 3;
+  mix-blend-mode: overlay;
 }
 .passepartout-frame:hover::before,
 .panorama-exhibit:hover::before,
@@ -693,30 +716,44 @@
 .diptych-frame {
   position: relative;
   overflow: hidden;
-  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-style: preserve-3d;
+  transform:
+    perspective(1400px)
+    translate3d(0, var(--card-parallax-y, 0px), 0)
+    rotateX(var(--tilt-x, 0deg))
+    rotateY(var(--tilt-y, 0deg));
+  transition:
+    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .panorama-exhibit:hover,
 .diptych-frame:hover {
-  transform: translate3d(0, -6px, 0);
-  box-shadow: 0 44px 92px -28px rgba(20, 22, 20, 0.2), 0 4px 16px rgba(20, 22, 20, 0.06);
+  box-shadow: 0 46px 96px -26px rgba(20, 22, 20, 0.24), 0 6px 20px rgba(20, 22, 20, 0.08);
 }
 .sample-image-frame img {
-  transition: transform 0.75s cubic-bezier(0.16, 1, 0.3, 1), filter 0.55s ease !important;
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), filter 0.55s ease !important;
 }
 .sample-image-frame:hover img {
-  transform: scale(1.032) !important;
-  filter: contrast(1.02) saturate(1.03);
+  transform: scale(1.045) !important;
+  filter: contrast(1.03) saturate(1.05);
 }
 
-/* Scroll-triggered Exhibition Bloom */
+/* Scroll-triggered Exhibition Bloom (Dramatic Blur-to-Clear + Spring Rise) */
+#app.motion-ready [data-reveal]:not(.is-revealed) {
+  opacity: 0;
+  transform: translate3d(0, 64px, 0) scale(0.94);
+  filter: blur(10px);
+}
 [data-reveal].is-revealed {
-  animation: gallery-scroll-bloom 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: gallery-scroll-bloom 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Optical Cross-Dissolve on Edition Switch */
 .print-window.welcome-comparison.edition-switching > img,
 .print-window.welcome-comparison.edition-switching > canvas {
-  animation: edition-optical-focus 0.46s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: edition-optical-focus 0.54s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Center Pearl Handle Optical Ring Pulse */
@@ -725,12 +762,12 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.75);
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
   pointer-events: none;
-  animation: handle-ring-breathe 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation: handle-ring-breathe 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 .print-window.dragging .print-handle::after {
   animation: none;
@@ -739,18 +776,18 @@
 
 /* Replay Opening Button in Header / Intro */
 .btn-pill.curtain-replay-btn {
-  border-color: rgba(140, 101, 62, 0.32);
+  border-color: rgba(140, 101, 62, 0.38);
   color: var(--gallery-bronze);
-  background: rgba(140, 101, 62, 0.04);
+  background: rgba(140, 101, 62, 0.06);
 }
 .btn-pill.curtain-replay-btn:hover {
   border-color: var(--gallery-bronze);
-  background: rgba(140, 101, 62, 0.1);
+  background: rgba(140, 101, 62, 0.14);
   color: #6E4D2C;
 }
 
 /* ============================================================================
-   Hypergryph-Inspired Thematic Opening & View-Switch Curtain
+   Hypergryph-Inspired Thematic Opening & View-Switch Curtain (95-Pt Edition)
    「山川显影 · 经纬星盘与装裱快门 (Topographic Astrolabe & Passepartout Shutter)」
    ============================================================================ */
 .hg-curtain-stage {
@@ -765,40 +802,98 @@
 
 /* Interlocking Diagonal / Layered Shutter Leaves */
 @keyframes hg-leaf-top-snap {
-  0% { transform: translate3d(0, -102%, 0); }
+  0% { transform: translate3d(0, -104%, 0); }
   100% { transform: translate3d(0, 0, 0); }
 }
 @keyframes hg-leaf-bottom-snap {
-  0% { transform: translate3d(0, 102%, 0); }
+  0% { transform: translate3d(0, 104%, 0); }
   100% { transform: translate3d(0, 0, 0); }
+}
+@keyframes hg-marquee-slide {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-18%, 0, 0); }
+}
+@keyframes hg-scan-sweep {
+  0% { top: 45%; opacity: 0; }
+  30% { opacity: 0.75; }
+  100% { top: 98%; opacity: 0; }
 }
 
 .hg-shutter-leaf {
   position: absolute;
   inset: -4%;
   will-change: transform;
-  transition: transform 0.56s cubic-bezier(0.76, 0, 0.24, 1);
+  transition: transform 0.62s cubic-bezier(0.76, 0, 0.24, 1);
+  overflow: hidden;
 }
 .hg-shutter-top {
   background:
-    radial-gradient(circle at 28% 24%, rgba(140, 101, 62, 0.1), transparent 52%),
-    linear-gradient(135deg, #FAF9F6 0%, #EFECE3 100%);
-  clip-path: polygon(0 0, 100% 0, 100% 54%, 0 64%);
-  border-bottom: 1.5px solid #8C653E;
+    radial-gradient(circle at 26% 22%, rgba(140, 101, 62, 0.15), transparent 54%),
+    linear-gradient(135deg, #FAF9F6 0%, #ECE7DB 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 53%, 0 65%);
+  border-bottom: 2px solid #8C653E;
   transform: translate3d(0, 0, 0);
 }
 .hg-shutter-bottom {
   background:
-    radial-gradient(circle at 72% 76%, rgba(200, 157, 102, 0.14), transparent 55%),
-    linear-gradient(135deg, #16392C 0%, #0E1F18 100%);
-  clip-path: polygon(0 62%, 100% 52%, 100% 100%, 0 100%);
+    radial-gradient(circle at 74% 78%, rgba(200, 157, 102, 0.18), transparent 55%),
+    linear-gradient(135deg, #163B2D 0%, #0A1712 100%);
+  clip-path: polygon(0 63%, 100% 51%, 100% 100%, 0 100%);
   transform: translate3d(0, 0, 0);
 }
 .hg-curtain-stage.is-entering .hg-shutter-top {
-  animation: hg-leaf-top-snap 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: hg-leaf-top-snap 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .hg-curtain-stage.is-entering .hg-shutter-bottom {
-  animation: hg-leaf-bottom-snap 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: hg-leaf-bottom-snap 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Topographic Contour Waves in Upper Shutter Leaf */
+.hg-topo-waves {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 70%;
+  fill: none;
+  stroke: rgba(140, 101, 62, 0.18);
+  stroke-width: 1.4;
+  stroke-dasharray: 12 8;
+  pointer-events: none;
+}
+
+/* Giant Kinetic Stencil Marquee Typography across Upper & Lower Blades */
+.hg-kinetic-marquee {
+  position: absolute;
+  left: -5%;
+  width: 140%;
+  white-space: nowrap;
+  font-family: var(--gallery-serif);
+  font-size: clamp(46px, 6.2vw, 88px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  pointer-events: none;
+  user-select: none;
+  animation: hg-marquee-slide 9s linear infinite;
+}
+.hg-kinetic-marquee.top {
+  top: 12%;
+  color: rgba(23, 24, 23, 0.045);
+}
+.hg-kinetic-marquee.bottom {
+  bottom: 11%;
+  color: rgba(200, 157, 102, 0.065);
+  animation-direction: reverse;
+}
+
+/* Laser Optical Scan Beam in Lower Leaf */
+.hg-scan-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(200, 157, 102, 0.65) 50%, transparent 100%);
+  box-shadow: 0 0 24px rgba(200, 157, 102, 0.55);
+  animation: hg-scan-sweep 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 /* Subtle Architectural Coordinate Grid inside Shutter */
@@ -806,60 +901,118 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(140, 101, 62, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(140, 101, 62, 0.08) 1px, transparent 1px);
-  background-size: 96px 96px;
+    linear-gradient(to right, rgba(140, 101, 62, 0.085) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(140, 101, 62, 0.085) 1px, transparent 1px);
+  background-size: 84px 84px;
   opacity: 0;
   transition: opacity 0.4s ease;
 }
 
-/* Diagonal Warm-Bronze Horizon Seam */
+/* Large Backdrop Counter-Rotating Celestial Astrolabe */
+.hg-backdrop-astrolabe {
+  position: absolute;
+  width: min(560px, 76vw);
+  height: min(560px, 76vw);
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.84) rotate(-18deg);
+  transition: opacity 0.45s ease, transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hg-backdrop-astrolabe circle,
+.hg-backdrop-astrolabe line {
+  fill: none;
+  stroke: rgba(200, 157, 102, 0.26);
+}
+.hg-backdrop-astrolabe .bd-ring-outer {
+  stroke-width: 1;
+  stroke-dasharray: 3 7;
+  transform-origin: 250px 250px;
+  animation: hg-spin 22s linear infinite;
+}
+.hg-backdrop-astrolabe .bd-ring-mid {
+  stroke-width: 1.2;
+  stroke-dasharray: 48 16 8 16;
+  transform-origin: 250px 250px;
+  animation: hg-spin-reverse 16s linear infinite;
+}
+.hg-backdrop-astrolabe .bd-ring-inner {
+  stroke-width: 0.9;
+  stroke-dasharray: 6 6;
+}
+.hg-backdrop-astrolabe .bd-axis {
+  stroke-width: 0.8;
+  stroke-dasharray: 4 8;
+}
+
+/* Diagonal Warm-Bronze Horizon Seam + Optical Iris Flare */
 .hg-shutter-seam {
   position: absolute;
-  left: -10%;
-  right: -10%;
-  top: 58%;
-  height: 1.5px;
-  background: linear-gradient(90deg, transparent 5%, #C89D66 25%, #FFFDF8 50%, #C89D66 75%, transparent 95%);
-  transform: rotate(-4.5deg) scaleX(0);
+  left: -12%;
+  right: -12%;
+  top: 57%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 4%, #C89D66 22%, #FFFDF8 50%, #C89D66 78%, transparent 96%);
+  box-shadow: 0 0 24px rgba(226, 184, 130, 0.75);
+  transform: rotate(-5.2deg) scaleX(0);
   transform-origin: center;
   transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.38s ease;
   opacity: 0;
   z-index: 2;
+}
+.hg-iris-flare {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 240px;
+  height: 18px;
+  transform: translate(-50%, -50%) scaleX(0.2);
+  border-radius: 50%;
+  background: radial-gradient(circle, #FFFFFF 0%, rgba(226, 184, 130, 0.85) 38%, transparent 75%);
+  filter: blur(2px);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+}
+.hg-curtain-stage.is-peak .hg-iris-flare {
+  opacity: 1;
+  transform: translate(-50%, -50%) scaleX(2.2);
 }
 
 /* Central Astrolabe & Curatorial Emblem Card */
 .hg-curtain-core {
   position: relative;
   z-index: 3;
-  width: min(560px, calc(100vw - 36px));
-  padding: 28px 34px 26px;
-  background: rgba(18, 28, 23, 0.92);
-  border: 1px solid rgba(200, 157, 102, 0.42);
-  border-radius: 6px;
-  box-shadow: 0 36px 90px -20px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  width: min(580px, calc(100vw - 36px));
+  padding: 28px 36px 26px;
+  background: linear-gradient(160deg, rgba(16, 28, 22, 0.95) 0%, rgba(11, 19, 15, 0.96) 100%);
+  border: 1px solid rgba(200, 157, 102, 0.5);
+  border-radius: 8px;
+  box-shadow:
+    0 42px 100px -20px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 0 48px -12px rgba(200, 157, 102, 0.25);
   color: #FAF9F6;
   text-align: center;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   opacity: 0;
-  transform: translate3d(0, 14px, 0) scale(0.96);
-  transition: opacity 0.38s cubic-bezier(0.16, 1, 0.3, 1), transform 0.46s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translate3d(0, 18px, 0) scale(0.94);
+  transition: opacity 0.38s cubic-bezier(0.16, 1, 0.3, 1), transform 0.48s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Corner Passepartout Registration Marks */
 .hg-corner {
   position: absolute;
-  width: 10px;
-  height: 10px;
-  border-color: #C89D66;
+  width: 12px;
+  height: 12px;
+  border-color: #E2B882;
   border-style: solid;
-  opacity: 0.8;
+  opacity: 0.9;
 }
-.hg-corner.tl { top: 8px; left: 8px; border-width: 1.5px 0 0 1.5px; }
-.hg-corner.tr { top: 8px; right: 8px; border-width: 1.5px 1.5px 0 0; }
-.hg-corner.bl { bottom: 8px; left: 8px; border-width: 0 0 1.5px 1.5px; }
-.hg-corner.br { bottom: 8px; right: 8px; border-width: 0 1.5px 1.5px 0; }
+.hg-corner.tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+.hg-corner.tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+.hg-corner.bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+.hg-corner.br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
 
 .hg-telemetry-row {
   display: flex;
@@ -869,15 +1022,27 @@
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(200, 157, 102, 0.88);
-  border-bottom: 1px solid rgba(200, 157, 102, 0.2);
+  color: rgba(226, 184, 130, 0.92);
+  border-bottom: 1px solid rgba(200, 157, 102, 0.24);
   padding-bottom: 10px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+.hg-telemetry-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hg-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #E2B882;
+  box-shadow: 0 0 10px #E2B882;
 }
 
 .hg-astrolabe-wrap {
-  width: 84px;
-  height: 84px;
+  width: 92px;
+  height: 92px;
   margin: 0 auto 14px;
   position: relative;
 }
@@ -888,24 +1053,37 @@
 }
 .hg-astrolabe-svg .ring-outer {
   fill: none;
-  stroke: rgba(200, 157, 102, 0.45);
+  stroke: rgba(226, 184, 130, 0.55);
   stroke-width: 1;
-  stroke-dasharray: 4 5;
+  stroke-dasharray: 3 4;
   transform-origin: 50px 50px;
-  animation: hg-spin 14s linear infinite;
+  animation: hg-spin 12s linear infinite;
+}
+.hg-astrolabe-svg .ring-compass {
+  fill: none;
+  stroke: rgba(226, 184, 130, 0.35);
+  stroke-width: 1.2;
+  stroke-dasharray: 18 8 4 8;
+  transform-origin: 50px 50px;
+  animation: hg-spin-reverse 9s linear infinite;
 }
 .hg-astrolabe-svg .ring-inner {
   fill: none;
-  stroke: #C89D66;
-  stroke-width: 1.25;
+  stroke: #E2B882;
+  stroke-width: 1.35;
   stroke-dasharray: 220;
   stroke-dashoffset: 220;
   transform-origin: 50px 50px;
 }
+.hg-astrolabe-svg .crosshair {
+  stroke: rgba(226, 184, 130, 0.22);
+  stroke-width: 0.75;
+  stroke-dasharray: 2 4;
+}
 .hg-astrolabe-svg .mountain-path {
-  fill: none;
+  fill: rgba(226, 184, 130, 0.08);
   stroke: #FAF9F6;
-  stroke-width: 1.8;
+  stroke-width: 1.9;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 180;
@@ -913,49 +1091,95 @@
 }
 .hg-astrolabe-svg .water-lines {
   fill: none;
-  stroke: #C89D66;
-  stroke-width: 1.2;
+  stroke: #E2B882;
+  stroke-width: 1.3;
   stroke-linecap: round;
 }
 .hg-astrolabe-svg .sun-disc {
-  fill: #C89D66;
-  opacity: 0.9;
+  fill: #E2B882;
+  filter: drop-shadow(0 0 6px rgba(226, 184, 130, 0.8));
 }
 
 @keyframes hg-spin {
   to { transform: rotate(360deg); }
 }
+@keyframes hg-spin-reverse {
+  to { transform: rotate(-360deg); }
+}
 @keyframes hg-stroke-draw {
   to { stroke-dashoffset: 0; }
+}
+@keyframes hg-char-reveal {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) rotateX(-65deg) scale(0.86);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateX(0deg) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes hg-spectrum-pulse {
+  0%, 100% { transform: scaleY(0.28); opacity: 0.45; }
+  50% { transform: scaleY(1); opacity: 0.95; }
 }
 
 .hg-chapter-code {
   display: block;
   font-size: 10px;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: #C89D66;
+  color: #E2B882;
   margin-bottom: 6px;
   font-weight: 600;
 }
 .hg-chapter-title {
   font-family: var(--gallery-serif);
-  font-size: clamp(22px, 3vw, 30px);
+  font-size: clamp(24px, 3.2vw, 32px);
   font-weight: 600;
-  letter-spacing: 0.22em;
   color: #FAF9F6;
-  margin: 0 0 6px;
-  padding-left: 0.22em;
+  margin: 0 0 8px;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.28em;
+  perspective: 600px;
+}
+.hg-char {
+  display: inline-block;
+  animation: hg-char-reveal 0.32s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--char-idx, 0) * 0.035s + 0.02s) both;
+  text-shadow: 0 4px 18px rgba(226, 184, 130, 0.38);
 }
 .hg-chapter-sub {
   font-size: 12px;
-  color: rgba(250, 249, 246, 0.72);
+  color: rgba(250, 249, 246, 0.76);
   letter-spacing: 0.06em;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
+
+/* 16-Bar Live Optical Spectrum Equalizer */
+.hg-spectrum-bars {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 5px;
+  height: 16px;
+  margin: 0 auto 14px;
+}
+.hg-spectrum-bars span {
+  width: 2.5px;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #FAF9F6 0%, #C89D66 100%);
+  transform-origin: bottom;
+  animation: hg-spectrum-pulse 0.75s ease-in-out calc(var(--bar-idx, 1) * 0.055s) infinite;
+}
+
 .hg-progress-track {
   width: 100%;
-  height: 2px;
+  height: 2.5px;
   background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   overflow: hidden;
@@ -964,23 +1188,25 @@
 .hg-progress-fill {
   height: 100%;
   width: var(--hg-progress, 0%);
-  background: linear-gradient(90deg, #8C653E, #E2B882, #FAF9F6);
-  transition: width 0.18s linear;
+  background: linear-gradient(90deg, #8C653E, #E2B882, #FFFFFF);
+  box-shadow: 0 0 12px rgba(226, 184, 130, 0.8);
+  transition: width 0.14s linear;
 }
 
 /* Active & Parting States */
 .hg-curtain-stage.is-active .hg-shutter-top,
-.hg-curtain-stage.is-Active .hg-shutter-bottom {
-  transform: translate3d(0, 0, 0);
-}
 .hg-curtain-stage.is-active .hg-shutter-bottom {
   transform: translate3d(0, 0, 0);
 }
 .hg-curtain-stage.is-active .hg-shutter-grid {
   opacity: 1;
 }
+.hg-curtain-stage.is-active .hg-backdrop-astrolabe {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
 .hg-curtain-stage.is-active .hg-shutter-seam {
-  transform: rotate(-4.5deg) scaleX(1);
+  transform: rotate(-5.2deg) scaleX(1);
   opacity: 1;
 }
 .hg-curtain-stage.is-active .hg-curtain-core {
@@ -995,18 +1221,22 @@
 }
 
 .hg-curtain-stage.is-parting .hg-shutter-top {
-  transform: translate3d(0, -104%, 0);
+  transform: translate3d(0, -105%, 0);
 }
 .hg-curtain-stage.is-parting .hg-shutter-bottom {
-  transform: translate3d(0, 104%, 0);
+  transform: translate3d(0, 105%, 0);
+}
+.hg-curtain-stage.is-parting .hg-backdrop-astrolabe {
+  opacity: 0;
+  transform: scale(1.22) rotate(16deg);
 }
 .hg-curtain-stage.is-parting .hg-shutter-seam {
-  transform: rotate(-4.5deg) scaleX(1.3);
+  transform: rotate(-5.2deg) scaleX(1.35);
   opacity: 0;
 }
 .hg-curtain-stage.is-parting .hg-curtain-core {
   opacity: 0;
-  transform: translate3d(0, -12px, 0) scale(1.03);
+  transform: translate3d(0, -14px, 0) scale(1.04);
 }
 
 @media(prefers-reduced-motion:reduce){

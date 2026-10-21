@@ -122,7 +122,33 @@ createApp({
       sub:'Fine-Art Landscape Print & Color Darkroom',
       coord:"GALLERY // 46°37'N · 12°17'E"
     });
-    let curtainTimerA=null,curtainTimerB=null,curtainTick=null;
+    let curtainTimerA=null,curtainTimerB=null,curtainTick=null,splitSweepRaf=null,parallaxRaf=null;
+    function stopHeroSplitSweep(){
+      if(splitSweepRaf!==null){cancelAnimationFrame(splitSweepRaf);splitSweepRaf=null;}
+    }
+    function animateHeroSplitSweep(amplitude=22,durationMs=1180){
+      if(typeof navigator!=='undefined'&&navigator.webdriver&&!location.search.includes('motion=1')&&!location.search.includes('intro=1'))return;
+      stopHeroSplitSweep();
+      const start=performance.now();
+      const step=now=>{
+        if(heroDragging.value||imageLoaded.value){splitSweepRaf=null;return;}
+        const t=Math.min(1,(now-start)/durationMs);
+        const ease=1-Math.pow(1-t,2);
+        const wave=Math.sin(t*Math.PI*2)*amplitude*(1-ease*0.45);
+        heroPosition.value=Math.round((50-wave)*10)/10;
+        if(t<1){splitSweepRaf=requestAnimationFrame(step);}
+        else{heroPosition.value=50;splitSweepRaf=null;}
+      };
+      splitSweepRaf=requestAnimationFrame(step);
+    }
+    function replayHeroEntrance(){
+      const targets=document.querySelectorAll('.exhibition-intro .exhibition-kicker, .exhibition-intro .exhibition-title, .exhibition-intro .exhibition-lead, .exhibition-intro .intro-cta-group, .hero-print-section .passepartout-frame');
+      targets.forEach(el=>{
+        el.style.animation='none';
+        void el.offsetWidth;
+        el.style.animation='';
+      });
+    }
     function runCurtainSequence(opts={},forceManual=false){
       if(typeof navigator!=='undefined'&&navigator.webdriver&&!location.search.includes('intro=1')&&!location.search.includes('curtain=1')&&!forceManual)return;
       clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);
@@ -130,7 +156,7 @@ createApp({
       curtain.title=opts.title||'山 川 显 影';
       curtain.sub=opts.sub||'Fine-Art Landscape Print & Color Darkroom';
       curtain.coord=opts.coord||"GALLERY // 46°37'N · 12°17'E";
-      const holdMs=opts.holdMs||640;
+      const holdMs=opts.holdMs||680;
       curtain.progress=12;
       curtain.entering=!opts.startClosed;
       curtain.phase='active';
@@ -144,12 +170,16 @@ createApp({
         curtain.progress=100;
         curtain.entering=false;
         curtain.phase='parting';
+        if(!imageLoaded.value&&currentView.value==='editor'){
+          replayHeroEntrance();
+          animateHeroSplitSweep(24,1250);
+        }
       },holdMs);
       curtainTimerB=setTimeout(()=>{
         curtain.visible=false;
         curtain.entering=false;
         curtain.phase='idle';
-      },holdMs+600);
+      },holdMs+640);
     }
     function playIntroCurtain(){
       runCurtainSequence({
@@ -157,18 +187,59 @@ createApp({
         title:'山 川 显 影',
         sub:'在静谧留白之中，重现山川与暮海的呼吸 · Fine-Art Print Lab',
         coord:"GALLERY // 46°37'N · 12°17'E",
-        holdMs:880,
+        holdMs:920,
         startClosed:true
       },true);
     }
     function updateMatSpotlight(event){
       const el=event.currentTarget;if(!el)return;
       const rect=el.getBoundingClientRect();if(!rect.width||!rect.height)return;
-      el.style.setProperty('--spot-x',`${Math.round(((event.clientX-rect.left)/rect.width)*100)}%`);
-      el.style.setProperty('--spot-y',`${Math.round(((event.clientY-rect.top)/rect.height)*100)}%`);
+      const px=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));
+      const py=Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height));
+      el.style.setProperty('--spot-x',`${Math.round(px*100)}%`);
+      el.style.setProperty('--spot-y',`${Math.round(py*100)}%`);
+      if(!heroDragging.value){
+        const maxTilt=el.classList.contains('passepartout-frame')?2.4:3.8;
+        const tiltX=((0.5-py)*maxTilt).toFixed(2);
+        const tiltY=((px-0.5)*(maxTilt*1.15)).toFixed(2);
+        el.style.setProperty('--tilt-x',`${tiltX}deg`);
+        el.style.setProperty('--tilt-y',`${tiltY}deg`);
+      }
+    }
+    function resetMatSpotlight(event){
+      const el=event.currentTarget;if(!el)return;
+      el.style.setProperty('--tilt-x','0deg');
+      el.style.setProperty('--tilt-y','0deg');
+    }
+    function updateScrollParallax(){
+      parallaxRaf=null;
+      if(imageLoaded.value||currentView.value!=='editor')return;
+      const vh=window.innerHeight||800;
+      const heroEl=document.querySelector('.hero-print-section .passepartout-frame');
+      if(heroEl){
+        const r=heroEl.getBoundingClientRect();
+        const centerOffset=(r.top+r.height*0.5-vh*0.5)/vh;
+        const parallaxY=Math.max(-22,Math.min(22,centerOffset*-18));
+        const scale=Math.max(0.975,Math.min(1.018,1-Math.abs(centerOffset)*0.022));
+        heroEl.style.setProperty('--hero-parallax-y',`${parallaxY.toFixed(1)}px`);
+        heroEl.style.setProperty('--hero-scroll-scale',scale.toFixed(4));
+      }
+      document.querySelectorAll('.panorama-exhibit, .diptych-frame').forEach((card,idx)=>{
+        const r=card.getBoundingClientRect();
+        const centerOffset=(r.top+r.height*0.5-vh*0.5)/vh;
+        const factor=card.classList.contains('offset-down')?-26:(idx===0?-14:-18);
+        const y=Math.max(-28,Math.min(28,centerOffset*factor));
+        card.style.setProperty('--card-parallax-y',`${y.toFixed(1)}px`);
+      });
+    }
+    function onWindowScroll(){
+      if(parallaxRaf===null)parallaxRaf=requestAnimationFrame(updateScrollParallax);
     }
     function initScrollReveal(){
       revealObserver?.disconnect();
+      const appRoot=document.getElementById('app');
+      const enableMotion=typeof navigator==='undefined'||!navigator.webdriver||location.search.includes('motion=1');
+      if(appRoot)appRoot.classList.toggle('motion-ready',enableMotion);
       if(typeof IntersectionObserver==='undefined')return;
       revealObserver=new IntersectionObserver(entries=>{
         for(const entry of entries){
@@ -177,8 +248,9 @@ createApp({
             revealObserver.unobserve(entry.target);
           }
         }
-      },{threshold:0.14});
+      },{threshold:0.12,rootMargin:'0px 0px -40px 0px'});
       document.querySelectorAll('[data-reveal]').forEach(el=>revealObserver.observe(el));
+      updateScrollParallax();
     }
     const activeHeroEdition=computed(()=>heroEditions[heroEditionKey.value]||heroEditions['alpine-lake']);
     const photoBusy=computed(()=>imageLoading.value||importing.value||exporting.value||sharing.value||frameExporting.value);
@@ -679,7 +751,8 @@ createApp({
       if(heroEditionKey.value!==key){
         editionSwitching.value=true;
         clearTimeout(editionSwitchTimer);
-        editionSwitchTimer=setTimeout(()=>{editionSwitching.value=false;},460);
+        editionSwitchTimer=setTimeout(()=>{editionSwitching.value=false;},520);
+        animateHeroSplitSweep(16,920);
       }
       heroEditionKey.value=key;drawWelcome();
       if(scroll)document.getElementById('main-print')?.scrollIntoView({behavior:'smooth'});
@@ -689,7 +762,7 @@ createApp({
       heroPosition.value=Math.max(5,Math.min(95,Math.round(((clientX-rect.left)/rect.width)*100)));
     }
     function startHeroDrag(e){
-      if(!heroReady.value)return;heroDragging.value=true;e.currentTarget?.setPointerCapture?.(e.pointerId);setHeroSplitFromClientX(e.clientX);
+      if(!heroReady.value)return;stopHeroSplitSweep();heroDragging.value=true;e.currentTarget?.setPointerCapture?.(e.pointerId);setHeroSplitFromClientX(e.clientX);
     }
     function moveHeroDrag(e){if(heroDragging.value)setHeroSplitFromClientX(e.clientX);}
     function stopHeroDrag(){heroDragging.value=false;}
@@ -1321,19 +1394,20 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); });
+    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); });
     onBeforeUnmount(() => {
       cancelUprightAnalysis();
+      stopHeroSplitSweep();if(parallaxRaf!==null)cancelAnimationFrame(parallaxRaf);
       clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);clearTimeout(editionSwitchTimer);revealObserver?.disconnect();
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload);
+      window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll);
     });
     return {
       uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
-      curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,
+      curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
       openLogin,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
       legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
