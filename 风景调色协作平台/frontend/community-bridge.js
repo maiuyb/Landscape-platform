@@ -14,9 +14,13 @@
   const send=(type,data={})=>parent.postMessage({type,channel,id:channel+':'+(++sequence),sentAt:Date.now(),...data},location.origin);
   const valid=e=>e.source===parent&&e.origin===location.origin&&e.data&&typeof e.data==='object';
   const setFile=(selector,blob,name)=>{
+    const input=document.querySelector(selector);
     const transfer=new DataTransfer();
     if(blob)transfer.items.add(new File([blob],name,{type:'image/png'}));
-    document.querySelector(selector).files=transfer.files;
+    input.files=transfer.files;
+    input.dataset.fromEditor='1';
+    const note=input.closest('.file-field')?.querySelector('.file-note');
+    if(note) note.textContent='默认使用编辑器内图片';
   };
   window.addEventListener('message',e=>{
     if(!valid(e))return;
@@ -25,6 +29,14 @@
       channel=d.channel;send('landscape:ready');return;
     }
     if(channel&&d.channel===channel&&d.type==='landscape:auth'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){openAuth('login');return;}
+    if(channel&&d.channel===channel&&d.type==='landscape:search'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){
+      const query=String(d.query||'').trim();
+      const input=document.querySelector('#search');
+      if(input)input.value=query;
+      state.search=query;
+      if(state.view!=='community')switchView('community');else loadRecipes(true);
+      return;
+    }
     if(!channel||d.channel!==channel||d.type!=='landscape:share'||typeof d.id!=='string'||!d.id||seenShares.has(d.id)||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000)return;
     if(!d.payload?.recipe||!(d.after instanceof Blob))return;
     seenShares.add(d.id);if(seenShares.size>100)seenShares.delete(seenShares.values().next().value);

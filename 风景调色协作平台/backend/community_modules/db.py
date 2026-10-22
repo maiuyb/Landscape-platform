@@ -53,6 +53,7 @@ def init_db():
             tags TEXT DEFAULT '[]',
             version INTEGER DEFAULT 1,
             rendering TEXT DEFAULT NULL,
+            pairing TEXT DEFAULT NULL,
             likes INTEGER DEFAULT 0,
             deleted_at DATETIME DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -75,6 +76,7 @@ def init_db():
         _add_column_if_missing(conn, 'recipes', 'tags', "TEXT DEFAULT '[]'")
         _add_column_if_missing(conn, 'recipes', 'version', 'INTEGER DEFAULT 1')
         _add_column_if_missing(conn, 'recipes', 'rendering', 'TEXT')
+        _add_column_if_missing(conn, 'recipes', 'pairing', 'TEXT')
         _add_column_if_missing(conn, 'recipes', 'deleted_at', 'DATETIME')
 
         c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_recipe ON favorites(recipe_id)')

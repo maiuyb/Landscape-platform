@@ -111,15 +111,16 @@ def insert_recipe(conn, data):
     cur = conn.execute(
         '''INSERT INTO recipes
            (name, author, author_id, description, cover_before, cover_after,
-            steps, features, category, tags, version, rendering)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            steps, features, category, tags, version, rendering, pairing)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         (data['name'], data['author'], data['author_id'], data['description'],
          data['cover_before'], data['cover_after'],
          json.dumps(data['steps'], ensure_ascii=False),
          json.dumps(data['features'], ensure_ascii=False),
          data['category'], json.dumps(data['tags'], ensure_ascii=False),
          int(data.get('version', 1) or 1),
-         json.dumps(rendering, ensure_ascii=False) if rendering is not None else None))
+         json.dumps(rendering, ensure_ascii=False) if rendering is not None else None,
+         data.get('pairing')))
     conn.commit()
     return cur.lastrowid
 
@@ -219,6 +220,7 @@ def serialize_recipe(conn, row, user_id=None, with_steps=True):
         'cover_after': row['cover_after'] or '',
         'version': row['version'] or 1,
         'rendering': _json_obj(row['rendering']) if 'rendering' in keys else None,
+        'pairing': row['pairing'] if 'pairing' in keys else None,
         'favorite_count': row['favorite_count'] if 'favorite_count' in keys
                           else favorite_count(conn, row['id']),
         'is_favorited': is_favorited(conn, user_id, row['id']),

@@ -5,6 +5,8 @@ import sqlite3
 import hashlib
 import base64
 import uuid
+import re
+from PIL import Image, ImageOps
 from ai_service import AIService, AIError, MAX_BODY, validate_request
 from datetime import datetime
 from flask import Flask, Request, request, jsonify, send_from_directory
@@ -43,6 +45,56 @@ FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), 'frontend')
 MAX_UPLOAD_FILE_BYTES = 20 * 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_FILE_BYTES + 1024 * 1024
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+THUMB_DIR = os.path.join(UPLOAD_DIR, '.thumbs')
+os.makedirs(THUMB_DIR, exist_ok=True)
+THUMB_WIDTHS = (200, 400, 800, 1200)
+ALLOWED_IMAGE_EXT = ('.jpg', '.jpeg', '.png', '.webp')
+# 允许 6600 万像素级的 Unsplash 原图；默认上限约 8900 万，留出余量。
+Image.MAX_IMAGE_PIXELS = 200_000_000
+
+
+def _safe_upload_name(name):
+    name = os.path.basename(str(name or ''))
+    if name != str(name or '') or not re.fullmatch(r'[A-Za-z0-9._-]+', name):
+        return None
+    if not name.lower().endswith(ALLOWED_IMAGE_EXT):
+        return None
+    return name
+
+
+def build_thumbnail(name, width):
+    """生成/复用指定宽度的 WebP 缩略图，返回本地路径；失败返回 None。"""
+    name = _safe_upload_name(name)
+    if not name:
+        return None
+    src = os.path.join(UPLOAD_DIR, name)
+    if not os.path.isfile(src):
+        return None
+    width = max(THUMB_WIDTHS[0], min(THUMB_WIDTHS[-1], int(width)))
+    dst = os.path.join(THUMB_DIR, f'{name}.{width}.webp')
+    if os.path.isfile(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
+        return dst
+    tmp = None
+    try:
+        with Image.open(src) as im:
+            im = ImageOps.exif_transpose(im)
+            if im.mode not in ('RGB', 'RGBA'):
+                im = im.convert('RGB')
+            if im.width > width:
+                height = max(1, round(im.height * width / im.width))
+                im = im.resize((width, height), Image.LANCZOS)
+            tmp = f'{dst}.{uuid.uuid4().hex}.tmp'
+            im.save(tmp, format='WEBP', quality=82, method=4)
+        os.replace(tmp, dst)
+    except Exception:
+        if tmp and os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        return None
+    return dst
+
 
 # Local frontend and API share one origin; the editor also works without a CDN.
 @app.route('/api/health')
@@ -150,11 +202,40 @@ def upload():
     filename = f"{uuid.uuid4().hex}.{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     file.save(filepath)
-    return json_ok({'url': f'{request.script_root}/uploads/{filename}'})
+    # 预生成常用宽度，首屏不用等按需转码。
+    for width in (400, 800):
+        build_thumbnail(filename, width)
+    return json_ok({
+        'url': f'{request.script_root}/uploads/{filename}',
+        'thumb': f'{request.script_root}/api/thumb/{filename}?w=800'
+    })
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
+
+@app.route('/api/thumb/<path:filename>')
+def upload_thumb(filename):
+    # 仅允许 uploads 目录下的单个文件名，禁止目录穿越。
+    if '/' in str(filename) or '\\' in str(filename):
+        return json_error('图片不存在', 404)
+    name = _safe_upload_name(filename)
+    if not name:
+        return json_error('图片不存在', 404)
+    try:
+        width = int(request.args.get('w', 800))
+    except (TypeError, ValueError):
+        width = 800
+    width = max(THUMB_WIDTHS[0], min(THUMB_WIDTHS[-1], width))
+    path = build_thumbnail(name, width)
+    if not path:
+        return json_error('图片不存在', 404)
+    response = send_from_directory(
+        THUMB_DIR, os.path.basename(path),
+        mimetype='image/webp', max_age=31536000, conditional=True
+    )
+    response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return response
 
 # ---------- AI 推荐 ----------
 @app.route('/api/ai/status', methods=['GET'])
