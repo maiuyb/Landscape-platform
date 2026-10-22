@@ -64,6 +64,26 @@ class UploadTests(unittest.TestCase):
         finally:
             saved.close()
 
+    def test_upload_does_not_block_on_thumbnail_transcoding(self):
+        with patch.object(self.backend, 'build_thumbnail', side_effect=AssertionError('must be lazy')):
+            response = self.upload(512)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('/api/thumb/', response.get_json()['thumb'])
+
+    def test_thumbnail_busy_and_invalid_inputs_return_bounded_errors(self):
+        with patch.object(self.backend, 'build_thumbnail', side_effect=self.backend.ThumbnailBusy):
+            response = self.client.get('/api/thumb/synthetic.png?w=401')
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.headers['Retry-After'], '1')
+        with patch.object(self.backend, 'build_thumbnail', side_effect=OSError('synthetic cache unavailable')):
+            self.assertEqual(self.client.get('/api/thumb/synthetic.png').status_code, 503)
+        with patch.object(self.backend, 'build_thumbnail', return_value=None) as generate:
+            response = self.client.get('/api/thumb/synthetic.png?w=401')
+            generate.assert_called_once_with(self.backend.UPLOAD_DIR, 'synthetic.png', 800)
+        self.assertEqual(response.status_code, 404)
+        for path in ('/api/thumb/a/b.png', '/api/thumb/.private.png', '/api/thumb/bad.txt'):
+            self.assertEqual(self.client.get(path).status_code, 404)
+
     def test_reverse_proxy_prefix_is_preserved_in_upload_urls(self):
         from werkzeug.middleware.proxy_fix import ProxyFix
         original = self.backend.app.wsgi_app

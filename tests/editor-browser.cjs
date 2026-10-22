@@ -27,7 +27,7 @@ const results = path.resolve(__dirname, '../test-results');
   };
   try {
     await page.goto(baseURL);
-    await page.getByRole('heading', { name: /留住那一刻/ }).waitFor();
+    await page.locator('.exhibition-title').waitFor();
     await page.screenshot({ path: path.join(results, 'desktop-empty.png') });
     const png = Buffer.from(await page.evaluate(() => {
       const c = document.createElement('canvas'); c.width = 2400; c.height = 1600;
@@ -70,7 +70,7 @@ const results = path.resolve(__dirname, '../test-results');
     assert.equal(await button('导出照片').isEnabled(), true);
     await button('冷调').hover(); await flush();
     await page.locator('#mainCanvas').hover(); await flush(); assert.equal(await pixels(), edited);
-    await button('胶片').click(); await flush();
+    await button('胶片').click();await page.getByRole('dialog',{name:'应用预设前确认'}).getByRole('button',{name:'应用预设',exact:true}).click(); await flush();
     assert.equal(await button('胶片').getAttribute('aria-pressed'), 'true');
     await button('撤销').click(); await flush(); assert.equal(await pixels(), edited);
     await page.getByRole('tab',{name:'编辑',exact:true}).click();checks.push('comparison never commits; filter hover/leave/click preserves document and is undoable');
@@ -159,7 +159,7 @@ const results = path.resolve(__dirname, '../test-results');
     await page.route('**/api/recipes?*', route => route.fulfill({ json: { recipes: fixture,total:30 } }));
     await page.route('**/api/recipes/100', route => route.fulfill({ json: {recipe:fixture[0]} }));
     await button('浏览社区').click();const community=page.frameLocator('iframe');
-    await community.locator('#search').fill('测试');await community.locator('#search').press('Enter');
+    await page.getByRole('searchbox',{name:'搜索社区配方',exact:true}).fill('测试');await page.getByRole('searchbox',{name:'搜索社区配方',exact:true}).press('Enter');
     await community.locator('.card-title').first().waitFor();
     const communityPage=page.frames().find(f=>f.url().endsWith('/community/'));
     await communityPage.evaluate(()=>scrollTo(0,450));const scroll=await communityPage.evaluate(()=>scrollY);

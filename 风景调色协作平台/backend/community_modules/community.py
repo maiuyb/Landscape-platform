@@ -22,7 +22,8 @@
 import hashlib
 import os
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify, g, has_request_context
+from thumbnails import upload_path
 
 from .config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, RECOMMEND_LIMIT, UPLOAD_DIR
 from .db import get_db, init_db
@@ -146,14 +147,15 @@ def recipe_detail(recipe_id):
 
 # ---------------- 发布 / 删除 ----------------
 def _upload_path(url):
-    """把 /uploads/<name> 映射到本地文件；仅接受单个文件名。"""
-    if not isinstance(url, str) or not url.startswith('/uploads/'):
+    """Accept legacy root paths or this request's trusted application prefix only."""
+    if not isinstance(url, str):
         return None
-    name = url[len('/uploads/'):]
-    if not name or '/' in name or '\\' in name or name.startswith('.'):
-        return None
-    path = os.path.join(UPLOAD_DIR, name)
-    return path if os.path.isfile(path) else None
+    prefix = request.script_root.rstrip('/') if has_request_context() else ''
+    for start in ([prefix + '/uploads/'] if prefix else []) + ['/uploads/']:
+        if url.startswith(start):
+            path = upload_path(UPLOAD_DIR, url[len(start):])
+            return str(path) if path else None
+    return None
 
 
 def _same_upload_content(url_a, url_b):
