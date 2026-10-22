@@ -25,7 +25,6 @@ const state = {
   pairing: 'manual',
 };
 
-const DEMO = { username: 'demo', password: 'demo1234' };
 const $ = (s) => document.querySelector(s);
 
 function readToken() { return localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY) || ''; }
@@ -138,12 +137,9 @@ function openAuth(mode) {
   $('#authTitle').textContent = state.authMode === 'login' ? '登录' : '注册';
   $('#authSubmit').textContent = state.authMode === 'login' ? '登录' : '注册';
   $('#authToggle').textContent = state.authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录';
-  if (state.authMode === 'login') {
-    $('#authUser').value = DEMO.username;
-    $('#authPass').value = DEMO.password;
-  } else {
-    $('#authUser').value = ''; $('#authPass').value = '';
-  }
+  $('#authUser').value = '';
+  $('#authPass').value = '';
+  $('#authPass').autocomplete = state.authMode === 'login' ? 'current-password' : 'new-password';
   $('#authError').textContent = '';
   $('#authModal').classList.add('open');
 }

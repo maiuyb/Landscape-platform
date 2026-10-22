@@ -91,14 +91,13 @@
     <button class="close" data-close>&times;</button>
     <h3 id="authTitle">登录</h3>
     <label class="field-label">用户名</label>
-    <input id="authUser" class="input" placeholder="用户名">
+    <input id="authUser" name="username" class="input" placeholder="用户名" autocomplete="username">
     <label class="field-label">密码</label>
-    <input id="authPass" class="input" type="password" placeholder="密码">
+    <input id="authPass" name="password" class="input" type="password" placeholder="密码" autocomplete="current-password">
     <div class="modal-actions">
       <button id="authSubmit" class="btn primary">登录</button>
       <button id="authToggle" class="btn ghost">没有账号？去注册</button>
     </div>
-    <div class="hint">测试账号：<b>demo</b> / <b>demo1234</b></div>
     <div id="authError" class="error"></div>
   </div>
 </div>
