@@ -19,9 +19,12 @@
     GET    /api/me/favorites                我收藏的配方（分页）
 """
 
+import hashlib
+import os
+
 from flask import Blueprint, request, jsonify, g
 
-from .config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, RECOMMEND_LIMIT
+from .config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, RECOMMEND_LIMIT, UPLOAD_DIR
 from .db import get_db, init_db
 from .auth import current_user, login_required
 from .recipe_schema import validate_recipe
@@ -142,6 +145,36 @@ def recipe_detail(recipe_id):
 
 
 # ---------------- 发布 / 删除 ----------------
+def _upload_path(url):
+    """把 /uploads/<name> 映射到本地文件；仅接受单个文件名。"""
+    if not isinstance(url, str) or not url.startswith('/uploads/'):
+        return None
+    name = url[len('/uploads/'):]
+    if not name or '/' in name or '\\' in name or name.startswith('.'):
+        return None
+    path = os.path.join(UPLOAD_DIR, name)
+    return path if os.path.isfile(path) else None
+
+
+def _same_upload_content(url_a, url_b):
+    """两张已上传图片内容是否完全相同（SHA-256）；相同则不应伪装成前后对比。"""
+    a, b = _upload_path(url_a), _upload_path(url_b)
+    if not a or not b:
+        return False
+
+    def digest(path):
+        h = hashlib.sha256()
+        with open(path, 'rb') as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b''):
+                h.update(chunk)
+        return h.hexdigest()
+
+    try:
+        return digest(a) == digest(b)
+    except OSError:
+        return False
+
+
 @community_bp.route('/api/recipes', methods=['POST'])
 @login_required
 def create_recipe():
@@ -164,6 +197,22 @@ def create_recipe():
     if not isinstance(features, dict):
         features = {}
 
+    cover_before = str(recipe.get('cover_before', ''))[:MAX_URL_LEN]
+    cover_after = str(recipe.get('cover_after', ''))[:MAX_URL_LEN]
+    pairing = recipe.get('pairing')
+    if pairing not in ('editor', 'manual', 'single'):
+        pairing = None
+
+    # 单图规整：只保留一张；内容相同不能伪装成前后对比
+    if not cover_before and cover_after:
+        cover_before, cover_after = cover_after, ''
+    if cover_before and cover_after and _same_upload_content(cover_before, cover_after):
+        cover_after = ''
+    if not cover_after:
+        pairing = 'single'
+    elif pairing not in ('editor', 'manual'):
+        pairing = 'manual'
+
     user = g.current_user
     data = {
         'name': name,
@@ -172,12 +221,13 @@ def create_recipe():
         'description': str(recipe.get('description', '')).strip()[:MAX_DESC_LEN],
         'category': str(recipe.get('category', '')).strip()[:MAX_CATEGORY_LEN],
         'tags': _normalize_tags(recipe.get('tags')),
-        'cover_before': str(recipe.get('cover_before', ''))[:MAX_URL_LEN],
-        'cover_after': str(recipe.get('cover_after', ''))[:MAX_URL_LEN],
+        'cover_before': cover_before,
+        'cover_after': cover_after,
         'version': normalized['version'],
         'rendering': normalized['rendering'],
         'steps': normalized['steps'],
         'features': features,
+        'pairing': pairing,
     }
     conn = get_db()
     try:

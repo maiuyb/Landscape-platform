@@ -96,10 +96,15 @@ createApp({
     const state = ref(Core.createState()), historyVersion = ref(0);
     const sourceImage = shallowRef(null);
     const photoStripCollapsed=ref(false);
+    const editorBlank=ref(false);
     const photos=shallowRef([]),activePhotoId=ref(null),importing=ref(false),closePhotoId=ref(null),closePhotoDialog=ref(null);
     // The Vue mount element is outside its template; synchronize its layout classes explicitly.
-    watch([()=>photos.value.length,currentView,photoStripCollapsed],()=>{
-      const root=document.getElementById('app');root.classList.toggle('has-photos',photos.value.length>0&&currentView.value==='editor');root.classList.toggle('welcome-active',photos.value.length===0&&currentView.value==='editor');root.classList.toggle('photos-collapsed',photoStripCollapsed.value);
+    watch([()=>photos.value.length,currentView,photoStripCollapsed,editorBlank],()=>{
+      const root=document.getElementById('app');
+      root.classList.toggle('has-photos',photos.value.length>0&&currentView.value==='editor');
+      root.classList.toggle('welcome-active',photos.value.length===0&&currentView.value==='editor'&&!editorBlank.value);
+      root.classList.toggle('editor-blank',photos.value.length===0&&currentView.value==='editor'&&editorBlank.value);
+      root.classList.toggle('photos-collapsed',photoStripCollapsed.value);
     },{immediate:true,flush:'post'});
     let photoSequence=0,thumbnailDirty=false,aiRequestToken=0,aiAbort=null;
     const frameOpen=ref(false),frameDialog=ref(null),frameCanvas=ref(null),frameOptions=ref(Frames.defaults()),frameScale=ref(1),frameExporting=ref(false),frameReady=ref(false),frameLoading=ref(false),frameError=ref('');
@@ -392,6 +397,48 @@ createApp({
       zoom.value=Core.clamp(Math.round(zoom.value*Math.exp(-Core.clamp(event.deltaY,-100,100)*.002)),25,400);
       nextTick(()=>{const changed=mainCanvas.value.getBoundingClientRect();panel.scrollLeft+=changed.left+rx*changed.width-rect.left-px;panel.scrollTop+=changed.top+ry*changed.height-rect.top-py;});
     }
+    // 放大后拖拽平移：在画布容器上按住左键拖动；滚轮缩放仍保留。
+    let panPointer = null, panStart = null, panMoved = false, suppressClickUntil = 0;
+    function panAvailable() {
+      const panel = canvasContainer.value;
+      if (!panel || !imageLoaded.value || locked.value) return false;
+      if (cropOpen.value || straightenOpen.value || perspectiveOpen.value || maskEditing.value || wbPicking.value || inspectorOpen.value) return false;
+      return panel.scrollWidth > panel.clientWidth + 1 || panel.scrollHeight > panel.clientHeight + 1;
+    }
+    function updatePanCursor() {
+      const panel = canvasContainer.value;
+      if (!panel) return;
+      panel.classList.toggle('can-pan', panAvailable());
+    }
+    function startPan(event) {
+      if (event.button !== 0 || !panAvailable()) return;
+      const panel = canvasContainer.value;
+      panPointer = event.pointerId;
+      panStart = { x: event.clientX, y: event.clientY, left: panel.scrollLeft, top: panel.scrollTop };
+      panMoved = false;
+      panel.classList.add('panning');
+      panel.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    }
+    function movePan(event) {
+      if (panPointer !== event.pointerId || !panStart) return;
+      const panel = canvasContainer.value;
+      const dx = event.clientX - panStart.x, dy = event.clientY - panStart.y;
+      if (!panMoved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      panMoved = true;
+      panel.scrollLeft = panStart.left - dx;
+      panel.scrollTop = panStart.top - dy;
+      event.preventDefault();
+    }
+    function endPan(event) {
+      if (panPointer !== event.pointerId) return;
+      const panel = canvasContainer.value;
+      if (panMoved) suppressClickUntil = performance.now() + 350;
+      panPointer = null;
+      panStart = null;
+      panel?.classList.remove('panning');
+      if (panel?.hasPointerCapture?.(event.pointerId)) panel.releasePointerCapture(event.pointerId);
+    }
     const viewport = reactive({ width: 600, height: 400 });
     const cropOpen = ref(false), cropRatio = ref('free'), crop = reactive({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 });
     const cropDraft = reactive({});
@@ -436,6 +483,8 @@ createApp({
     const rotationAngle = ref(0), exportOpen = ref(false), exporting = ref(false);
     const exportOptions = reactive({ format: 'jpg', quality: 92, scale: 1 });
     const communityFrame=ref(null), communityMounted=ref(false), communityReady=ref(false);
+    const communitySearch=ref('');
+    let pendingCommunitySearch=null;
     const shareOpen=ref(false),shareDialog=ref(null),sharing=ref(false),shareSingle=ref(false);
     const waitingRecipe=ref(null),reuseGeometry=ref(false),reuseMasks=ref(false),reuseScope=ref({geometry:false,masks:false});
     const handoffId=()=>Array.from(crypto.getRandomValues(new Uint32Array(4)),v=>v.toString(16).padStart(8,'0')).join('');
@@ -563,6 +612,11 @@ createApp({
     watch(activeState, schedulePaint, { deep: true });
     watch([inspectorOpen,inspectorPosition],schedulePaint,{deep:true,flush:'post'});
     watch([maskId,maskEditing,showMask],schedulePaint,{flush:'post'});
+    watch(
+      [zoom, imageLoaded, () => previewSize.width, () => previewSize.height, cropOpen, straightenOpen, perspectiveOpen, maskEditing, wbPicking, inspectorOpen],
+      () => nextTick(updatePanCursor),
+      { flush: 'post' }
+    );
     watch(selectedMask,m=>{if(!m){maskEditing.value=false;maskDrag=null;}});
     watch([state,presetCategory,presetSearch,presetFavorites,aiResults],requestThumbnails,{deep:true,flush:'post'});
     watch(aiMessages,async()=>{if(panelTab.value!=='ai')return;await nextTick();const log=document.querySelector('.ai-conversation');if(log)log.scrollTop=log.scrollHeight;},{deep:true});
@@ -940,6 +994,7 @@ createApp({
     function toggleInspector() {if(!inspectorOpen.value&&locked.value)return;wbPicking.value=false;hoverFilter.value=null;inspectorOpen.value=!inspectorOpen.value;if(inspectorOpen.value)revealMobileTool('.detail-inspector');}
     function nudgeInspector(dx,dy) {inspectorPosition.x=Core.clamp(inspectorPosition.x+dx,0,1);inspectorPosition.y=Core.clamp(inspectorPosition.y+dy,0,1);}
     function stageClick(event) {
+      if(performance.now() < suppressClickUntil)return;
       if(maskEditing.value)return;
       if(wbPicking.value)return pickWhiteBalance(event);
       if(!inspectorOpen.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value)return;
@@ -1254,8 +1309,37 @@ createApp({
       }catch(e){if(version===recipeDetailVersion)recipeDetailError.value=e.message;}
       finally{if(version===recipeDetailVersion)recipeDetailLoading.value=false;}
     }
+    // ---- 登录态 / 用户中心 ----
+    const authUser = ref(readAuthUser());
+    const userMenuOpen = ref(false);
+    function readAuthUser(){ try { const raw=localStorage.getItem('landscape:user')||localStorage.getItem('cd_user'); return raw?JSON.parse(raw):null; } catch { return null; } }
+    function refreshAuthUser(){ authUser.value=readAuthUser(); }
+    function authStorageChanged(event){ if(!event.key||['landscape:token','landscape:user','cd_token','cd_user'].includes(event.key)) refreshAuthUser(); }
+    function toggleUserMenu(){ userMenuOpen.value=!userMenuOpen.value; }
+    function closeUserMenu(){ userMenuOpen.value=false; }
+    async function logout(){
+      try { await api('/api/auth/logout',{method:'POST'}); } catch(e){ /* ignore */ }
+      for(const k of ['landscape:token','landscape:user','cd_token','cd_user']) localStorage.removeItem(k);
+      refreshAuthUser(); userMenuOpen.value=false; notify('已退出登录');
+    }
     function openLogin(){loginRequested=true;openCommunity();sendLogin();}
     function sendLogin(){if(!loginRequested||!communityReady.value)return;loginRequested=false;communityFrame.value.contentWindow.postMessage({type:'landscape:auth',channel:communityChannel,id:handoffId(),sentAt:Date.now()},location.origin);}
+    function postCommunitySearch(query){
+      if(!communityFrame.value||!communityReady.value)return false;
+      communityFrame.value.contentWindow.postMessage({type:'landscape:search',channel:communityChannel,id:handoffId(),sentAt:Date.now(),query},location.origin);
+      return true;
+    }
+    function sendCommunitySearch(){
+      const query=communitySearch.value.trim();
+      if(!communityReady.value){pendingCommunitySearch=query;openCommunity();return;}
+      pendingCommunitySearch=null;
+      postCommunitySearch(query);
+    }
+    function clearCommunitySearch(){
+      communitySearch.value='';
+      pendingCommunitySearch=null;
+      sendCommunitySearch();
+    }
     function openCommunity() {
       const wasCommunity=currentView.value==='community';
       communityMounted.value=true;currentView.value='community';
@@ -1274,12 +1358,14 @@ createApp({
       currentView.value='editor';
       runCurtainSequence({
         code:'CHAMBER I // FINE-ART PRINT DARKROOM',
-        title:imageLoaded.value?'返 回 暗 房 工 作 区':'返 回 画 廊 主 展 厅',
+        title:imageLoaded.value||editorBlank.value?'返 回 暗 房 工 作 区':'返 回 画 廊 主 展 厅',
         sub:'本地无损阶调显影 · 留白卡纸装裱',
         coord:"DARKROOM // 35°41'N · 139°41'E",
         holdMs:480
       });
     }
+    function openEditorWorkspace(){editorBlank.value=true;photoStripCollapsed.value=false;switchToEditor();}
+
     function connectCommunity(){communityReady.value=false;communityFrame.value?.contentWindow?.postMessage({type:'landscape:connect',channel:communityChannel},location.origin);}
     function sendShare(){
       if(!sharePackage||!communityReady.value)return;
@@ -1291,7 +1377,7 @@ createApp({
       const d=event.data;
       if(!d||d.channel!==communityChannel||typeof d.id!=='string'||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000||seenHandoffs.has(d.id))return;
       seenHandoffs.add(d.id);if(seenHandoffs.size>100)seenHandoffs.delete(seenHandoffs.values().next().value);
-      if(d.type==='landscape:ready'){communityReady.value=true;sendShare();sendLogin();}
+      if(d.type==='landscape:ready'){communityReady.value=true;sendShare();sendLogin();if(pendingCommunitySearch!==null){const q=pendingCommunitySearch;pendingCommunitySearch=null;postCommunitySearch(q);}}
       else if(d.type==='landscape:share-received'){sharePackage=null;notify('已送到社区发布表单，确认作品信息后再发布。');}
       else if(d.type==='landscape:share-request'&&currentView.value==='community'){
         if(locked.value){fail('请先回到编辑器载入照片，并完成当前预览或构图操作。');return;}
@@ -1332,6 +1418,9 @@ createApp({
       await nextTick();
       if (value === 'editor') { observeCanvas(); schedulePaint(); }
     }, { flush: 'pre' });
+    watch(currentView, (value) => {
+      document.getElementById('app')?.classList.toggle('community-mode', value === 'community');
+    }, { immediate: true });
     function openExport() { if (locked.value) return; commit(); exportOpen.value = true; }
     async function exportImage() {
       if (exporting.value || preview.value || !sourceImage.value) return;
@@ -1394,7 +1483,8 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); });
+    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
+
     onBeforeUnmount(() => {
       cancelUprightAnalysis();
       stopHeroSplitSweep();if(parallaxRaf!==null)cancelAnimationFrame(parallaxRaf);
@@ -1402,29 +1492,31 @@ createApp({
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll);
+      window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); document.removeEventListener('click', closeUserMenu);
+
     });
     return {
       uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
-      openLogin,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
+      openLogin,editorBlank,openEditorWorkspace,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
+
       legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
       maskId,maskEditing,showMask,maskErase,brushSize,brushFeather,maskCanvas,selectedMask,maskHandles,maskGuide,selectMask,addMask,editMask,deleteMask,clearBrush,maskPointerDown,maskPointerMove,maskPointerUp,maskHandleKey,
       perspectiveOpen,perspectiveDraft,perspectiveControls,beginPerspective,inputPerspective,finishPerspective,
       mainCanvas, compareCanvas, canvasContainer, communityContainer, currentView, imageLoaded, imageLoading, originalImageUrl, filename, message, error,
       state, preview, hoverFilter, wbPicking, histogram, histogramPath, canUndo, canRedo, activeState, controls: Core.controls, colorControls, adjustmentValue, filters: Core.filters, locked, dirty,
-      compareMode, sliderPos, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,zoom, stageStyle, previewSize, outputDimensions, exportDimensions,
+      compareMode, sliderPos, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,startPan,movePan,endPan,zoom, stageStyle, previewSize, outputDimensions, exportDimensions,
       straightenControl:{key:'straighten-angle',label:'拉直角度',min:-45,max:45,step:.1,precision:1,unit:'°',hint:'微调倾斜地平线；应用保存一次构图，取消保持原样。'},detailControls,setDetail,inputDetail,resetDetail,resetDetails,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
       confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
       exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
-      communityFrame,communityMounted,communityReady,connectCommunity,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
+      communityFrame,communityMounted,communityReady,connectCommunity,communitySearch,sendCommunitySearch,clearCommunitySearch,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe
+      openCommunity, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe, authUser, userMenuOpen, toggleUserMenu, logout
     };
   }
 }).mount('#app');

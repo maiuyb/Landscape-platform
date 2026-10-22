@@ -96,20 +96,28 @@
     <header class="app-header">
       <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">协作工作区</span></span></a>
       <nav aria-label="主导航">
-        <button :aria-current="currentView === 'editor' ? 'page' : undefined" @click="switchToEditor">编辑器</button>
+        <button :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">编辑器</button>
+
         <button :aria-current="currentView === 'community' ? 'page' : undefined" @click="openCommunity">浏览社区</button>
         <label class="button primary upload-button" :class="{ disabled: photoBusy || photos.length >= 6 }">
           {{ importing || imageLoading ? '读取中…' : imageLoaded ? '添加照片' : '选择照片' }}
           <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" :disabled="photoBusy || photos.length >= 6" multiple @change="handleUpload" aria-label="选择照片">
         </label>
-      <button v-if="!imageLoaded" @click="openLogin">登录 / 注册</button><button v-if="imageLoaded" @click="openShare" :disabled="locked">分享到社区</button><button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button></nav>
+      <div class="user-center" v-if="authUser" @click.stop>
+        <button class="user-chip" type="button" @click.stop="toggleUserMenu" :aria-expanded="userMenuOpen">{{ authUser.username }} <span aria-hidden="true">▾</span></button>
+        <div class="user-menu" v-if="userMenuOpen" role="menu">
+          <button role="menuitem" type="button" @click="openCommunity(); userMenuOpen = false">进入社区</button>
+          <button role="menuitem" type="button" @click="logout">退出登录</button>
+        </div>
+      </div>
+      <button v-else @click="openLogin">登录 / 注册</button><button v-if="imageLoaded" @click="openShare" :disabled="locked">分享到社区</button><button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button></nav>
     </header>
     <div class="notice error" v-if="error" role="alert"><span>{{ error }}</span><button type="button" class="notice-close" aria-label="关闭错误提示" @click="error = ''">×</button></div>
     <div class="notice" v-else-if="message" role="status"><span>{{ message }}</span><button type="button" class="notice-close" aria-label="关闭提示" @click="message = ''">×</button></div>
 
     <div class="notice" v-if="waitingRecipe && !imageLoaded"><span>待用配方「{{ waitingRecipe.name }}」· 选择自己的照片后再预览。</span><button @click="waitingRecipe=null">取消待用配方</button></div>
-    <main class="workspace" :class="{'welcome-mode':!imageLoaded}" v-show="currentView === 'editor'">
-      <section class="welcome-page" v-if="!imageLoaded" @dragover.prevent @drop.prevent="handleDrop" aria-label="照片导入">
+    <main class="workspace" :class="{'welcome-mode':!imageLoaded && !editorBlank}" v-show="currentView === 'editor'">
+      <section class="welcome-page" v-if="!imageLoaded && !editorBlank" @dragover.prevent @drop.prevent="handleDrop" aria-label="照片导入">
         <!-- Section 01: Centered Curatorial Manifesto -->
         <div class="exhibition-intro">
           <span class="exhibition-kicker">EXHIBITION &amp; COLOR DARKROOM</span>
@@ -293,7 +301,7 @@
       </section>
       <template v-else>
         <section class="canvas-panel" aria-label="照片画布" @dragover.prevent @drop.prevent="handleDrop">
-          <div class="canvas-heading"><div class="file-info"><strong>{{ filename }}</strong><span>{{ outputDimensions.width }} × {{ outputDimensions.height }} · {{ perspectiveOpen ? '透视校正预览 · 尚未应用' : straightenOpen ? '拉直预览 · 尚未应用' : preview ? '方案预览' : dirty ? '已编辑' : '原图' }}</span></div><button class="ai-shortcut" aria-label="AI 建议" @click="switchPanel('ai',true)" :aria-pressed="panelTab === 'ai'">✧ AI 建议</button></div>
+          <div class="canvas-heading"><div class="file-info"><strong>{{ filename || '未选择照片' }}</strong><span v-if="imageLoaded">{{ outputDimensions.width }} × {{ outputDimensions.height }} · {{ perspectiveOpen ? '透视校正预览 · 尚未应用' : straightenOpen ? '拉直预览 · 尚未应用' : preview ? '方案预览' : dirty ? '已编辑' : '原图' }}</span></div><button class="ai-shortcut" aria-label="AI 建议" @click="switchPanel('ai',true)" :aria-pressed="panelTab === 'ai'">✧ AI 建议</button></div>
           <div class="canvas-toolbar">
             <div class="canvas-view-tools"><div class="segmented" aria-label="画布显示">
               <button @click="compareMode = 'original'" :aria-pressed="compareMode === 'original'" :disabled="cropOpen || straightenOpen || perspectiveOpen || maskEditing">原图</button>
@@ -302,9 +310,10 @@
             </div>
             <button @click="toggleInspector" :aria-pressed="inspectorOpen" :disabled="locked">100% 细节查看</button><label class="zoom-label">显示 <select v-model.number="zoom" aria-label="画布缩放" :disabled="cropOpen || straightenOpen || perspectiveOpen || maskEditing" title="也可在照片上滚轮缩放，双击恢复适配"><option :value="25">25%</option><option :value="50">50%</option><option :value="100">适配画布</option><option :value="200">200%</option><option :value="400">400%</option><option v-if="![25,50,100,200,400].includes(zoom)" :value="zoom">{{ zoom }}%</option></select></label></div>
           </div>
-          <div class="canvas-container" ref="canvasContainer" @wheel="wheelZoom" @dblclick="!locked && !maskEditing && (zoom=100)">
+          <div class="canvas-container" ref="canvasContainer" @wheel="wheelZoom" @pointerdown="startPan" @pointermove="movePan" @pointerup="endPan" @pointercancel="endPan" @lostpointercapture="endPan" @dblclick="!locked && !maskEditing && (zoom=100)">
+            <div class="canvas-empty" v-if="!imageLoaded">从下方「本次照片」添加照片开始编辑</div>
             <div class="canvas-centering">
-              <div class="image-stage" :class="{ 'wb-picking': wbPicking, 'detail-picking': inspectorOpen }" :style="stageStyle" @click="stageClick">
+              <div class="image-stage" v-show="imageLoaded" :class="{ 'wb-picking': wbPicking, 'detail-picking': inspectorOpen }" :style="stageStyle" @click="stageClick">
                 <canvas ref="mainCanvas" id="mainCanvas" aria-label="编辑后照片"></canvas>
                 <canvas ref="compareCanvas" id="compareCanvas" class="compare-canvas" :style="{ visibility: compareMode === 'edited' ? 'hidden' : 'visible', clipPath: compareMode === 'slider' ? `inset(0 ${100 - sliderPos}% 0 0)` : 'none' }" aria-label="原图，同构图"></canvas>
                 <canvas ref="maskCanvas" class="mask-overlay" v-show="maskEditing && showMask && selectedMask" aria-label="当前蒙版覆盖区域"></canvas>
@@ -436,7 +445,16 @@
     <dialog ref="closePhotoDialog" @cancel.prevent="closePhotoId=null" aria-labelledby="close-photo-title"><h2 id="close-photo-title">关闭这张照片？</h2><p>它将从本次工作区移除，原文件不会改变。尚未导出的编辑会丢失。</p><div class="actions"><button @click="closePhotoId=null">保留照片</button><button @click="removePhoto(closePhotoId)">关闭照片</button></div></dialog>
 
     <section class="community-view" ref="communityContainer" v-show="currentView === 'community'" aria-label="社区配方">
-      <div class="community-heading"><div><p class="eyebrow">来自风景的灵感</p><h1>浏览社区配方</h1><p>先看效果与说明，再在自己的照片上尝试。</p></div><button @click="switchToEditor">返回编辑器</button></div>
+      <div class="community-heading">
+        <div><p class="eyebrow">来自风景的灵感</p><h1>浏览社区配方</h1><p>先看效果与说明，再在自己的照片上尝试。</p></div>
+        <div class="community-heading-search">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>
+          <input v-model="communitySearch" @keydown.enter.prevent="sendCommunitySearch" @keydown.esc.prevent="clearCommunitySearch" type="search" placeholder="搜索配方 / 标签 / 作者，回车确认" aria-label="搜索社区配方">
+          <button v-if="communitySearch" class="community-search-clear" type="button" @click="clearCommunitySearch" aria-label="清除搜索">&times;</button>
+        </div>
+        <button @click="openEditorWorkspace">返回编辑器</button>
+      </div>
+
       <p v-if="!communityReady" role="status">正在连接社区… <button @click="connectCommunity">重试连接</button></p>
       <iframe v-if="communityMounted" ref="communityFrame" src="community/" title="风景配方社区" class="community-frame" @load="connectCommunity"></iframe>
     </section>

@@ -81,6 +81,9 @@ button[aria-current=page] {
 
 /* Unified Gallery Top Header across Welcome, Editor, and Community */
 .app-header {
+  /* Gallery blur creates a stacking context: keep the imported user menu above the sticky community heading. */
+  position: relative;
+  z-index: 20;
   background: rgba(250, 249, 246, 0.94);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -1082,12 +1085,13 @@ dialog::backdrop {
 /* Community Host Wrapper inside Main App */
 .community-view {
   max-width: none;
-  padding: 20px 28px;
+  padding: 16px 28px 8px;
   background: var(--paper);
 }
 
 .community-view .community-heading {
-  margin-bottom: 14px;
+  margin-bottom: 8px;
+  padding-block: 4px;
   background: rgba(250, 249, 246, 0.92);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(23, 24, 23, 0.08);
@@ -1140,3 +1144,11 @@ dialog::backdrop {
   .community-heading { flex-wrap: wrap; gap: 8px; }
   .community-frame { min-height: 550px; height: calc(100dvh - 230px); }
 }
+
+/* 用户中心 */
+.user-center { position: relative; display: inline-flex; align-items: center; }
+.user-chip { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font: inherit; color: inherit; cursor: pointer; }
+.user-chip:hover { background: var(--accent-soft); }
+.user-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 150px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 28px rgba(41,61,48,.16); padding: 6px; z-index: 60; display: flex; flex-direction: column; }
+.user-menu button { background: none; border: none; text-align: left; padding: 9px 12px; border-radius: 7px; font: inherit; color: inherit; cursor: pointer; }
+.user-menu button:hover { background: var(--accent-soft); }
