@@ -38,6 +38,20 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// 卡片/推荐/记录使用按需缩略图；详情仍用原图。
+function thumbUrl(url, width = 800) {
+  const s = String(url || '');
+  if (!s.startsWith('/uploads/')) return s;
+  return `/api/thumb/${s.slice('/uploads/'.length)}?w=${width}`;
+}
+
+function thumbSrcset(url) {
+  const s = String(url || '');
+  if (!s.startsWith('/uploads/')) return '';
+  const name = s.slice('/uploads/'.length);
+  return [200, 400, 800, 1200].map((w) => `/api/thumb/${name}?w=${w} ${w}w`).join(', ');
+}
+
 async function api(path, { method = 'GET', body = null, auth = false, form = null } = {}) {
   const headers = {};
   if (body) headers['Content-Type'] = 'application/json';
@@ -135,7 +149,7 @@ async function loadRecommend() {
   box.innerHTML = list.map((rec, i) => `
     <div class="mini" data-id="${rec.id}">
       ${i < 3 ? `<div class="rank">TOP${i + 1}</div>` : ''}
-      <img src="${esc(rec.cover_after || rec.cover_before)}" alt="${esc(rec.name)}" loading="lazy">
+      <img src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 400))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 16vw" width="400" height="533" alt="${esc(rec.name)}" loading="lazy" decoding="async">
       <div class="cap">${esc(rec.name)}<br><span class="muted">★ ${rec.favorite_count}</span></div>
     </div>`).join('') || '<div class="muted">暂无推荐</div>';
   box.querySelectorAll('.mini').forEach((m) => { m.onclick = () => openDetail(+m.dataset.id); });
@@ -167,6 +181,9 @@ async function loadRecipes(reset) {
   if ((state.view === 'mine' || state.view === 'favorites') && !state.user) {
     toast('请先登录'); openAuth('login'); return;
   }
+  // 搜索时隐藏「为你推荐」，把「全部作品」区域顶上来。
+  const recommendSection = $('#recommendSection');
+  if (recommendSection) recommendSection.style.display = (state.view === 'community' && state.search) ? 'none' : '';
   state.loading = true;
   if (reset) { state.page = 1; $('#grid').innerHTML = ''; }
   const r = await api(listEndpoint(), { auth: true });
@@ -179,18 +196,38 @@ async function loadRecipes(reset) {
   $('#empty').textContent = state.view === 'mine' ? '还没有上传作品'
     : state.view === 'favorites' ? '还没有收藏作品' : '没有更多内容了';
   $('#loadMore').style.display = state.hasMore ? 'inline-block' : 'none';
+  if (reset && state.view === 'community' && state.search) {
+    requestAnimationFrame(() => document.querySelector('.toolbar')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }
 }
 
 function appendCard(rec) {
   const isOwn = !!(state.user && rec.author_id === state.user.id);
-  const foot = isOwn
-    ? `<button class="btn danger card-del">删除</button>`
-    : `<button class="fav ${rec.is_favorited ? 'on' : ''}">${rec.is_favorited ? '★' : '☆'} <b>${rec.favorite_count}</b></button>`;
+  const isCommunity = state.view === 'community';
+  const isMine = state.view === 'mine';
+  const count = Number(rec.favorite_count) || 0;
+  const star = rec.is_favorited ? '★' : '☆';
+  const staticPill = `<span class="fav static ${rec.is_favorited ? 'on' : ''}">${star} <b>${count}</b></span>`;
+  const favButton = `<button class="fav ${rec.is_favorited ? 'on' : ''}">${star} <b>${count}</b></button>`;
+
+  let foot = '';
+  let footClass = 'card-foot';
+  if (isMine) {
+    // 我的上传：收藏数放卡片左下角，删除在右下角，与全部作品的右下角对称。
+    foot = `${staticPill}<button class="btn danger card-del">删除</button>`;
+    footClass = 'card-foot split';
+  } else if (isOwn) {
+    // 全部作品里自己的作品也展示收藏数，外观与别人一致。
+    foot = staticPill;
+  } else {
+    foot = favButton;
+  }
+
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
     <div class="card-cover" data-id="${rec.id}">
-      <img src="${esc(rec.cover_after || rec.cover_before)}" alt="${esc(rec.name)}" loading="lazy">
+      <img src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 800))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 480px) 100vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async">
       ${rec.category ? `<span class="badge">${esc(rec.category)}</span>` : ''}
     </div>
     <div class="card-body">
@@ -200,12 +237,21 @@ function appendCard(rec) {
         <span>@ ${esc(rec.author)}</span>
         ${(rec.tags || []).slice(0, 3).map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}
       </div>
-      <div class="card-foot">${foot}</div>
+      <div class="${footClass}">${foot}</div>
     </div>`;
-  card.querySelector('.card-cover').onclick = () => openDetail(rec.id);
-  card.querySelector('.card-title').onclick = () => openDetail(rec.id);
-  if (isOwn) card.querySelector('.card-del').onclick = () => deleteOwnRecipe(rec);
-  else card.querySelector('.fav').onclick = (e) => toggleFavorite(rec, e.currentTarget);
+  // 整张卡片可点开详情；按钮/链接等交互元素保持自己的行为（点赞、删除等）。
+  card.addEventListener('click', (event) => {
+    if (event.target.closest('button, a, input, select, textarea, label')) return;
+    openDetail(rec.id);
+  });
+
+  if (isMine) {
+    const del = card.querySelector('.card-del');
+    if (del) del.onclick = () => deleteOwnRecipe(rec);
+  } else if (!isOwn) {
+    const fav = card.querySelector('.fav');
+    if (fav) fav.onclick = (e) => toggleFavorite(rec, e.currentTarget);
+  }
   $('#grid').appendChild(card);
 }
 
@@ -236,7 +282,7 @@ function previewImage(rec) {
   if (!hasPair) {
     return {
       pair: false,
-      html: `<div class="detail-imgs"><figure><img class="detail-img" src="${esc(after || before)}" alt="${esc(rec.name)}">
+      html: `<div class="detail-imgs single"><figure><img class="detail-img" src="${esc(after || before)}" alt="${esc(rec.name)}" decoding="async">
         <figcaption class="muted">单图 · 未提供前后对比</figcaption></figure></div>`,
     };
   }
@@ -248,12 +294,206 @@ function previewImage(rec) {
     : '<div class="hint">人工上传的前后图 · 未验证为同一照片/同一构图，仅作参考</div>';
   return {
     pair: true,
-    html: `<div class="detail-imgs">
-        <figure><img class="detail-img" style="width:180px" src="${esc(before)}" alt="${esc(capA)}"><figcaption class="muted">${esc(capA)}</figcaption></figure>
-        <figure><img class="detail-img" style="width:180px" src="${esc(after)}" alt="${esc(capB)}"><figcaption class="muted">${esc(capB)}</figcaption></figure>
+    html: `<div class="detail-imgs pair">
+        <figure><img class="detail-img" src="${esc(before)}" alt="${esc(capA)}" decoding="async"><figcaption class="muted">${esc(capA)}</figcaption></figure>
+        <figure><img class="detail-img" src="${esc(after)}" alt="${esc(capB)}" decoding="async"><figcaption class="muted">${esc(capB)}</figcaption></figure>
       </div>${note}`,
   };
 }
+
+const lightboxState = {
+  scale: 1, fitW: 0, fitH: 0,
+  pointer: null, start: null, moved: false, suppressClickUntil: 0
+};
+const lightboxEl = (id) => document.getElementById(id);
+
+function lightboxCanPan() {
+  const box = lightboxEl('imageLightbox');
+  const vp = lightboxEl('lightboxViewport');
+  return !!(box && !box.hidden && vp &&
+    (vp.scrollWidth > vp.clientWidth + 1 || vp.scrollHeight > vp.clientHeight + 1));
+}
+
+function syncLightboxPanCursor() {
+  const vp = lightboxEl('lightboxViewport');
+  if (vp) vp.classList.toggle('can-pan', lightboxCanPan());
+}
+
+function setLightboxZoomLabel() {
+  const label = lightboxEl('lightboxZoom');
+  if (label) label.textContent = lightboxState.scale <= 1.001 ? '适配' : `${lightboxState.scale.toFixed(1)}×`;
+}
+
+function measureLightboxFit() {
+  const img = lightboxEl('lightboxImage');
+  if (!img || !img.naturalWidth) return;
+  const rect = img.getBoundingClientRect();
+  if (rect.width && rect.height) {
+    lightboxState.fitW = rect.width;
+    lightboxState.fitH = rect.height;
+  }
+  setLightboxZoomLabel();
+  syncLightboxPanCursor();
+}
+
+function resetLightboxZoom() {
+  const img = lightboxEl('lightboxImage');
+  const vp = lightboxEl('lightboxViewport');
+  lightboxState.scale = 1;
+  if (img) {
+    img.style.width = '';
+    img.style.height = '';
+    img.style.maxWidth = '';
+    img.style.maxHeight = '';
+  }
+  if (vp) { vp.scrollLeft = 0; vp.scrollTop = 0; }
+  setLightboxZoomLabel();
+  requestAnimationFrame(measureLightboxFit);
+}
+
+function applyLightboxZoom(nextScale, clientX, clientY) {
+  const img = lightboxEl('lightboxImage');
+  const vp = lightboxEl('lightboxViewport');
+  if (!img || !vp) return;
+  if (!lightboxState.fitW) measureLightboxFit();
+  if (!lightboxState.fitW) return;
+  const scale = Math.max(1, Math.min(6, nextScale));
+  if (Math.abs(scale - lightboxState.scale) < 0.001) return;
+  if (scale <= 1.001) { resetLightboxZoom(); return; }
+  const before = img.getBoundingClientRect();
+  const rx = clientX == null ? 0.5 : Math.max(0, Math.min(1, (clientX - before.left) / before.width));
+  const ry = clientY == null ? 0.5 : Math.max(0, Math.min(1, (clientY - before.top) / before.height));
+  lightboxState.scale = scale;
+  img.style.maxWidth = 'none';
+  img.style.maxHeight = 'none';
+  img.style.width = `${Math.round(lightboxState.fitW * scale)}px`;
+  img.style.height = `${Math.round(lightboxState.fitH * scale)}px`;
+  setLightboxZoomLabel();
+  requestAnimationFrame(() => {
+    const after = img.getBoundingClientRect();
+    if (clientX == null) {
+      vp.scrollLeft = Math.max(0, (vp.scrollWidth - vp.clientWidth) / 2);
+      vp.scrollTop = Math.max(0, (vp.scrollHeight - vp.clientHeight) / 2);
+    } else {
+      vp.scrollLeft += after.left + rx * after.width - clientX;
+      vp.scrollTop += after.top + ry * after.height - clientY;
+    }
+    syncLightboxPanCursor();
+  });
+}
+
+function openLightbox(src, alt) {
+  const box = lightboxEl('imageLightbox');
+  const img = lightboxEl('lightboxImage');
+  if (!box || !img || !src) return;
+  box.hidden = false;
+  document.body.classList.add('lightbox-open');
+  lightboxState.scale = 1;
+  lightboxState.fitW = 0;
+  lightboxState.fitH = 0;
+  img.style.width = '';
+  img.style.height = '';
+  img.style.maxWidth = '';
+  img.style.maxHeight = '';
+  img.alt = alt || '';
+  img.src = src;
+  setLightboxZoomLabel();
+  const done = () => requestAnimationFrame(measureLightboxFit);
+  if (img.complete && img.naturalWidth) done();
+  else img.addEventListener('load', done, { once: true });
+  lightboxEl('lightboxClose')?.focus();
+}
+
+function closeLightbox() {
+  const box = lightboxEl('imageLightbox');
+  const img = lightboxEl('lightboxImage');
+  const vp = lightboxEl('lightboxViewport');
+  if (!box || box.hidden) return;
+  box.hidden = true;
+  if (img) {
+    img.removeAttribute('src');
+    img.style.width = '';
+    img.style.height = '';
+    img.style.maxWidth = '';
+    img.style.maxHeight = '';
+  }
+  if (vp) {
+    vp.classList.remove('panning', 'can-pan');
+    vp.scrollLeft = 0;
+    vp.scrollTop = 0;
+  }
+  lightboxState.scale = 1;
+  lightboxState.fitW = 0;
+  lightboxState.fitH = 0;
+  setLightboxZoomLabel();
+  document.body.classList.remove('lightbox-open');
+}
+
+function lightboxPointerDown(event) {
+  if (event.button !== 0 || !lightboxCanPan()) return;
+  const vp = lightboxEl('lightboxViewport');
+  lightboxState.pointer = event.pointerId;
+  lightboxState.start = { x: event.clientX, y: event.clientY, left: vp.scrollLeft, top: vp.scrollTop };
+  lightboxState.moved = false;
+  vp.classList.add('panning');
+  vp.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+
+function lightboxPointerMove(event) {
+  if (lightboxState.pointer !== event.pointerId || !lightboxState.start) return;
+  const vp = lightboxEl('lightboxViewport');
+  const dx = event.clientX - lightboxState.start.x;
+  const dy = event.clientY - lightboxState.start.y;
+  if (!lightboxState.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+  lightboxState.moved = true;
+  vp.scrollLeft = lightboxState.start.left - dx;
+  vp.scrollTop = lightboxState.start.top - dy;
+  event.preventDefault();
+}
+
+function lightboxPointerUp(event) {
+  if (lightboxState.pointer !== event.pointerId) return;
+  const vp = lightboxEl('lightboxViewport');
+  if (lightboxState.moved) lightboxState.suppressClickUntil = performance.now() + 350;
+  lightboxState.pointer = null;
+  lightboxState.start = null;
+  vp?.classList.remove('panning');
+  if (vp?.hasPointerCapture?.(event.pointerId)) vp.releasePointerCapture(event.pointerId);
+}
+
+const lightboxViewportEl = lightboxEl('lightboxViewport');
+if (lightboxViewportEl) {
+  lightboxViewportEl.addEventListener('wheel', (event) => {
+    const box = lightboxEl('imageLightbox');
+    if (!box || box.hidden) return;
+    event.preventDefault();
+    const delta = Math.max(-100, Math.min(100, event.deltaY));
+    applyLightboxZoom(lightboxState.scale * Math.exp(-delta * 0.002), event.clientX, event.clientY);
+  }, { passive: false });
+  lightboxViewportEl.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    resetLightboxZoom();
+  });
+  lightboxViewportEl.addEventListener('pointerdown', lightboxPointerDown);
+  lightboxViewportEl.addEventListener('pointermove', lightboxPointerMove);
+  lightboxViewportEl.addEventListener('pointerup', lightboxPointerUp);
+  lightboxViewportEl.addEventListener('pointercancel', lightboxPointerUp);
+  lightboxViewportEl.addEventListener('lostpointercapture', lightboxPointerUp);
+  lightboxViewportEl.addEventListener('click', (event) => {
+    if (performance.now() < lightboxState.suppressClickUntil) return;
+    if (event.target.closest('#lightboxImage')) return;
+    closeLightbox();
+  });
+}
+lightboxEl('lightboxClose')?.addEventListener('click', closeLightbox);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeLightbox();
+});
+window.addEventListener('resize', () => {
+  const box = lightboxEl('imageLightbox');
+  if (box && !box.hidden) resetLightboxZoom();
+});
 
 async function openDetail(id) {
   const r = await api('/api/recipes/' + id, { auth: true });   // 详情含完整配方
@@ -266,28 +506,39 @@ async function openDetail(id) {
     return `<li><span>${esc(s.type)}</span><span>${esc(val)}</span></li>`;
   }).join('') || '<li><span>无可执行操作</span><span></span></li>';
   const owner = state.user && rec.author_id === state.user.id;
-  const favBtn = owner ? '' : `<button class="btn ${rec.is_favorited ? 'ghost' : ''}" id="dFav">${rec.is_favorited ? '★ 已收藏' : '☆ 收藏'}（${rec.favorite_count}）</button>`;
+  const favBtn = owner
+    ? `<span class="detail-fav-count">★ 收藏 ${rec.favorite_count || 0}</span>`
+    : `<button class="btn ${rec.is_favorited ? 'ghost' : ''}" id="dFav">${rec.is_favorited ? '★ 已收藏' : '☆ 收藏'}（${rec.favorite_count}）</button>`;
   const delBtn = owner ? '<button class="btn danger" id="dDel">删除作品</button>' : '';
 
   $('#detailBody').innerHTML = `
     <h3>${esc(rec.name)}</h3>
-    <div class="detail-head">
-      <div>${pv.html}</div>
-      <div class="detail-info">
-        <div class="card-meta"><span>@ ${esc(rec.author)}</span>${rec.category ? `<span class="chip">${esc(rec.category)}</span>` : ''}</div>
-        <div style="margin-top:8px">${(rec.tags || []).map((t) => `<span class="chip">#${esc(t)}</span>`).join(' ')}</div>
-        <p class="desc">${esc(rec.description || '（暂无说明）')}</p>
-        <div class="steps-title">调色配方（版本 ${esc(rec.version || 1)}）</div>
+    <div class="detail-photos">${pv.html}</div>
+    <div class="detail-info">
+      <div class="card-meta"><span>@ ${esc(rec.author)}</span>${rec.category ? `<span class="chip">${esc(rec.category)}</span>` : ''}</div>
+      <div class="detail-tags">${(rec.tags || []).map((t) => `<span class="chip">#${esc(t)}</span>`).join(' ')}</div>
+      <p class="desc">${esc(rec.description || '（暂无说明）')}</p>
+      <button class="recipe-toggle" id="recipeToggle" type="button" aria-expanded="false" aria-controls="recipeBody">
+        <span>调色配方</span>
+        <svg class="recipe-caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+      </button>
+      <div class="recipe-body" id="recipeBody" hidden>
         <ul class="steps-list">${steps}</ul>
-        <div class="modal-actions" style="margin-top:16px">
-          <button class="btn primary" id="dPreview">在我的照片上预览</button>
-          <button class="btn ghost" id="dCopy">复制配方</button>
-          ${favBtn}${delBtn}
-        </div>
-        <div class="hint">预览会把完整配方送到编辑器，套用在**你自己的照片**上；不会替换你的原图。</div>
       </div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn primary" id="dPreview">在我的照片上预览</button>
+        <button class="btn ghost" id="dCopy">复制配方</button>
+        ${favBtn}${delBtn}
+      </div>
+      <div class="hint">预览会把完整配方送到编辑器，套用在**你自己的照片**上；不会替换你的原图。</div>
     </div>`;
 
+  $('#detailBody').querySelectorAll('.detail-img').forEach((img) => {
+    img.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openLightbox(img.currentSrc || img.src, img.alt);
+    });
+  });
   $('#dPreview').onclick = () => previewInEditor(rec.id);
   $('#dCopy').onclick = () => {
     const recipe = { version: rec.version || 1 };
@@ -295,6 +546,15 @@ async function openDetail(id) {
     recipe.steps = rec.steps || [];
     copyText(JSON.stringify(recipe, null, 2)).then(() => toast('已复制配方'), () => toast('复制失败'));
   };
+  const recipeToggle = $('#recipeToggle');
+  if (recipeToggle) {
+    recipeToggle.onclick = () => {
+      const body = $('#recipeBody');
+      const open = recipeToggle.getAttribute('aria-expanded') === 'true';
+      recipeToggle.setAttribute('aria-expanded', String(!open));
+      body.hidden = open;
+    };
+  }
   if ($('#dFav')) {
     $('#dFav').onclick = async () => {
       if (!state.user) { toast('请先登录'); openAuth('login'); return; }
@@ -462,6 +722,14 @@ async function submitPublish() {
 
 function resetPublishForm() {
   ['#pName', '#pDesc', '#pCategory', '#pTags', '#pRecipeJson', '#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
+  ['#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) delete el.dataset.fromEditor; });
+  document.querySelectorAll('.file-note').forEach((n) => { n.textContent = '默认使用编辑器内图片'; });
+  const toggle = $('#pRecipeToggle');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', 'false');
+    const body = $('#pRecipeBody');
+    if (body) body.hidden = true;
+  }
   state.pairing = 'manual';
   updateRecipeStatus();
 }
@@ -494,7 +762,7 @@ function appendRecord(rec) {
   const el = document.createElement('div');
   el.className = 'record';
   el.innerHTML = `
-    <img class="record-thumb" src="${esc(rec.cover_after || rec.cover_before)}" alt="${esc(rec.name)}" loading="lazy">
+      <img class="record-thumb" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 200))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="88px" width="88" height="60" alt="${esc(rec.name)}" loading="lazy" decoding="async">
     <div class="record-info">
       <div class="record-name">${esc(rec.name)}${rec.category ? ` <span class="chip">${esc(rec.category)}</span>` : ''}</div>
       <div class="record-meta">上传时间：${esc(rec.created_at || '—')}</div>
@@ -561,6 +829,25 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#authToggle').onclick = () => openAuth(state.authMode === 'login' ? 'register' : 'login');
   $('#publishSubmit').onclick = submitPublish;
   $('#pLoadHandoff').onclick = loadHandoff;
+  const recipeToggle = $('#pRecipeToggle');
+  if (recipeToggle) {
+    recipeToggle.onclick = () => {
+      const body = $('#pRecipeBody');
+      const open = recipeToggle.getAttribute('aria-expanded') === 'true';
+      recipeToggle.setAttribute('aria-expanded', String(!open));
+      body.hidden = open;
+    };
+  }
+  document.querySelectorAll('.file-pick').forEach((btn) => {
+    btn.onclick = () => document.getElementById(btn.dataset.target)?.click();
+  });
+  document.querySelectorAll('#pBefore, #pAfter').forEach((input) => {
+    input.addEventListener('change', () => {
+      input.dataset.fromEditor = '0';
+      const note = input.closest('.file-field')?.querySelector('.file-note');
+      if (note) note.textContent = input.files[0]?.name || '默认使用编辑器内图片';
+    });
+  });
   $('#pRecipeJson').oninput = () => { state.pairing = 'manual'; updateRecipeStatus(); };
   $('#pClearRecipe').onclick = () => { $('#pRecipeJson').value = ''; state.pairing = 'manual'; updateRecipeStatus(); };
 
