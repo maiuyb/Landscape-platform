@@ -7,6 +7,7 @@ const LEGACY_TOKEN_KEY = 'cd_token';
 const LEGACY_USER_KEY = 'cd_user';
 const SHARE_KEY = 'landscape:share-recipe';        // 编辑器写入，社区发布时读取（同源）
 const EDITOR_URL = window.EDITOR_URL || '';        // 独立部署时仅用于打开编辑器，不自动传照片
+const APP_PREFIX = new URL('../', location.href).pathname.replace(/\/$/, '');
 
 const state = {
   view: 'community',
@@ -40,17 +41,42 @@ function esc(s) {
 
 // 卡片/推荐/记录使用按需缩略图；详情仍用原图。
 function thumbUrl(url, width = 800) {
-  const s = String(url || '');
-  if (!s.startsWith('/uploads/')) return s;
-  return `/api/thumb/${s.slice('/uploads/'.length)}?w=${width}`;
+  const name = localUploadName(url);
+  return name ? `${APP_PREFIX}/api/thumb/${name}?w=${width}` : String(url || '');
 }
 
 function thumbSrcset(url) {
-  const s = String(url || '');
-  if (!s.startsWith('/uploads/')) return '';
-  const name = s.slice('/uploads/'.length);
-  return [200, 400, 800, 1200].map((w) => `/api/thumb/${name}?w=${w} ${w}w`).join(', ');
+  const name = localUploadName(url);
+  return name ? [200, 400, 800, 1200].map((w) => `${APP_PREFIX}/api/thumb/${name}?w=${w} ${w}w`).join(', ') : '';
 }
+
+function localUploadName(url) {
+  const s = String(url || '');
+  for (const prefix of [APP_PREFIX + '/uploads/', '/uploads/']) {
+    if (s.startsWith(prefix)) {
+      const name = s.slice(prefix.length);
+      return name.length <= 180 && /^[a-z0-9][a-z0-9._-]*\.(jpg|jpeg|png|webp)$/i.test(name) ? name : '';
+    }
+  }
+  return '';
+}
+function uploadOriginalUrl(url) {
+  const name = localUploadName(url);
+  return name ? `${APP_PREFIX}/uploads/${name}` : String(url || '');
+}
+// Image attributes can retry the original once; a failed fallback remains an honest placeholder.
+document.addEventListener('error', event => {
+  const img = event.target;
+  if (!(img instanceof HTMLImageElement) || !img.dataset.originalSrc) return;
+  img.removeAttribute('srcset');
+  if (!img.dataset.usedOriginal) {
+    img.dataset.usedOriginal = '1';
+    img.src = img.dataset.originalSrc;
+  } else {
+    img.alt = '图片暂不可用';
+    img.classList.add('image-unavailable');
+  }
+}, true);
 
 async function api(path, { method = 'GET', body = null, auth = false, form = null } = {}) {
   const headers = {};
@@ -71,12 +97,17 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
 }
 
-function copyText(text) {
-  if (navigator.clipboard) return navigator.clipboard.writeText(text);
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try { await navigator.clipboard.writeText(text); return; } catch { /* try the HTTP-compatible path */ }
+  }
   const ta = document.createElement('textarea');
+  const previous = document.activeElement;
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
   ta.value = text; document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); } finally { ta.remove(); }
-  return Promise.resolve();
+  try {
+    if (!document.execCommand('copy')) throw Error('剪贴板不可用');
+  } finally { ta.remove(); previous?.focus({preventScroll:true}); }
 }
 
 /* ---------------- 编辑器交接 ----------------
@@ -149,7 +180,7 @@ async function loadRecommend() {
   box.innerHTML = list.map((rec, i) => `
     <div class="mini" data-id="${rec.id}">
       ${i < 3 ? `<div class="rank">TOP${i + 1}</div>` : ''}
-      <img src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 400))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 16vw" width="400" height="533" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 400))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 16vw" width="400" height="533" alt="${esc(rec.name)}" loading="lazy" decoding="async">
       <div class="cap">${esc(rec.name)}<br><span class="muted">★ ${rec.favorite_count}</span></div>
     </div>`).join('') || '<div class="muted">暂无推荐</div>';
   box.querySelectorAll('.mini').forEach((m) => { m.onclick = () => openDetail(+m.dataset.id); });
@@ -227,7 +258,7 @@ function appendCard(rec) {
   card.className = 'card';
   card.innerHTML = `
     <div class="card-cover" data-id="${rec.id}">
-      <img src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 800))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 480px) 100vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 800))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 480px) 100vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async">
       ${rec.category ? `<span class="badge">${esc(rec.category)}</span>` : ''}
     </div>
     <div class="card-body">
@@ -282,7 +313,7 @@ function previewImage(rec) {
   if (!hasPair) {
     return {
       pair: false,
-      html: `<div class="detail-imgs single"><figure><img class="detail-img" src="${esc(after || before)}" alt="${esc(rec.name)}" decoding="async">
+      html: `<div class="detail-imgs single"><figure><img class="detail-img" src="${esc(uploadOriginalUrl(after || before))}" alt="${esc(rec.name)}" decoding="async">
         <figcaption class="muted">单图 · 未提供前后对比</figcaption></figure></div>`,
     };
   }
@@ -295,8 +326,8 @@ function previewImage(rec) {
   return {
     pair: true,
     html: `<div class="detail-imgs pair">
-        <figure><img class="detail-img" src="${esc(before)}" alt="${esc(capA)}" decoding="async"><figcaption class="muted">${esc(capA)}</figcaption></figure>
-        <figure><img class="detail-img" src="${esc(after)}" alt="${esc(capB)}" decoding="async"><figcaption class="muted">${esc(capB)}</figcaption></figure>
+        <figure><img class="detail-img" src="${esc(uploadOriginalUrl(before))}" alt="${esc(capA)}" decoding="async"><figcaption class="muted">${esc(capA)}</figcaption></figure>
+        <figure><img class="detail-img" src="${esc(uploadOriginalUrl(after))}" alt="${esc(capB)}" decoding="async"><figcaption class="muted">${esc(capB)}</figcaption></figure>
       </div>${note}`,
   };
 }
@@ -544,7 +575,7 @@ async function openDetail(id) {
     const recipe = { version: rec.version || 1 };
     if (rec.rendering != null) recipe.rendering = rec.rendering;
     recipe.steps = rec.steps || [];
-    copyText(JSON.stringify(recipe, null, 2)).then(() => toast('已复制配方'), () => toast('复制失败'));
+    copyText(JSON.stringify(recipe, null, 2)).then(() => toast('已复制配方'), () => toast('复制失败，请展开“调色配方”手动复制'));
   };
   const recipeToggle = $('#recipeToggle');
   if (recipeToggle) {
@@ -585,12 +616,12 @@ async function previewInEditor(id) {
 
   copyText(JSON.stringify(recipe, null, 2)).then(() => {
     if (EDITOR_URL) {
-      window.open(EDITOR_URL, '_blank', 'noopener');
-      toast('已打开编辑器；独立部署无法自动传递照片/历史，请粘贴配方套用');
+      try { window.open(EDITOR_URL, '_blank', 'noopener'); } catch { /* popup policy may require a manual visit */ }
+      toast('已复制配方并请求打开编辑器；若未打开请手动访问。独立部署不自动传递照片/历史，请粘贴配方套用');
     } else {
       toast('已复制配方；独立部署无法自动传递照片/历史，请在编辑器粘贴套用');
     }
-  }, () => toast('复制失败，请手动复制配方'));
+  }, () => toast('复制失败，请展开“调色配方”手动复制'));
 }
 
 /* ---------------- 发布 ---------------- */
@@ -762,7 +793,7 @@ function appendRecord(rec) {
   const el = document.createElement('div');
   el.className = 'record';
   el.innerHTML = `
-      <img class="record-thumb" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 200))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="88px" width="88" height="60" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <img class="record-thumb" data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 200))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="88px" width="88" height="60" alt="${esc(rec.name)}" loading="lazy" decoding="async">
     <div class="record-info">
       <div class="record-name">${esc(rec.name)}${rec.category ? ` <span class="chip">${esc(rec.category)}</span>` : ''}</div>
       <div class="record-meta">上传时间：${esc(rec.created_at || '—')}</div>

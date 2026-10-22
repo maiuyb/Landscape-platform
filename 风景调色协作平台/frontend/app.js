@@ -777,7 +777,7 @@ createApp({
       closePhotoId.value=null;const index=photos.value.findIndex(p=>p.id===id);if(index<0)return;
       if(id===activePhotoId.value&&photos.value.length>1){await activatePhoto(photos.value[index===photos.value.length-1?index-1:index+1]);if(activePhotoId.value===id)return;}
       photos.value=photos.value.filter(p=>p.id!==id);
-      if(!photos.value.length){photoStripCollapsed.value=false;importVersion++;aiAbort?.abort();aiRequestToken++;aiLoading.value=false;renderer?.dispose();renderer=null;sourceImage.value&&(sourceImage.value.src='');sourceImage.value=null;if(sourcePreview){sourcePreview.width=1;sourcePreview.height=1;}sourcePreview=null;if(originalImageUrl.value)URL.revokeObjectURL(originalImageUrl.value);originalImageUrl.value='';activePhotoId.value=null;imageLoaded.value=false;state.value=Core.createState();history=Core.createHistory();historyVersion.value++;frameOptions.value=Frames.defaults();filename.value='';currentView.value='editor';notify('已关闭照片，原文件未改变。');}
+      if(!photos.value.length){editorBlank.value=false;photoStripCollapsed.value=false;importVersion++;aiAbort?.abort();aiRequestToken++;aiLoading.value=false;renderer?.dispose();renderer=null;sourceImage.value&&(sourceImage.value.src='');sourceImage.value=null;if(sourcePreview){sourcePreview.width=1;sourcePreview.height=1;}sourcePreview=null;if(originalImageUrl.value)URL.revokeObjectURL(originalImageUrl.value);originalImageUrl.value='';activePhotoId.value=null;imageLoaded.value=false;state.value=Core.createState();history=Core.createHistory();historyVersion.value++;frameOptions.value=Frames.defaults();filename.value='';currentView.value='editor';notify('已关闭照片，原文件未改变。');}
     }
     watch(closePhotoId,async id=>{await nextTick();if(id)closePhotoDialog.value.showModal();else closePhotoDialog.value.close();});
     async function trySample(sample){
@@ -1364,7 +1364,7 @@ createApp({
         holdMs:480
       });
     }
-    function openEditorWorkspace(){editorBlank.value=true;photoStripCollapsed.value=false;switchToEditor();}
+    function openEditorWorkspace(){if(!imageLoaded.value){editorBlank.value=true;photoStripCollapsed.value=false;}switchToEditor();}
 
     function connectCommunity(){communityReady.value=false;communityFrame.value?.contentWindow?.postMessage({type:'landscape:connect',channel:communityChannel},location.origin);}
     function sendShare(){

@@ -562,3 +562,5 @@ h3 {
   .keysheet, pre { white-space: pre-wrap; word-break: break-word; }
   .card { padding: 14px 14px 16px; }
 }
+
+.image-unavailable { object-fit: contain; background: var(--bg-2); color: var(--muted); }
