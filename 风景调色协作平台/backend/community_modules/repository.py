@@ -209,9 +209,11 @@ def recovery_info(deleted_at):
 
 def query_recipes(conn, *, search='', category='', tag='', author_id=None,
                   favorited_by=None, sort='favorites', page=1, page_size=12,
-                  include_deleted=False):
+                  include_deleted=False, deleted_only=False):
     where, params = [], []
-    if not include_deleted:
+    if deleted_only:
+        where.append('r.deleted_at IS NOT NULL')
+    elif not include_deleted:
         where.append('r.deleted_at IS NULL')
     if search:
         like = '%' + search + '%'
@@ -236,7 +238,7 @@ def query_recipes(conn, *, search='', category='', tag='', author_id=None,
             'FROM favorites GROUP BY recipe_id) f ON f.recipe_id = r.id' + where_sql)
 
     total = conn.execute('SELECT COUNT(*) AS c ' + base, params).fetchone()['c']
-    order = SORT_SQL.get(sort, SORT_SQL['favorites'])
+    order = 'r.deleted_at DESC, r.id DESC' if deleted_only else SORT_SQL.get(sort, SORT_SQL['favorites'])
     rows = conn.execute(
         'SELECT r.*, COALESCE(f.favorite_count, 0) AS favorite_count ' + base +
         ' ORDER BY ' + order + ' LIMIT ? OFFSET ?',

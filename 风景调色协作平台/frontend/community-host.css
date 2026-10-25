@@ -16,3 +16,20 @@ html:not(.uc-mode) .grid.gallery-mode {
   width: 100%;
   margin-inline: 0;
 }
+
+/* One private workspace for published works, publication records and recovery. */
+.work-management { margin-bottom: 18px; }
+.work-management h1 { margin: 0 0 8px; font: 600 28px/1.4 var(--gallery-serif); }
+.work-management > p { margin: 0 0 20px; }
+.work-management-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.work-management-status { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: var(--gallery-caption); font-size: 12px; }
+.gallery-owned { break-inside: avoid; margin-bottom: 8px; }
+.gallery-owned .gallery-card { margin-bottom: 0; }
+.gallery-manage { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--gallery-mat); border: 1px solid var(--gallery-border); }
+.gallery-manage > span { color: var(--gallery-caption); font-size: 12px; }
+.gallery-manage .btn { padding: 5px 14px; }
+.work-management .tab:focus-visible { outline: 2px solid var(--gallery-forest); outline-offset: 3px; }
+.record-name { overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .work-management-tabs .tab { flex: 1 1 auto; padding-inline: 10px; }
+}

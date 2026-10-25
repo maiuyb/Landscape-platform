@@ -15,10 +15,9 @@
   <div class="uc-brand">用户中心</div>
   <nav class="uc-nav">
     <button type="button" data-uc-view="profile">个人主页</button>
-    <button type="button" data-uc-view="account" class="active">账号管理</button>
-    <button type="button" data-uc-view="mine">我的上传</button>
+    <button type="button" data-uc-view="mine">我的作品</button>
     <button type="button" data-uc-view="favorites">我的收藏</button>
-    <button type="button" data-uc-view="records">上传记录</button>
+    <button type="button" data-uc-view="account">账号管理</button>
     <button type="button" data-uc-view="settings">个性化设置</button>
   </nav>
   <button type="button" id="ucBack" class="uc-back">返回社区</button>
@@ -137,6 +136,16 @@
   </section>
 
   <section class="section" id="communityListSection">
+    <div id="workManagement" class="work-management" hidden>
+      <h1>我的作品</h1>
+      <p id="workManagementHint" class="muted">管理已发布的作品，查看发布记录或找回删除的作品。</p>
+      <nav class="work-management-tabs" aria-label="作品管理">
+        <button type="button" class="tab" data-work-view="mine">已发布作品</button>
+        <button type="button" class="tab" data-work-view="records" data-uc-view="records">发布记录</button>
+        <button type="button" class="tab" data-work-view="deleted">删除找回</button>
+      </nav>
+      <div class="work-management-status"><span id="workManagementStatus" role="status"></span><button type="button" id="workManagementRetry" class="btn ghost" hidden>重新加载</button></div>
+    </div>
     <div class="toolbar">
       <div class="tabs">
         <button class="tab active" data-view="community">全部作品</button>

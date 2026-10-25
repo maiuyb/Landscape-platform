@@ -24,9 +24,11 @@ const state = {
   authMode: 'login',
   pairing: 'manual',
   profileAvatarDraft: null,
+  recordFilter: 'all',
 };
 
 const $ = (s) => document.querySelector(s);
+const workActions = new Set();
 
 /* ---------------- 个性化设置 ---------------- */
 const PREF_KEY = 'landscape:prefs';
@@ -457,6 +459,8 @@ async function loadRecipes(reset) {
   const recommendSection = $('#recommendSection');
   if (recommendSection) recommendSection.style.display = (state.view === 'community' && state.search) ? 'none' : '';
   state.loading = true;
+  renderWorkManagement('正在加载作品…');
+  $('#pagination').style.display = 'none';
   if (reset) state.page = 1;
   $('#grid').innerHTML = '';
   let r;
@@ -464,14 +468,17 @@ async function loadRecipes(reset) {
   catch { r = {ok:false, data:{error:'网络暂不可用，请重试'}}; }
   if (request !== state.listRequest || state.view !== view) return;
   state.loading = false;
-  if (!r.ok) { toast(r.data.error || '加载失败'); return; }
+  if (!r.ok) { renderWorkManagement('作品加载失败，请重试。', true); toast(r.data.error || '加载失败'); return; }
   state.total = r.data.total || 0;
+  const lastPage = Math.max(1, Math.ceil(state.total / state.pageSize));
+  if (state.page > lastPage) { state.page = lastPage; return loadRecipes(false); }
   state.hasMore = !!r.data.has_more;
   (r.data.recipes || []).forEach(appendCard);
   $('#empty').style.display = (state.total === 0) ? 'block' : 'none';
-  $('#empty').textContent = state.view === 'mine' ? '还没有上传作品'
+  $('#empty').textContent = state.view === 'mine' ? '还没有已发布的作品，点击“发布作品”分享你的创作。'
     : state.view === 'favorites' ? '还没有收藏作品' : '没有更多内容了';
   renderPagination();
+  renderWorkManagement();
   if (reset && state.view === 'community' && state.search) {
     requestAnimationFrame(() => document.querySelector('.toolbar')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   }
@@ -530,7 +537,16 @@ function appendGalleryCard(rec) {
   btn.setAttribute('aria-label', rec.name);
   btn.innerHTML = `<img data-original-src="${esc(uploadOriginalUrl(cover))}" src="${esc(thumbUrl(cover, 800))}" srcset="${esc(thumbSrcset(cover))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async"><span class="gallery-meta"><strong>${esc(rec.name)}</strong><span>☆ ${count}</span></span>`;
   btn.onclick = () => openDetail(rec.id);
-  $('#grid').appendChild(btn);
+  if (state.view === 'mine') {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'gallery-owned';
+    const actions = document.createElement('div');
+    actions.className = 'gallery-manage';
+    actions.innerHTML = '<span>已发布</span><button type="button" class="btn danger gallery-del">删除</button>';
+    actions.querySelector('button').onclick = () => deleteOwnRecipe(rec);
+    wrapper.append(btn, actions);
+    $('#grid').appendChild(wrapper);
+  } else $('#grid').appendChild(btn);
 }
 
 function appendCard(rec) {
@@ -549,7 +565,7 @@ function appendCard(rec) {
   let foot = '';
   let footClass = 'card-foot';
   if (isMine) {
-    // 我的上传：收藏数放卡片左下角，删除在右下角，与全部作品的右下角对称。
+    // 我的作品：收藏数放卡片左下角，删除在右下角。
     foot = `${staticPill}<button class="btn danger card-del">删除</button>`;
     footClass = 'card-foot split';
   } else if (isOwn) {
@@ -597,12 +613,19 @@ function appendCard(rec) {
 }
 
 async function deleteOwnRecipe(rec) {
-  if (!confirm(`确定删除「${rec.name}」？删除后 7 天内可在“上传记录”里找回。`)) return;
-  const r = await api('/api/recipes/' + rec.id, { method: 'DELETE', auth: true });
-  if (!r.ok) { toast(r.data.error || '删除失败'); return; }
-  toast('已删除，7 天内可找回');
-  loadStats(); loadRecommend();
-  if (state.view === 'records') loadRecords(true); else loadRecipes(true);
+  if (workActions.has(rec.id)) return;
+  if (!confirm(`确定删除「${rec.name}」？删除后将不再公开展示，7 天内可在“我的作品 → 删除找回”中恢复。`)) return;
+  const token = state.token;
+  workActions.add(rec.id);
+  try {
+    const r = await api('/api/recipes/' + rec.id, { method: 'DELETE', auth: true });
+    if (state.token !== token) return;
+    if (!r.ok) { toast(r.data.error || '删除失败'); return; }
+    if ($('#dDel')?.dataset.workId === String(rec.id)) $('#detailModal').classList.remove('open');
+    toast('已删除，可在“我的作品 → 删除找回”中恢复（7 天内）');
+    loadStats(); loadRecommend();
+    if (state.view === 'records') loadRecords(false); else loadRecipes(false);
+  } finally { workActions.delete(rec.id); }
 }
 
 async function toggleFavorite(rec, btn) {
@@ -850,7 +873,7 @@ async function openDetail(id) {
   const favBtn = owner
     ? `<span class="detail-fav-count">★ 收藏 ${rec.favorite_count || 0}</span>`
     : `<button class="btn ${rec.is_favorited ? 'ghost' : ''}" id="dFav">${rec.is_favorited ? '★ 已收藏' : '☆ 收藏'}（${rec.favorite_count}）</button>`;
-  const delBtn = owner ? '<button class="btn danger" id="dDel">删除作品</button>' : '';
+  const delBtn = owner ? `<button class="btn danger" id="dDel" data-work-id="${Number(rec.id)}">删除作品</button>` : '';
 
   $('#detailBody').innerHTML = `
     <h3>${esc(rec.name)}</h3>
@@ -910,12 +933,7 @@ async function openDetail(id) {
     };
   }
   if (owner) {
-    $('#dDel').onclick = async () => {
-      if (!confirm('确定删除这条作品？')) return;
-      const r2 = await api('/api/recipes/' + rec.id, { method: 'DELETE', auth: true });
-      if (r2.ok) { $('#detailModal').classList.remove('open'); toast('已删除'); loadStats(); loadRecommend(); loadRecipes(true); }
-      else toast(r2.data.error || '删除失败');
-    };
+    $('#dDel').onclick = () => deleteOwnRecipe(rec);
   }
   $('#detailModal').classList.add('open');
 }
@@ -1084,28 +1102,54 @@ function resetPublishForm() {
   updateRecipeStatus();
 }
 
-/* ---------------- 上传记录 ---------------- */
+/* ---------------- 作品记录与删除找回 ---------------- */
+function renderWorkManagement(message, failed = false) {
+  const visible = document.documentElement.classList.contains('uc-mode') && ['mine', 'records'].includes(state.view);
+  $('#workManagement').hidden = !visible;
+  if (!visible) return;
+  const view = state.view === 'mine' ? 'mine' : state.recordFilter === 'deleted' ? 'deleted' : 'records';
+  document.querySelectorAll('[data-work-view]').forEach(button => {
+    const selected = button.dataset.workView === view;
+    button.classList.toggle('active', selected);
+    if (selected) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
+  });
+  $('#workManagementHint').textContent = view === 'mine' ? '管理已发布的作品；删除后可在“删除找回”中恢复。'
+    : view === 'deleted' ? '删除的作品在 7 天内可找回；已过期记录仅保留状态。'
+    : '查看作品的发布时间、发布状态和删除记录。';
+  const count = state.view === 'mine' ? state.total : state.recTotal || 0;
+  $('#workManagementStatus').textContent = message ?? `${count} ${view === 'mine' ? '件已发布作品' : view === 'deleted' ? '条删除记录' : '条发布记录'}`;
+  $('#workManagementRetry').hidden = !failed;
+}
+
 async function loadRecords(reset) {
   if (!state.user) { toast('请先登录'); openAuth('login'); return; }
   const request = state.listRequest = (state.listRequest || 0) + 1;
   if (reset) state.recPage = 1;
+  state.loading = true;
+  renderWorkManagement('正在加载记录…');
+  $('#pagination').style.display = 'none';
   $('#records').innerHTML = '';
   const p = new URLSearchParams({ page: state.recPage || 1, page_size: 20 });
+  if (state.recordFilter === 'deleted') p.set('status', 'deleted');
   const r = await api('/api/me/uploads?' + p.toString(), { auth: true });
   if (request !== state.listRequest || state.view !== 'records') return;
-  if (!r.ok) { toast(r.data.error || '加载失败'); return; }
+  state.loading = false;
+  if (!r.ok) { renderWorkManagement('记录加载失败，请重试。', true); toast(r.data.error || '加载失败'); return; }
   state.recTotal = r.data.total || 0;
+  const lastPage = Math.max(1, Math.ceil(state.recTotal / 20));
+  if (state.recPage > lastPage) { state.recPage = lastPage; return loadRecords(false); }
   (r.data.recipes || []).forEach(appendRecord);
   $('#empty').style.display = (state.recTotal === 0) ? 'block' : 'none';
-  $('#empty').textContent = '还没有上传记录';
+  $('#empty').textContent = state.recordFilter === 'deleted' ? '没有已删除的作品。' : '还没有发布记录。';
   renderPagination();
+  renderWorkManagement();
 }
 
 function appendRecord(rec) {
   let status, actions;
   if (!rec.deleted) {
     status = '<span class="status active">已发布</span>';
-    actions = '<button class="btn danger rec-del">删除</button>';
+    actions = '<button type="button" class="btn ghost rec-view">查看作品</button><button type="button" class="btn danger rec-del">删除</button>';
   } else if (rec.recoverable) {
     status = `<span class="status deleted">已删除 · ${rec.days_left} 天内可找回</span>`;
     actions = '<button class="btn rec-restore">找回</button>';
@@ -1119,22 +1163,35 @@ function appendRecord(rec) {
       <img class="record-thumb" data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 200))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="88px" width="88" height="60" alt="${esc(rec.name)}" loading="lazy" decoding="async">
     <div class="record-info">
       <div class="record-name">${esc(rec.name)}${rec.category ? ` <span class="chip">${esc(rec.category)}</span>` : ''}</div>
-      <div class="record-meta">上传时间：${esc(rec.created_at || '—')}</div>
+      <div class="record-meta">发布时间：${esc(rec.created_at || '—')}</div>
       <div class="record-meta">状态：${status}${rec.deleted_at ? ` · 删除时间：${esc(rec.deleted_at)}` : ''}</div>
     </div>
     <div class="record-actions">${actions}</div>`;
   const del = el.querySelector('.rec-del');
   if (del) del.onclick = () => deleteOwnRecipe(rec);
+  const view = el.querySelector('.rec-view');
+  if (view) view.onclick = () => openDetail(rec.id);
   const res = el.querySelector('.rec-restore');
-  if (res) res.onclick = () => restoreRecipe(rec);
+  if (res) res.onclick = () => restoreRecipe(rec, res);
   $('#records').appendChild(el);
 }
 
-async function restoreRecipe(rec) {
-  const r = await api(`/api/recipes/${rec.id}/restore`, { method: 'POST', auth: true });
-  if (!r.ok) { toast(r.data.error || '找回失败'); return; }
-  toast('已找回');
-  loadStats(); loadRecommend(); loadRecords(true);
+async function restoreRecipe(rec, button) {
+  if (workActions.has(rec.id)) return;
+  workActions.add(rec.id);
+  const token = state.token;
+  if (button) { button.disabled = true; button.textContent = '正在找回…'; }
+  try {
+    const r = await api(`/api/recipes/${rec.id}/restore`, { method: 'POST', auth: true });
+    if (state.token !== token) return;
+    if (!r.ok) { toast(r.data.error || '找回失败'); return; }
+    toast('已找回，作品已重新公开展示');
+    loadStats(); loadRecommend();
+    if (state.view === 'records') loadRecords(false); else loadRecipes(false);
+  } finally {
+    workActions.delete(rec.id);
+    if (button?.isConnected) { button.disabled = false; button.textContent = '找回'; }
+  }
 }
 
 /* ---------------- 视图 ---------------- */
@@ -1147,7 +1204,8 @@ function switchView(view) {
   window.AuthorPortfolio?.leave();
   if (view === 'records' && !state.user) { toast('请先登录'); openAuth('login'); view = 'community'; }
   state.view = view;
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
+  document.querySelectorAll('.toolbar .tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
+  renderWorkManagement();
   const comm = view === 'community';
   const isRecords = view === 'records';
   $('#sort').style.display = comm ? '' : 'none';
@@ -1164,12 +1222,16 @@ function switchView(view) {
 
 /* ---------------- 用户中心 ---------------- */
 function setUserCenterView(view) {
+  if (!state.user) { toast('请先登录'); openAuth('login'); return; }
   if (view === 'profile') { if (state.user) openPublicProfile(state.user.id); return; }
   window.AuthorPortfolio?.leave();
   state.listRequest = (state.listRequest || 0) + 1;
   state.loading = false;
   $('#empty').style.display = 'none';
-  document.querySelectorAll('.uc-nav button').forEach((b) => b.classList.toggle('active', b.dataset.ucView === view));
+  const workView = ['mine', 'records', 'deleted'].includes(view);
+  if (view === 'records' || view === 'deleted') state.recordFilter = view === 'deleted' ? 'deleted' : 'all';
+  $('#workManagement').hidden = !workView;
+  document.querySelectorAll('.uc-nav button').forEach((b) => b.classList.toggle('active', b.dataset.ucView === view || workView && b.dataset.ucView === 'mine'));
   const account = document.getElementById('ucAccountPanel');
   const settings = document.getElementById('ucSettingsPanel');
   const toolbar = document.querySelector('.toolbar');
@@ -1200,7 +1262,7 @@ function setUserCenterView(view) {
     if (account) account.hidden = true;
     if (settings) settings.hidden = true;
     if (toolbar) toolbar.style.display = '';
-    if (view === 'records') switchView('records');
+    if (view === 'records' || view === 'deleted') switchView('records');
     else switchView(view);
   }
 }
@@ -1242,7 +1304,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!AuthorRoute.parse(location.search)) loadRecipes(true);
   updateRecipeStatus();
 
-  document.querySelectorAll('.tab').forEach((t) => { t.onclick = () => switchView(t.dataset.view); });
+  document.querySelectorAll('.toolbar .tabs [data-view]').forEach((t) => { t.onclick = () => switchView(t.dataset.view); });
   $('#sort').onchange = (e) => { state.sort = e.target.value; loadRecipes(true); };
   $('#displayMode').onchange = (e) => setDisplayMode(e.target.value);
   $('#category').onchange = (e) => { state.category = e.target.value; loadRecipes(true); };
@@ -1256,6 +1318,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.uc-nav button').forEach((btn) => {
     btn.onclick = () => setUserCenterView(btn.dataset.ucView);
   });
+  document.querySelectorAll('[data-work-view]').forEach(button => {
+    button.onclick = () => setUserCenterView(button.dataset.workView);
+  });
+  $('#workManagementRetry').onclick = () => state.view === 'records' ? loadRecords(false) : loadRecipes(false);
   const ucBack = $('#ucBack');
   if (ucBack) ucBack.onclick = exitUserCenter;
   const ucSaveProfile = $('#ucSaveProfile');
