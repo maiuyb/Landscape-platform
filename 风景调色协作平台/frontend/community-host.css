@@ -1,1 +1,18 @@
 /* Host theme only; the community module owns its gallery palette (see community/style.css). */
+
+/* Shared page gutters for the integrated gallery. Keep user-center sidebar layout native. */
+:root { --community-page-gutter: clamp(16px, 4vw, 96px); }
+
+html:not(.uc-mode) .hero,
+html:not(.uc-mode) .container {
+  max-width: none;
+  margin-inline: var(--community-page-gutter);
+}
+
+html:not(.uc-mode) .container { padding-inline: 0; }
+
+/* Remove the native grid's extra 12px on each side so it aligns with recommendations. */
+html:not(.uc-mode) .grid.gallery-mode {
+  width: 100%;
+  margin-inline: 0;
+}

@@ -94,7 +94,7 @@
     </div>
 
     <header class="app-header">
-      <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">馆藏暗房显影台</span></span></a>
+      <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">{{ currentView === 'community' ? '风景配方社区' : (imageLoaded || editorBlank) ? '馆藏暗房显影台' : '协作工作区' }}</span></span></a>
       <nav aria-label="主导航">
         <button :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">编辑器</button>
 
