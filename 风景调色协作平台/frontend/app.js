@@ -382,14 +382,22 @@ createApp({
     }
     const galleryLoading = ref(false), galleryResults = ref([]);
     const compareMode = ref('edited'), sliderPos = ref(50), zoom = ref(100);
+    const compareHandleVisible = ref(false), compareDragging = ref(false);
+    let compareHintTimer;
+    watch(compareMode, mode => {
+      clearTimeout(compareHintTimer);
+      stopComparison();
+      compareHandleVisible.value = mode === 'slider';
+      if (mode === 'slider') compareHintTimer = setTimeout(() => { compareHandleVisible.value = false; }, 5000);
+    });
     let comparePointer = null;
     function moveComparison(event){
       if(comparePointer!==event.pointerId)return;
       const bounds=mainCanvas.value.getBoundingClientRect();
       sliderPos.value=Core.clamp((event.clientX-bounds.left)/bounds.width*100,0,100);
     }
-    function startComparison(event){if(event.button!==0)return;event.preventDefault();comparePointer=event.pointerId;event.currentTarget.setPointerCapture(event.pointerId);moveComparison(event);}
-    function stopComparison(){comparePointer=null;}
+    function startComparison(event){if(event.button!==0)return;event.preventDefault();comparePointer=event.pointerId;compareDragging.value=true;event.currentTarget.setPointerCapture(event.pointerId);moveComparison(event);}
+    function stopComparison(){comparePointer=null;compareDragging.value=false;}
     function comparisonKey(event){if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();sliderPos.value=event.key==='Home'?0:event.key==='End'?100:Core.clamp(sliderPos.value+(event.key==='ArrowLeft'?-1:1)*(event.shiftKey?10:1),0,100);}
     function wheelZoom(event){
       if(!imageLoaded.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value||maskEditing.value||!event.deltaY)return;
@@ -518,7 +526,8 @@ createApp({
     const outputDimensions = computed(() => sourceImage.value ? Core.outputSize(sourceImage.value.naturalWidth, sourceImage.value.naturalHeight, activeState.value.geometry) : { width: 0, height: 0 });
     const exportDimensions = computed(() => sourceImage.value ? Core.outputSize(Math.max(1, Math.round(sourceImage.value.naturalWidth * exportOptions.scale)), Math.max(1, Math.round(sourceImage.value.naturalHeight * exportOptions.scale)), state.value.geometry) : { width: 0, height: 0 });
     const stageStyle = computed(() => {
-      const fit = Math.min((viewport.width - 32) / previewSize.width, (viewport.height - 32) / previewSize.height, 1);
+      // Match the extra top clearance for the comparison grip outside the photograph.
+      const fit = Math.min((viewport.width - 32) / previewSize.width, (viewport.height - (compareMode.value === 'slider' ? 56 : 32)) / previewSize.height, 1);
       const scale = Math.max(0.02, fit) * zoom.value / 100;
       return { width: `${Math.round(previewSize.width * scale)}px`, height: `${Math.round(previewSize.height * scale)}px` };
     });
@@ -1518,6 +1527,7 @@ createApp({
     onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
 
     onBeforeUnmount(() => {
+      clearTimeout(compareHintTimer);
       cancelUprightAnalysis();
       stopHeroSplitSweep();if(parallaxRaf!==null)cancelAnimationFrame(parallaxRaf);
       clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);clearTimeout(editionSwitchTimer);clearTimeout(noticeTimer);revealObserver?.disconnect();
@@ -1539,7 +1549,7 @@ createApp({
       perspectiveOpen,perspectiveDraft,perspectiveControls,beginPerspective,inputPerspective,finishPerspective,
       mainCanvas, compareCanvas, canvasContainer, communityContainer, currentView, imageLoaded, imageLoading, originalImageUrl, filename, message, error,
       state, preview, hoverFilter, wbPicking, histogram, histogramPath, canUndo, canRedo, activeState, controls: Core.controls, colorControls, adjustmentValue, filters: Core.filters, locked, dirty,
-      compareMode, sliderPos, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,startPan,movePan,endPan,zoom, stageStyle, previewSize, outputDimensions, exportDimensions,
+      compareMode, sliderPos, compareHandleVisible, compareDragging, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,startPan,movePan,endPan,zoom, stageStyle, previewSize, outputDimensions, exportDimensions,
       straightenControl:{key:'straighten-angle',label:'拉直角度',min:-45,max:45,step:.1,precision:1,unit:'°',hint:'微调倾斜地平线；应用保存一次构图，取消保持原样。'},detailControls,setDetail,inputDetail,resetDetail,resetDetails,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
       confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
