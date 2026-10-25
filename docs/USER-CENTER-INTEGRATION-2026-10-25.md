@@ -1,5 +1,7 @@
 # 用户中心与展示数据整合（2026-10-25）
 
+**最终状态：本轮已通过 [PR #22](https://github.com/maiuyb/Landscape-platform/pull/22) 合入、部署并完成管理员追加导入。** 新增 201 条公开作品，验收时总公开数 210、demo 205；409 张图片关联并验收，已有账号 / 密码 / 会话 / 收藏保留，服务器临时传输材料已清理。下方“数据计划 / 需运行管理员命令”为当时过程，**不要重新运行旧导入**。最终验收见 [PR 评论](https://github.com/maiuyb/Landscape-platform/pull/22#issuecomment-6398309642)，最近界面修复与最新接续见 [HANDOFF-2026-10-25.md](HANDOFF-2026-10-25.md)。
+
 基线为已部署的 `main/878271c`，成员来源为 `feature/user-center-profile-data/69e8cd1`。用户要求先只读检查、确认兼容后合入 main，并另外确认本轮追加 demo 展示数据。
 
 ## 检查与合入范围
