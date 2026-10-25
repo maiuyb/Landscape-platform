@@ -26,17 +26,18 @@
     if(!valid(e))return;
     const d=e.data;
     if(d.type==='landscape:connect'&&typeof d.channel==='string'){
-      channel=d.channel;send('landscape:ready');return;
+      channel=d.channel;send('landscape:ready');AuthorPortfolio.publishTitle();return;
     }
     if(channel&&d.channel===channel&&d.type==='landscape:auth'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){openAuth('login');return;}
     if(channel&&d.channel===channel&&d.type==='landscape:user-center'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){if(typeof enterUserCenter==='function')enterUserCenter();return;}
     if(channel&&d.channel===channel&&d.type==='landscape:community'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){if(typeof exitUserCenter==='function')exitUserCenter();return;}
+    if(channel&&d.channel===channel&&d.type==='landscape:author-route'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){AuthorPortfolio.restore(d.route);return;}
     if(channel&&d.channel===channel&&d.type==='landscape:search'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){
       const query=String(d.query||'').trim();
       const input=document.querySelector('#search');
       if(input)input.value=query;
       state.search=query;
-      if(state.view!=='community')switchView('community');else loadRecipes(true);
+      if(state.view!=='community'||AuthorPortfolio.active())switchView('community');else loadRecipes(true);
       return;
     }
     if(!channel||d.channel!==channel||d.type!=='landscape:share'||typeof d.id!=='string'||!d.id||seenShares.has(d.id)||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000)return;
@@ -50,6 +51,12 @@
     document.querySelector('#publishError').textContent='';
     send('landscape:share-received');
     if(!state.user){pendingPublish=true;document.querySelector('#publishModal').classList.remove('open');toast('请先登录，再发布当前作品');openAuth('login');}
+  });
+  window.addEventListener('landscape:author-route-change',event=>{
+    if(channel)send('landscape:author-route-change',event.detail);
+  });
+  window.addEventListener('landscape:author-title',event=>{
+    if(channel)send('landscape:author-title',event.detail);
   });
   // Preserve the community DOM, filters and scroll, and return to the live editor.
   previewInEditor=async id=>{

@@ -448,7 +448,7 @@
 
     <section class="community-view" ref="communityContainer" v-show="currentView === 'community'" aria-label="社区配方">
       <p v-if="!communityReady" role="status">正在连接社区… <button @click="connectCommunity">重试连接</button></p>
-      <iframe v-if="communityMounted" ref="communityFrame" src="community/" title="风景配方社区" class="community-frame" @load="connectCommunity"></iframe>
+      <iframe v-if="communityMounted" ref="communityFrame" :src="communityInitialUrl" title="风景配方社区" class="community-frame" @load="connectCommunity"></iframe>
     </section>
 
     <dialog ref="exportDialog" @cancel.prevent="!exporting && (exportOpen = false)" aria-labelledby="export-title">
@@ -484,6 +484,7 @@
   <script src="editor-workspace.js"></script>
   <script src="editor-frames.js"></script>
   <script src="preview-renderer.js"></script>
+  <script src="author-route.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

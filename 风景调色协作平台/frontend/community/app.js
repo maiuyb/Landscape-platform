@@ -184,6 +184,7 @@ async function copyText(text) {
 
 /* ---------------- 认证 ---------------- */
 function renderAuth() {
+  window.AuthorPortfolio?.refreshActions();
   const area = $('#authArea');
   if (!area) return;
   if (state.user) {
@@ -221,7 +222,7 @@ async function refreshMe() {
     state.profileAvatarDraft = null;
     clearSession();
     renderAuth();
-    exitUserCenter(true);
+    if (!window.AuthorPortfolio?.active()) exitUserCenter(true);
   }
 }
 
@@ -367,57 +368,11 @@ async function saveProfile() {
   renderAuth();
   renderAccountPanel();
   toast('资料已保存');
+  openPublicProfile(state.user.id);
 }
 
 async function openPublicProfile(userId) {
-  const id = Number(userId);
-  if (!id) return;
-  const r = await api('/api/users/' + id);
-  if (!r.ok) { toast(r.data.error || '用户不存在'); return; }
-  const user = r.data.user;
-  const name = user.display_name || user.username;
-  const worksResult = await api(`/api/recipes?author_id=${id}&page_size=9&sort=latest`);
-  const works = worksResult.ok ? (worksResult.data.recipes || []) : [];
-  const avatar = user.avatar
-    ? `<img data-original-src="${esc(uploadOriginalUrl(user.avatar))}" src="${esc(thumbUrl(user.avatar, 160))}" alt="${esc(name)}的头像">`
-    : esc(userInitial(user));
-  const meta = [];
-  if (user.location) meta.push(`<span>${esc(user.location)}</span>`);
-  if (user.created_at) meta.push(`<span>加入于 ${esc(formatJoined(user.created_at))}</span>`);
-  const workHtml = works.map((rec) => {
-    const cover = rec.cover_after || rec.cover_before;
-    return `<button type="button" class="public-work" data-work-id="${rec.id}">
-      <img data-original-src="${esc(uploadOriginalUrl(cover))}" src="${esc(thumbUrl(cover, 400))}" alt="${esc(rec.name)}" loading="lazy" decoding="async">
-      <span>${esc(rec.name)}</span>
-    </button>`;
-  }).join('');
-
-  $('#publicProfileBody').innerHTML = `
-    <div class="public-profile-head">
-      <div class="public-profile-avatar">${avatar}</div>
-      <div>
-        <h2>${esc(name)}</h2>
-        <div class="public-profile-handle">@ ${esc(user.username)}</div>
-        <p class="public-profile-bio">${esc(user.bio || '这位作者还没有填写简介。')}</p>
-        <div class="public-profile-meta">${meta.join('')}</div>
-      </div>
-    </div>
-    <div class="public-profile-stats">
-      <span><b>${Number(user.works_count) || 0}</b>作品</span>
-      <span><b>${Number(user.favorites_received) || 0}</b>获收藏</span>
-    </div>
-    <h3 class="public-profile-section-title">最近作品</h3>
-    ${workHtml ? `<div class="public-profile-works">${workHtml}</div>` : '<p class="hint">还没有公开作品。</p>'}`;
-
-  $('#detailModal').classList.remove('open');
-  $('#profileModal').classList.add('open');
-  $('#publicProfileBody').querySelectorAll('.public-work').forEach((btn) => {
-    btn.onclick = () => {
-      const workId = Number(btn.dataset.workId);
-      $('#profileModal').classList.remove('open');
-      if (workId) openDetail(workId);
-    };
-  });
+  return window.AuthorPortfolio.open(userId);
 }
 
 function openAuth(mode) {
@@ -492,6 +447,7 @@ function listEndpoint() {
 }
 
 async function loadRecipes(reset) {
+  if (window.AuthorPortfolio?.active()) return window.AuthorPortfolio.reload();
   if ((state.view === 'mine' || state.view === 'favorites') && !state.user) {
     toast('请先登录'); openAuth('login'); return;
   }
@@ -1188,6 +1144,7 @@ function reloadCurrentView() {
 }
 
 function switchView(view) {
+  window.AuthorPortfolio?.leave();
   if (view === 'records' && !state.user) { toast('请先登录'); openAuth('login'); view = 'community'; }
   state.view = view;
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
@@ -1207,6 +1164,8 @@ function switchView(view) {
 
 /* ---------------- 用户中心 ---------------- */
 function setUserCenterView(view) {
+  if (view === 'profile') { if (state.user) openPublicProfile(state.user.id); return; }
+  window.AuthorPortfolio?.leave();
   state.listRequest = (state.listRequest || 0) + 1;
   state.loading = false;
   $('#empty').style.display = 'none';
@@ -1248,9 +1207,7 @@ function setUserCenterView(view) {
 
 function enterUserCenter() {
   if (!state.user) { toast('请先登录'); openAuth('login'); return; }
-  document.documentElement.classList.add('uc-mode');
-  setUserCenterView('account');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  openPublicProfile(state.user.id);
 }
 
 function clearProfileDraftMarks() {
@@ -1261,7 +1218,8 @@ function clearProfileDraftMarks() {
 }
 
 function exitUserCenter(force = false) {
-  if (!force && !document.documentElement.classList.contains('uc-mode')) return;
+  if (!force && !document.documentElement.classList.contains('uc-mode') && !window.AuthorPortfolio?.active()) return;
+  window.AuthorPortfolio?.leave();
   document.documentElement.classList.remove('uc-mode');
   const account = document.getElementById('ucAccountPanel');
   if (account) account.hidden = true;
@@ -1280,7 +1238,8 @@ document.addEventListener('DOMContentLoaded', () => {
   applyPrefs();
   renderAuth();
   refreshMe();
-  loadStats(); loadCategories(); loadRecommend(); loadRecipes(true);
+  loadStats(); loadCategories(); loadRecommend();
+  if (!AuthorRoute.parse(location.search)) loadRecipes(true);
   updateRecipeStatus();
 
   document.querySelectorAll('.tab').forEach((t) => { t.onclick = () => switchView(t.dataset.view); });
@@ -1288,11 +1247,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#displayMode').onchange = (e) => setDisplayMode(e.target.value);
   $('#category').onchange = (e) => { state.category = e.target.value; loadRecipes(true); };
   $('#search').onkeydown = (e) => {
-    if (e.key === 'Enter') { state.search = $('#search').value.trim(); if (state.view !== 'community') switchView('community'); else loadRecipes(true); }
+    if (e.key === 'Enter') { state.search = $('#search').value.trim(); if (state.view !== 'community' || window.AuthorPortfolio?.active()) switchView('community'); else loadRecipes(true); }
   };
   $('#searchSubmit').onclick = () => {
     state.search = $('#search').value.trim();
-    if (state.view !== 'community') switchView('community'); else loadRecipes(true);
+    if (state.view !== 'community' || window.AuthorPortfolio?.active()) switchView('community'); else loadRecipes(true);
   };
   document.querySelectorAll('.uc-nav button').forEach((btn) => {
     btn.onclick = () => setUserCenterView(btn.dataset.ucView);
@@ -1301,6 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (ucBack) ucBack.onclick = exitUserCenter;
   const ucSaveProfile = $('#ucSaveProfile');
   if (ucSaveProfile) ucSaveProfile.onclick = saveProfile;
+  $('#ucCancelProfile').onclick = () => { if (state.user) openPublicProfile(state.user.id); };
   for (const id of ['ucDisplayNameInput','ucBioInput','ucLocationInput']) {
     document.getElementById(id)?.addEventListener('input', event => { event.target.dataset.edited = '1'; });
   }

@@ -1,0 +1,55 @@
+/* Portfolio layout uses the existing Gallery paper, forest and bronze palette. */
+html.author-mode .hero,
+html.author-mode #recommendSection,
+html.author-mode #communityListSection { display: none !important; }
+.author-page { padding-block: 24px 56px; }
+.author-breadcrumb { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.author-breadcrumb > span { color: var(--gallery-bronze); font-size: 12px; letter-spacing: .12em; }
+.author-header { display: flex; justify-content: space-between; gap: 32px; padding: 30px 32px; border: 1px solid var(--gallery-border); background: var(--gallery-wall); border-radius: 6px; }
+.author-identity { display: flex; align-items: flex-start; gap: 24px; min-width: 0; }
+.author-intro { min-width: 0; }
+.author-intro .kicker { font-size: 10px; margin: 0 0 8px; }
+.author-intro h1 { font-family: var(--gallery-serif); font-weight: 600; font-size: calc(32px * var(--ui-font-scale)); line-height: 1.3; margin: 0 0 6px; overflow-wrap: anywhere; }
+#authorHeading:focus, #authorWorksHeading:focus { outline: none; }
+.author-intro .public-profile-bio { max-width: 680px; overflow-wrap: anywhere; white-space: pre-line; }
+.author-intro .public-profile-handle, .author-intro .public-profile-meta { overflow-wrap: anywhere; }
+.author-aside { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 24px; flex-shrink: 0; }
+.author-stats { display: flex; gap: 32px; }
+.author-stats span { color: var(--gallery-caption); font-size: 12px; text-align: center; }
+.author-stats b { display: block; font: 600 28px/1.3 var(--gallery-serif); color: var(--gallery-forest); }
+.author-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.author-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 30px 0 20px; }
+.author-toolbar > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+.author-toolbar h2 { font: 600 24px/1.4 var(--gallery-serif); margin: 0; scroll-margin-top: 100px; }
+.author-works { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 28px 24px; }
+.author-work { min-width: 0; border-radius: 0; color: var(--gallery-ink); }
+.author-work-mat { padding: 12px; border: 1px solid var(--gallery-border); background: var(--gallery-mat); box-shadow: var(--gallery-shadow-card); overflow: hidden; }
+.author-work img { aspect-ratio: 4 / 3; object-fit: contain; background: var(--gallery-wall); }
+.author-work-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 2px; }
+.author-work-caption strong { font-family: var(--gallery-serif); font-weight: 500; font-size: calc(16px * var(--ui-font-scale)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.author-work-caption span { flex-shrink: 0; margin: 0; color: var(--gallery-caption); }
+.author-work:focus-visible { outline: 2px solid var(--gallery-forest); outline-offset: 5px; }
+.author-status { color: var(--gallery-caption); margin: 24px 0; }
+.author-status:empty { display: none; }
+.author-share-fallback { max-width: 760px; margin-top: 24px; }
+.author-share-fallback label { color: var(--gallery-body); }
+@media (max-width: 1000px) {
+  .author-header { flex-direction: column; gap: 20px; }
+  .author-aside { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .author-works { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  .author-page { padding-top: 16px; }
+  .author-header { padding: 20px 16px; }
+  .author-breadcrumb { margin-bottom: 16px; }
+  .author-breadcrumb > span { letter-spacing: 0; font-size: 11px; }
+  .author-identity { gap: 14px; }
+  .author-identity .public-profile-avatar { width: 56px; height: 56px; font-size: 22px; }
+  .author-intro .kicker { font-size: 8px; letter-spacing: .1em; }
+  .author-intro h1 { font-size: calc(25px * var(--ui-font-scale)); }
+  .author-actions { width: 100%; }
+  .author-actions .btn { flex: 1 1 auto; }
+  .author-works { grid-template-columns: 1fr; gap: 20px; }
+  .author-work-mat { padding: 10px; }
+  .author-toolbar h2 { font-size: 21px; }
+}
