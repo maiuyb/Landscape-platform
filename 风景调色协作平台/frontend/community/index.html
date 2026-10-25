@@ -10,14 +10,30 @@
 </head>
 <body>
 
+<aside class="uc-sidebar" aria-label="用户中心">
+  <div class="uc-brand">用户中心</div>
+  <nav class="uc-nav">
+    <button type="button" data-uc-view="account" class="active">账号管理</button>
+    <button type="button" data-uc-view="mine">我的上传</button>
+    <button type="button" data-uc-view="favorites">我的收藏</button>
+    <button type="button" data-uc-view="records">上传记录</button>
+    <button type="button" data-uc-view="settings">个性化设置</button>
+  </nav>
+  <button type="button" id="ucBack" class="uc-back">返回社区</button>
+</aside>
+
 <header class="topbar">
   <div class="brand">风景调色<span>社区</span></div>
   <div class="search-wrap">
+    <span class="search-scope">配方</span>
     <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none"
          stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line>
     </svg>
-    <input id="search" type="text" placeholder="搜索配方 / 标签 / 作者，回车确认">
+    <input id="search" type="search" aria-label="搜索社区配方" placeholder="搜索配方 / 标签 / 作者，回车确认">
+    <button id="searchSubmit" class="search-submit" type="button" aria-label="搜索">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>
+    </button>
   </div>
   <div id="authArea" class="auth-area"></div>
 </header>
@@ -32,6 +48,78 @@
 </section>
 
 <main class="container">
+  <section id="ucAccountPanel" class="uc-account-panel" hidden>
+    <div class="uc-profile-hero">
+      <div class="uc-profile-avatar" id="ucProfileAvatar" aria-hidden="true">
+        <img id="ucAvatarImage" alt="" hidden>
+        <span id="ucAvatarInitial">?</span>
+      </div>
+      <div class="uc-profile-head">
+        <h1 id="ucDisplayName">—</h1>
+        <div class="uc-profile-handle" id="ucProfileHandle">@—</div>
+        <p class="uc-profile-bio" id="ucProfileBio">还没有填写简介。</p>
+        <div class="uc-profile-meta" id="ucProfileMeta"></div>
+      </div>
+      <button type="button" class="btn ghost" id="ucPreviewPublic">查看公开主页</button>
+    </div>
+
+    <div class="uc-profile-stats" id="ucProfileStats"></div>
+
+    <div class="uc-account-card uc-profile-edit">
+      <div class="uc-section-head">
+        <h2>编辑资料</h2>
+        <span class="hint">公开主页显示昵称、账号标识、头像、简介、所在地、加入时间和作品统计</span>
+      </div>
+      <div class="uc-avatar-edit">
+        <div class="uc-avatar-preview" id="ucAvatarPreview">
+          <img id="ucAvatarPreviewImg" alt="" hidden>
+          <span id="ucAvatarPreviewInitial">?</span>
+        </div>
+        <input id="ucAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+        <button type="button" class="btn ghost" id="ucAvatarPick">更换头像</button>
+        <button type="button" class="btn ghost" id="ucAvatarRemove" hidden>移除</button>
+        <span class="hint">JPG/PNG/WebP，5MB 以内</span>
+      </div>
+      <label class="field-label" for="ucDisplayNameInput">昵称</label>
+      <input id="ucDisplayNameInput" class="input" maxlength="20" placeholder="社区展示的昵称">
+      <label class="field-label" for="ucBioInput">简介</label>
+      <textarea id="ucBioInput" class="input" rows="3" maxlength="160" placeholder="介绍一下你的拍摄方向或调色偏好"></textarea>
+      <label class="field-label" for="ucLocationInput">所在地</label>
+      <input id="ucLocationInput" class="input" maxlength="40" placeholder="例如：杭州">
+      <div class="modal-actions">
+        <button type="button" class="btn primary" id="ucSaveProfile">保存资料</button>
+      </div>
+      <div id="ucProfileError" class="error"></div>
+    </div>
+
+    <div class="uc-account-card">
+      <div class="uc-field"><span>登录账号</span><strong id="ucAccountName">—</strong></div>
+      <div class="uc-field"><span>加入时间</span><strong id="ucJoinedAt">—</strong></div>
+      <div class="uc-field"><span>账号状态</span><strong>正常</strong></div>
+    </div>
+    <p class="hint">头像与资料仅用于社区展示；登录密码和登录安全设置暂未在此修改。</p>
+  </section>
+
+  <section id="ucSettingsPanel" class="uc-account-panel" hidden>
+    <h1>个性化设置</h1>
+    <div class="uc-setting-group">
+      <div class="uc-setting-label">字号</div>
+      <div class="uc-options">
+        <button type="button" data-font-scale="0.9">小</button>
+        <button type="button" data-font-scale="1" class="active">标准</button>
+        <button type="button" data-font-scale="1.1">大</button>
+      </div>
+    </div>
+    <div class="uc-setting-group">
+      <div class="uc-setting-label">作品展示模式</div>
+      <div class="uc-options">
+        <button type="button" data-display-mode="card" class="active">卡片模式</button>
+        <button type="button" data-display-mode="gallery">画廊模式</button>
+      </div>
+      <p class="hint">画廊模式使用满幅图片排列，鼠标悬停显示标题和收藏数；点击打开作品详情。</p>
+    </div>
+  </section>
+
   <section class="section" id="recommendSection">
     <div class="section-head">
       <h2>为你推荐</h2>
@@ -44,9 +132,7 @@
     <div class="toolbar">
       <div class="tabs">
         <button class="tab active" data-view="community">全部作品</button>
-        <button class="tab" data-view="mine">我的上传</button>
         <button class="tab" data-view="favorites">我的收藏</button>
-        <button class="tab" data-view="records">上传记录</button>
       </div>
       <div class="tools">
         <select id="category" class="select"><option value="">全部分类</option></select>
@@ -61,7 +147,11 @@
     <div id="grid" class="grid"></div>
     <div id="records" class="records" style="display:none"></div>
     <div id="empty" class="empty" style="display:none">没有更多内容了</div>
-    <div class="loadmore"><button id="loadMore" class="btn ghost" style="display:none">加载更多</button></div>
+    <nav class="pagination" id="pagination" aria-label="分页" style="display:none">
+      <button id="prevPage" class="page-btn" type="button">上一页</button>
+      <div class="page-numbers" id="pageNumbers"></div>
+      <button id="nextPage" class="page-btn" type="button">下一页</button>
+    </nav>
   </section>
 </main>
 
@@ -70,6 +160,14 @@
   <div class="modal-card">
     <button class="close" data-close>&times;</button>
     <div id="detailBody"></div>
+  </div>
+</div>
+
+<!-- 公开主页 -->
+<div id="profileModal" class="modal">
+  <div class="modal-card profile-modal-card">
+    <button class="close" data-close>&times;</button>
+    <div id="publicProfileBody"></div>
   </div>
 </div>
 

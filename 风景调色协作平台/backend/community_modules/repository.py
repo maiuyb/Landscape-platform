@@ -62,6 +62,56 @@ def get_user_by_credentials(conn, username, password_hash):
                         (username, password_hash)).fetchone()
 
 
+def update_user_profile(conn, user_id, display_name, bio, location, avatar):
+    conn.execute(
+        '''UPDATE users
+           SET display_name = ?, bio = ?, location = ?, avatar = ?
+           WHERE id = ?''',
+        (display_name, bio, location, avatar, user_id))
+    conn.commit()
+
+
+def user_stats(conn, user_id):
+    works = conn.execute(
+        'SELECT COUNT(*) AS c FROM recipes WHERE author_id = ? AND deleted_at IS NULL',
+        (user_id,)).fetchone()['c']
+    favorites_given = conn.execute(
+        'SELECT COUNT(*) AS c FROM favorites WHERE user_id = ?',
+        (user_id,)).fetchone()['c']
+    favorites_received = conn.execute(
+        '''SELECT COUNT(*) AS c
+           FROM favorites f
+           JOIN recipes r ON r.id = f.recipe_id
+           WHERE r.author_id = ? AND r.deleted_at IS NULL''',
+        (user_id,)).fetchone()['c']
+    return {
+        'works_count': works,
+        'favorites_given': favorites_given,
+        'favorites_received': favorites_received,
+    }
+
+
+def serialize_user(conn, user, self_view=False):
+    """本人视图包含私有统计；公开视图只返回社区可见字段。"""
+    if not user:
+        return None
+    stats = user_stats(conn, user['id'])
+    data = {
+        'id': user['id'],
+        'username': user['username'],
+        'display_name': user['display_name'] or user['username'],
+        'bio': user['bio'] or '',
+        'location': user['location'] or '',
+        'avatar': user['avatar'] or '',
+        'created_at': user['created_at'],
+        'works_count': stats['works_count'],
+        'favorites_received': stats['favorites_received'],
+    }
+    if self_view:
+        data['favorites_given'] = stats['favorites_given']
+    return data
+
+
 # ---------------- 会话 token ----------------
 def create_session(conn, token, user_id):
     conn.execute('INSERT INTO sessions (token, user_id) VALUES (?, ?)', (token, user_id))
