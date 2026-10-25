@@ -50,7 +50,8 @@ function applyPrefs() {
   const grid = document.getElementById('grid');
   if (grid) grid.classList.toggle('gallery-mode', prefs.displayMode === 'gallery');
   document.querySelectorAll('[data-font-scale]').forEach((b) => b.classList.toggle('active', Number(b.dataset.fontScale) === prefs.fontScale));
-  document.querySelectorAll('[data-display-mode]').forEach((b) => b.classList.toggle('active', b.dataset.displayMode === prefs.displayMode));
+  const displayMode = document.getElementById('displayMode');
+  if (displayMode) displayMode.value = prefs.displayMode;
 }
 
 function setFontScale(scale) {
@@ -63,7 +64,7 @@ function setDisplayMode(mode) {
   prefs.displayMode = mode;
   savePrefs();
   applyPrefs();
-  if (!document.documentElement.classList.contains('uc-mode')) loadRecipes(true);
+  if (['community', 'favorites', 'mine'].includes(state.view)) loadRecipes(false);
 }
 
 function readToken() { return localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY) || ''; }
@@ -1194,6 +1195,7 @@ function switchView(view) {
   const isRecords = view === 'records';
   $('#sort').style.display = comm ? '' : 'none';
   $('#category').style.display = comm ? '' : 'none';
+  $('#displayMode').hidden = isRecords;
   $('#grid').style.display = isRecords ? 'none' : '';
   $('#records').style.display = isRecords ? 'flex' : 'none';
   const pagination = $('#pagination');
@@ -1283,6 +1285,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('.tab').forEach((t) => { t.onclick = () => switchView(t.dataset.view); });
   $('#sort').onchange = (e) => { state.sort = e.target.value; loadRecipes(true); };
+  $('#displayMode').onchange = (e) => setDisplayMode(e.target.value);
   $('#category').onchange = (e) => { state.category = e.target.value; loadRecipes(true); };
   $('#search').onkeydown = (e) => {
     if (e.key === 'Enter') { state.search = $('#search').value.trim(); if (state.view !== 'community') switchView('community'); else loadRecipes(true); }
@@ -1322,9 +1325,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.querySelectorAll('[data-font-scale]').forEach((btn) => {
     btn.onclick = () => setFontScale(btn.dataset.fontScale);
-  });
-  document.querySelectorAll('[data-display-mode]').forEach((btn) => {
-    btn.onclick = () => setDisplayMode(btn.dataset.displayMode);
   });
   const pageNumbers = $('#pageNumbers');
   if (pageNumbers) pageNumbers.onclick = (e) => {

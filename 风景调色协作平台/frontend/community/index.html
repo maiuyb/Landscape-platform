@@ -110,14 +110,6 @@
         <button type="button" data-font-scale="1.1">大</button>
       </div>
     </div>
-    <div class="uc-setting-group">
-      <div class="uc-setting-label">作品展示模式</div>
-      <div class="uc-options">
-        <button type="button" data-display-mode="card" class="active">卡片模式</button>
-        <button type="button" data-display-mode="gallery">画廊模式</button>
-      </div>
-      <p class="hint">画廊模式使用满幅图片排列，鼠标悬停显示标题和收藏数；点击打开作品详情。</p>
-    </div>
   </section>
 
   <section class="section" id="recommendSection">
@@ -139,6 +131,10 @@
         <select id="sort" class="select">
           <option value="favorites">按收藏数</option>
           <option value="latest">按最新</option>
+        </select>
+        <select id="displayMode" class="select" aria-label="作品展示模式" title="切换作品的卡片或画廊展示">
+          <option value="card">卡片模式</option>
+          <option value="gallery">画廊模式</option>
         </select>
         <button id="publishBtn" class="btn primary">发布作品</button>
       </div>
