@@ -36,6 +36,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            display_name TEXT DEFAULT '',
+            bio TEXT DEFAULT '',
+            location TEXT DEFAULT '',
             avatar TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
@@ -78,6 +81,12 @@ def init_db():
         _add_column_if_missing(conn, 'recipes', 'rendering', 'TEXT')
         _add_column_if_missing(conn, 'recipes', 'pairing', 'TEXT')
         _add_column_if_missing(conn, 'recipes', 'deleted_at', 'DATETIME')
+
+        _add_column_if_missing(conn, 'users', 'display_name', "TEXT DEFAULT ''")
+        _add_column_if_missing(conn, 'users', 'bio', "TEXT DEFAULT ''")
+        _add_column_if_missing(conn, 'users', 'location', "TEXT DEFAULT ''")
+        c.execute("UPDATE users SET display_name = username "
+                  "WHERE display_name IS NULL OR TRIM(display_name) = ''")
 
         c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_recipe ON favorites(recipe_id)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)')

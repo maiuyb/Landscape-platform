@@ -98,6 +98,9 @@ def list_recipes():
         'tag': request.args.get('tag', '').strip()[:MAX_TAG_LEN],
         'sort': sort,
     }
+    author_id = _int_arg('author_id', 0)
+    if author_id > 0:
+        filters['author_id'] = author_id
     conn = get_db()
     try:
         user = current_user()

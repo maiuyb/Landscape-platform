@@ -1,0 +1,25 @@
+{
+  "account": "demo",
+  "display_name": "demo",
+  "password_note": "demo / demo1234",
+  "scope": "Demo account works and available images only",
+  "counts": {
+    "users": 1,
+    "recipes": 208,
+    "published_recipes": 205,
+    "deleted_recipes": 3,
+    "favorites": 2,
+    "sessions": 0
+  },
+  "images": {
+    "referenced": 411,
+    "copied": 409,
+    "missing": [
+      "1e05f857279e47a096e6a935ca1d41c9.jpg",
+      "a6f1c08f9270424da04287aa262b435f.jpg"
+    ],
+    "bytes": 481162076,
+    "megabytes": 458.9
+  },
+  "generated_at": "2026-10-25T20:34:48"
+}
