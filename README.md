@@ -1,4 +1,7 @@
 # Landscape-platform
+
+**新会话首读：[2026-10-25 最新交接包](docs/HANDOFF-2026-10-25.md)**（主线与线上状态、社区数据已导入、最近界面修复、后续边界和验证入口）。旧阶段状态以此包及实际 Git / 健康检查为准。
+
 风景调色协作平台。需求以 [docs/PRD.md](docs/PRD.md) 为准，编辑细节见 [Luminar 编辑基线](docs/EDITOR-BASELINE.md)；接续背景见 [开发交接包](docs/DEVELOPMENT-HANDOFF.md)，本次进度见 [开发状态](docs/DEVELOPMENT-STATUS.md)。
 
 ## 本地运行（Windows / PowerShell）
