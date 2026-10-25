@@ -94,7 +94,7 @@
     </div>
 
     <header class="app-header">
-      <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">协作工作区</span></span></a>
+      <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">馆藏暗房显影台</span></span></a>
       <nav aria-label="主导航">
         <button :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">编辑器</button>
 
@@ -302,6 +302,7 @@
       <template v-else>
         <section class="canvas-panel" aria-label="照片画布" @dragover.prevent @drop.prevent="handleDrop">
           <div class="canvas-heading"><div class="file-info"><strong>{{ filename || '未选择照片' }}</strong><span v-if="imageLoaded">{{ outputDimensions.width }} × {{ outputDimensions.height }} · {{ perspectiveOpen ? '透视校正预览 · 尚未应用' : straightenOpen ? '拉直预览 · 尚未应用' : preview ? '方案预览' : dirty ? '已编辑' : '原图' }}</span></div><button class="ai-shortcut" aria-label="AI 建议" @click="switchPanel('ai',true)" :aria-pressed="panelTab === 'ai'">✧ AI 建议</button></div>
+          <div class="canvas-viewer">
           <div class="canvas-toolbar">
             <div class="canvas-view-tools"><div class="segmented" aria-label="画布显示">
               <button @click="compareMode = 'original'" :aria-pressed="compareMode === 'original'" :disabled="cropOpen || straightenOpen || perspectiveOpen || maskEditing">原图</button>
@@ -312,7 +313,7 @@
           </div>
           <div class="canvas-container" ref="canvasContainer" @wheel="wheelZoom" @pointerdown="startPan" @pointermove="movePan" @pointerup="endPan" @pointercancel="endPan" @lostpointercapture="endPan" @dblclick="!locked && !maskEditing && (zoom=100)">
             <div class="canvas-empty" v-if="!imageLoaded">从下方「本次照片」添加照片开始编辑</div>
-            <div class="canvas-centering">
+            <div class="canvas-centering" :class="{ 'has-comparison': compareMode === 'slider' }">
               <div class="image-stage" v-show="imageLoaded" :class="{ 'wb-picking': wbPicking, 'detail-picking': inspectorOpen }" :style="stageStyle" @click="stageClick">
                 <canvas ref="mainCanvas" id="mainCanvas" aria-label="编辑后照片"></canvas>
                 <canvas ref="compareCanvas" id="compareCanvas" class="compare-canvas" :style="{ visibility: compareMode === 'edited' ? 'hidden' : 'visible', clipPath: compareMode === 'slider' ? `inset(0 ${100 - sliderPos}% 0 0)` : 'none' }" aria-label="原图，同构图"></canvas>
@@ -321,7 +322,7 @@
                   <svg v-if="maskGuide" v-bind="{viewBox:maskGuide.viewBox}" preserveAspectRatio="none" aria-hidden="true"><g v-if="!maskGuide.path" :transform="maskGuide.matrix"><line v-if="selectedMask.type === 'linear'" :x1="selectedMask.start[0]*maskGuide.sw" :y1="selectedMask.start[1]*maskGuide.sh" :x2="selectedMask.end[0]*maskGuide.sw" :y2="selectedMask.end[1]*maskGuide.sh"></line><ellipse v-else :cx="selectedMask.center[0]*maskGuide.sw" :cy="selectedMask.center[1]*maskGuide.sh" :rx="selectedMask.radius[0]*maskGuide.sw" :ry="selectedMask.radius[1]*maskGuide.sh"></ellipse></g><path v-if="maskGuide.path" :d="maskGuide.path"></path></svg>
                   <button v-for="handle in maskHandles" :key="handle.key" class="mask-handle" :data-mask-handle="handle.key" :style="handle.style" :aria-label="handle.label" @keydown="maskHandleKey(handle.key,$event)"></button>
                 </div>
-                <div class="compare-line" v-if="compareMode === 'slider'" :style="{ left: sliderPos + '%' }"><button class="compare-grab" role="slider" aria-label="前后对比分界，拖动查看左原图右编辑后" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(sliderPos)" @pointerdown.stop="startComparison" @pointermove.stop="moveComparison" @pointerup.stop="stopComparison" @pointercancel="stopComparison" @lostpointercapture="stopComparison" @keydown="comparisonKey" @click.stop></button></div>
+                <div class="compare-line" v-if="compareMode === 'slider'" :class="{ 'handle-visible': compareHandleVisible || compareDragging }" :style="{ left: sliderPos + '%' }"><button class="compare-grab" role="slider" aria-label="前后对比分界，拖动查看左原图右编辑后" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(sliderPos)" @pointerdown.stop="startComparison" @pointermove.stop="moveComparison" @pointerup.stop="stopComparison" @pointercancel="stopComparison" @lostpointercapture="stopComparison" @keydown="comparisonKey" @click.stop><span class="compare-handle" aria-hidden="true"><svg viewBox="0 0 24 16"><path d="m8 4-4 4 4 4m8-8 4 4-4 4M12 2v12"/></svg></span></button></div>
                 <div class="crop-layer" v-if="cropOpen" @pointerdown="cropPointerDown" @pointermove="cropPointerMove" @pointerup="cropPointerUp" @pointercancel="cropPointerUp"><div class="crop-selection" :style="cropStyle"><template v-if="showGuides"><i></i><i></i><i></i><i></i></template><button v-for="handle in cropHandles" :key="handle.key" class="crop-handle" :class="handle.key" :data-crop-handle="handle.key" :aria-label="'调整裁剪' + handle.label" @keydown="cropHandleKey(handle.key,$event)"></button></div></div>
                 <div class="straighten-guides" v-if="(straightenOpen || perspectiveOpen) && showGuides" aria-hidden="true"></div>
                 <div class="upright-layer" v-if="perspectiveOpen && uprightMode === 'guided'" tabindex="0" aria-label="透视参考线画布" @pointerdown.stop="uprightPointerDown" @pointermove.stop="uprightPointerMove" @pointerup.stop="uprightPointerUp" @pointercancel.stop="uprightPointerUp" @lostpointercapture="uprightPointerUp" @keydown.enter.stop.prevent="finishPerspective(true)" @click.stop>
@@ -332,6 +333,7 @@
                 <span v-if="compareGroup || wbPicking || perspectiveOpen || straightenOpen || preview || hoverFilter" class="image-badge">{{ compareGroup ? '按住对比 · 暂时关闭这组调整' : wbPicking ? '点击本应为白色或灰色的区域' : perspectiveOpen ? '透视校正预览 · 尚未应用' : straightenOpen ? '拉直预览 · 尚未应用' : preview ? '方案预览 · 尚未应用' : hoverFilter ? '预设预览 · ' + hoverFilter.label : '' }}</span>
               </div>
             </div>
+          </div>
           </div>
           <section class="detail-inspector" v-if="inspectorOpen" aria-label="100% 细节窗口">
             <div class="panel-heading"><strong>100% 细节</strong><span class="small" v-if="inspectorBusy" role="status">更新中…</span><button @click="inspectorOpen=false" aria-label="关闭细节查看">×</button></div>
