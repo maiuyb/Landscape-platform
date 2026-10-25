@@ -15,7 +15,7 @@ const state = {
   category: '',
   sort: 'favorites',
   page: 1,
-  pageSize: 12,
+  pageSize: 50,
   total: 0,
   hasMore: false,
   loading: false,
@@ -23,14 +23,78 @@ const state = {
   user: readUser(),
   authMode: 'login',
   pairing: 'manual',
+  profileAvatarDraft: null,
 };
 
 const $ = (s) => document.querySelector(s);
+
+/* ---------------- 个性化设置 ---------------- */
+const PREF_KEY = 'landscape:prefs';
+const prefs = { fontScale: 1, displayMode: 'card' };
+
+function loadPrefs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+    const scale = Number(raw.fontScale);
+    if ([0.9, 1, 1.1].includes(scale)) prefs.fontScale = scale;
+    if (['card', 'gallery'].includes(raw.displayMode)) prefs.displayMode = raw.displayMode;
+  } catch { /* ignore */ }
+}
+
+function savePrefs() {
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* ignore */ }
+}
+
+function applyPrefs() {
+  document.documentElement.style.setProperty('--ui-font-scale', prefs.fontScale);
+  const grid = document.getElementById('grid');
+  if (grid) grid.classList.toggle('gallery-mode', prefs.displayMode === 'gallery');
+  document.querySelectorAll('[data-font-scale]').forEach((b) => b.classList.toggle('active', Number(b.dataset.fontScale) === prefs.fontScale));
+  document.querySelectorAll('[data-display-mode]').forEach((b) => b.classList.toggle('active', b.dataset.displayMode === prefs.displayMode));
+}
+
+function setFontScale(scale) {
+  prefs.fontScale = Number(scale);
+  savePrefs();
+  applyPrefs();
+}
+
+function setDisplayMode(mode) {
+  prefs.displayMode = mode;
+  savePrefs();
+  applyPrefs();
+  if (!document.documentElement.classList.contains('uc-mode')) loadRecipes(true);
+}
 
 function readToken() { return localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY) || ''; }
 function readUser() { try { return JSON.parse(localStorage.getItem(USER_KEY) || localStorage.getItem(LEGACY_USER_KEY) || 'null'); } catch (e) { return null; } }
 function writeSession(token, user) { localStorage.setItem(TOKEN_KEY, token); localStorage.setItem(USER_KEY, JSON.stringify(user)); }
 function clearSession() { [TOKEN_KEY, USER_KEY, LEGACY_TOKEN_KEY, LEGACY_USER_KEY].forEach((k) => localStorage.removeItem(k)); }
+
+function userInitial(user) {
+  const value = String(user?.display_name || user?.username || '?').trim();
+  return (value.charAt(0) || '?').toUpperCase();
+}
+
+function updateAvatarDisplay(img, initial, url, name) {
+  if (img) {
+    delete img.dataset.usedOriginal;
+    img.classList.remove('image-unavailable');
+    if (url) {
+      img.dataset.originalSrc = uploadOriginalUrl(url);
+      img.src = thumbUrl(url, 160);
+      img.hidden = false;
+    } else {
+      img.hidden = true;
+      img.removeAttribute('src');
+      delete img.dataset.originalSrc;
+    }
+  }
+  if (initial) {
+    initial.textContent = userInitial({ display_name: name });
+    initial.hidden = !!url;
+  }
+}
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -81,7 +145,9 @@ async function api(path, { method = 'GET', body = null, auth = false, form = nul
   const headers = {};
   if (body) headers['Content-Type'] = 'application/json';
   if (auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
-  const res = await fetch(path, { method, headers, body: form ? form : (body ? JSON.stringify(body) : null) });
+  let res;
+  try { res = await fetch(path, { method, headers, body: form ? form : (body ? JSON.stringify(body) : null) }); }
+  catch { return {ok:false, status:0, data:{error:'网络暂不可用，请重试'}}; }
   let data = {};
   try { data = await res.json(); } catch (e) { /* ignore */ }
   return { ok: res.ok, status: res.status, data };
@@ -118,18 +184,239 @@ async function copyText(text) {
 /* ---------------- 认证 ---------------- */
 function renderAuth() {
   const area = $('#authArea');
+  if (!area) return;
   if (state.user) {
-    area.innerHTML = `<span class="chip">@ ${esc(state.user.username)}</span>` +
+    const name = state.user.display_name || state.user.username;
+    const avatar = state.user.avatar
+      ? `<span class="auth-avatar"><img data-original-src="${esc(uploadOriginalUrl(state.user.avatar))}" src="${esc(thumbUrl(state.user.avatar, 80))}" alt=""></span>`
+      : `<span class="auth-avatar">${esc(userInitial(state.user))}</span>`;
+    area.innerHTML = `<button type="button" class="auth-user" id="authUserBtn">${avatar}<span>@ ${esc(state.user.username)}</span></button>` +
       `<button class="btn ghost" id="logoutBtn">退出</button>`;
+    $('#authUserBtn').onclick = () => enterUserCenter();
     $('#logoutBtn').onclick = async () => {
       await api('/api/auth/logout', { method: 'POST', auth: true });
-      state.token = ''; state.user = null; clearSession();
-      renderAuth(); switchView('community'); toast('已退出登录');
+      state.token = ''; state.user = null; state.profileAvatarDraft = null; clearSession();
+      renderAuth(); exitUserCenter(true); toast('已退出登录');
     };
   } else {
     area.innerHTML = `<button class="btn ghost" id="loginBtn">登录</button>`;
     $('#loginBtn').onclick = () => openAuth('login');
   }
+}
+
+async function refreshMe() {
+  if (!state.token) return;
+  const token = state.token;
+  const r = await api('/api/auth/me', { auth: true });
+  if (state.token !== token) return;
+  if (r.ok && r.data.user) {
+    state.user = r.data.user;
+    writeSession(state.token, state.user);
+    renderAuth();
+    if (document.documentElement.classList.contains('uc-mode')) renderAccountPanel();
+  } else if (r.status === 401) {
+    state.token = '';
+    state.user = null;
+    state.profileAvatarDraft = null;
+    clearSession();
+    renderAuth();
+    exitUserCenter(true);
+  }
+}
+
+/* ---------------- 账号概览与资料编辑 ---------------- */
+function formatJoined(value) {
+  return String(value || '').slice(0, 10) || '—';
+}
+
+function setProfileError(message = '') {
+  const el = $('#ucProfileError');
+  if (el) el.textContent = message;
+}
+
+function renderAccountPanel() {
+  const user = state.user;
+  if (!user) return;
+  const name = user.display_name || user.username;
+  const avatar = state.profileAvatarDraft !== null ? state.profileAvatarDraft : (user.avatar || '');
+  updateAvatarDisplay($('#ucAvatarImage'), $('#ucAvatarInitial'), avatar, name);
+  updateAvatarDisplay($('#ucAvatarPreviewImg'), $('#ucAvatarPreviewInitial'), avatar, name);
+
+  const display = $('#ucDisplayName');
+  if (display) display.textContent = name;
+  const handle = $('#ucProfileHandle');
+  if (handle) handle.textContent = '@' + user.username;
+  const bio = $('#ucProfileBio');
+  if (bio) bio.textContent = user.bio || '还没有填写简介。';
+  const meta = $('#ucProfileMeta');
+  if (meta) {
+    const parts = [];
+    if (user.location) parts.push(`<span>${esc(user.location)}</span>`);
+    if (user.created_at) parts.push(`<span>加入于 ${esc(formatJoined(user.created_at))}</span>`);
+    meta.innerHTML = parts.join('');
+  }
+
+  const stats = $('#ucProfileStats');
+  if (stats) {
+    const values = [
+      [user.works_count, '作品'],
+      [user.favorites_given, '收藏'],
+      [user.favorites_received, '获收藏'],
+    ];
+    stats.innerHTML = values.map(([value, label]) =>
+      `<div class="uc-stat"><b>${Number(value) || 0}</b><span>${label}</span></div>`).join('');
+  }
+
+  const accountName = $('#ucAccountName');
+  if (accountName) accountName.textContent = user.username;
+  const joined = $('#ucJoinedAt');
+  if (joined) joined.textContent = formatJoined(user.created_at);
+
+  const nameInput = $('#ucDisplayNameInput');
+  if (nameInput && !nameInput.dataset.edited && document.activeElement !== nameInput) nameInput.value = user.display_name || user.username;
+  const bioInput = $('#ucBioInput');
+  if (bioInput && !bioInput.dataset.edited && document.activeElement !== bioInput) bioInput.value = user.bio || '';
+  const locationInput = $('#ucLocationInput');
+  if (locationInput && !locationInput.dataset.edited && document.activeElement !== locationInput) locationInput.value = user.location || '';
+
+  const remove = $('#ucAvatarRemove');
+  if (remove) remove.hidden = !avatar;
+}
+
+async function loadMyProfile() {
+  if (!state.token) return;
+  const token = state.token;
+  const r = await api('/api/users/me', { auth: true });
+  if (state.token !== token) return;
+  if (!r.ok) {
+    if (r.status === 401) {
+      state.token = '';
+      state.user = null;
+      clearSession();
+      renderAuth();
+      exitUserCenter(true);
+    }
+    return;
+  }
+  state.user = r.data.user;
+  writeSession(state.token, state.user);
+  renderAuth();
+  renderAccountPanel();
+}
+
+async function pickProfileAvatar(file) {
+  setProfileError('');
+  if (!file) return;
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    setProfileError('头像仅支持 JPG/PNG/WebP 格式');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    setProfileError('头像需小于 5MB');
+    return;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  const token = state.token;
+  const r = await api('/api/upload', { method: 'POST', form });
+  if (state.token !== token) return;
+  if (!r.ok) {
+    setProfileError(r.data.error || '头像上传失败');
+    return;
+  }
+  state.profileAvatarDraft = r.data.url || '';
+  renderProfileAvatar();
+}
+
+function renderProfileAvatar() {
+  if (!state.user) return;
+  const avatar = state.profileAvatarDraft !== null ? state.profileAvatarDraft : (state.user.avatar || '');
+  const name = state.user.display_name || state.user.username;
+  updateAvatarDisplay($('#ucAvatarImage'), $('#ucAvatarInitial'), avatar, name);
+  updateAvatarDisplay($('#ucAvatarPreviewImg'), $('#ucAvatarPreviewInitial'), avatar, name);
+  $('#ucAvatarRemove').hidden = !avatar;
+}
+
+async function saveProfile() {
+  if (!state.user) return;
+  setProfileError('');
+  const displayName = $('#ucDisplayNameInput').value.trim();
+  const bio = $('#ucBioInput').value.trim();
+  const location = $('#ucLocationInput').value.trim();
+  if (!displayName) { setProfileError('昵称不能为空'); return; }
+  if (displayName.length > 20) { setProfileError('昵称最多 20 个字符'); return; }
+  if (bio.length > 160) { setProfileError('简介最多 160 个字符'); return; }
+  if (location.length > 40) { setProfileError('所在地最多 40 个字符'); return; }
+  const avatar = state.profileAvatarDraft !== null ? state.profileAvatarDraft : (state.user.avatar || '');
+  const token = state.token;
+  const r = await api('/api/users/me', {
+    method: 'PUT',
+    auth: true,
+    body: { display_name: displayName, bio, location, avatar },
+  });
+  if (state.token !== token) return;
+  if (!r.ok) {
+    setProfileError(r.data.error || '保存失败');
+    return;
+  }
+  state.user = r.data.user;
+  state.profileAvatarDraft = null;
+  clearProfileDraftMarks();
+  writeSession(state.token, state.user);
+  renderAuth();
+  renderAccountPanel();
+  toast('资料已保存');
+}
+
+async function openPublicProfile(userId) {
+  const id = Number(userId);
+  if (!id) return;
+  const r = await api('/api/users/' + id);
+  if (!r.ok) { toast(r.data.error || '用户不存在'); return; }
+  const user = r.data.user;
+  const name = user.display_name || user.username;
+  const worksResult = await api(`/api/recipes?author_id=${id}&page_size=9&sort=latest`);
+  const works = worksResult.ok ? (worksResult.data.recipes || []) : [];
+  const avatar = user.avatar
+    ? `<img data-original-src="${esc(uploadOriginalUrl(user.avatar))}" src="${esc(thumbUrl(user.avatar, 160))}" alt="${esc(name)}的头像">`
+    : esc(userInitial(user));
+  const meta = [];
+  if (user.location) meta.push(`<span>${esc(user.location)}</span>`);
+  if (user.created_at) meta.push(`<span>加入于 ${esc(formatJoined(user.created_at))}</span>`);
+  const workHtml = works.map((rec) => {
+    const cover = rec.cover_after || rec.cover_before;
+    return `<button type="button" class="public-work" data-work-id="${rec.id}">
+      <img data-original-src="${esc(uploadOriginalUrl(cover))}" src="${esc(thumbUrl(cover, 400))}" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <span>${esc(rec.name)}</span>
+    </button>`;
+  }).join('');
+
+  $('#publicProfileBody').innerHTML = `
+    <div class="public-profile-head">
+      <div class="public-profile-avatar">${avatar}</div>
+      <div>
+        <h2>${esc(name)}</h2>
+        <div class="public-profile-handle">@ ${esc(user.username)}</div>
+        <p class="public-profile-bio">${esc(user.bio || '这位作者还没有填写简介。')}</p>
+        <div class="public-profile-meta">${meta.join('')}</div>
+      </div>
+    </div>
+    <div class="public-profile-stats">
+      <span><b>${Number(user.works_count) || 0}</b>作品</span>
+      <span><b>${Number(user.favorites_received) || 0}</b>获收藏</span>
+    </div>
+    <h3 class="public-profile-section-title">最近作品</h3>
+    ${workHtml ? `<div class="public-profile-works">${workHtml}</div>` : '<p class="hint">还没有公开作品。</p>'}`;
+
+  $('#detailModal').classList.remove('open');
+  $('#profileModal').classList.add('open');
+  $('#publicProfileBody').querySelectorAll('.public-work').forEach((btn) => {
+    btn.onclick = () => {
+      const workId = Number(btn.dataset.workId);
+      $('#profileModal').classList.remove('open');
+      if (workId) openDetail(workId);
+    };
+  });
 }
 
 function openAuth(mode) {
@@ -150,7 +437,7 @@ async function submitAuth() {
   const path = state.authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
   const r = await api(path, { method: 'POST', body: { username, password } });
   if (!r.ok) { $('#authError').textContent = r.data.error || '操作失败'; return; }
-  state.token = r.data.token; state.user = r.data.user;
+  state.token = r.data.token; state.user = r.data.user; state.profileAvatarDraft = null;
   writeSession(state.token, state.user);
   $('#authModal').classList.remove('open');
   renderAuth();
@@ -204,16 +491,21 @@ function listEndpoint() {
 }
 
 async function loadRecipes(reset) {
-  if (state.loading) return;
   if ((state.view === 'mine' || state.view === 'favorites') && !state.user) {
     toast('请先登录'); openAuth('login'); return;
   }
+  const request = state.listRequest = (state.listRequest || 0) + 1;
+  const view = state.view;
   // 搜索时隐藏「为你推荐」，把「全部作品」区域顶上来。
   const recommendSection = $('#recommendSection');
   if (recommendSection) recommendSection.style.display = (state.view === 'community' && state.search) ? 'none' : '';
   state.loading = true;
-  if (reset) { state.page = 1; $('#grid').innerHTML = ''; }
-  const r = await api(listEndpoint(), { auth: true });
+  if (reset) state.page = 1;
+  $('#grid').innerHTML = '';
+  let r;
+  try { r = await api(listEndpoint(), { auth: true }); }
+  catch { r = {ok:false, data:{error:'网络暂不可用，请重试'}}; }
+  if (request !== state.listRequest || state.view !== view) return;
   state.loading = false;
   if (!r.ok) { toast(r.data.error || '加载失败'); return; }
   state.total = r.data.total || 0;
@@ -222,13 +514,70 @@ async function loadRecipes(reset) {
   $('#empty').style.display = (state.total === 0) ? 'block' : 'none';
   $('#empty').textContent = state.view === 'mine' ? '还没有上传作品'
     : state.view === 'favorites' ? '还没有收藏作品' : '没有更多内容了';
-  $('#loadMore').style.display = state.hasMore ? 'inline-block' : 'none';
+  renderPagination();
   if (reset && state.view === 'community' && state.search) {
     requestAnimationFrame(() => document.querySelector('.toolbar')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   }
 }
 
+function renderPagination() {
+  const wrap = $('#pagination');
+  if (!wrap) return;
+  const records = state.view === 'records';
+  const total = Number(records ? state.recTotal : state.total) || 0;
+  const totalPages = Math.max(1, Math.ceil(total / (records ? 20 : state.pageSize)));
+  if (total === 0 || totalPages <= 1) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'flex';
+  const current = Math.min(Math.max(1, Number(records ? state.recPage : state.page) || 1), totalPages);
+  let pages;
+  if (totalPages <= 9) {
+    pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  } else if (current <= 5) {
+    pages = [1, 2, 3, 4, 5, 6, 7, '…', totalPages];
+  } else if (current >= totalPages - 4) {
+    pages = [1, '…', totalPages - 6, totalPages - 5, totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  } else {
+    pages = [1, '…', current - 2, current - 1, current, current + 1, current + 2, '…', totalPages];
+  }
+  const box = $('#pageNumbers');
+  if (box) {
+    box.innerHTML = pages.map((p) => p === '…'
+      ? '<span class="page-ellipsis">…</span>'
+      : `<button type="button" class="page-num${p === current ? ' active' : ''}" data-page="${p}">${p}</button>`).join('');
+  }
+  const prev = $('#prevPage');
+  const next = $('#nextPage');
+  if (prev) prev.disabled = current <= 1;
+  if (next) next.disabled = current >= totalPages;
+}
+
+function goToPage(page) {
+  const records = state.view === 'records';
+  const totalPages = Math.max(1, Math.ceil((Number(records ? state.recTotal : state.total) || 0) / (records ? 20 : state.pageSize)));
+  const next = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  if (next === (records ? state.recPage : state.page)) return;
+  if (records) { state.recPage = next; loadRecords(false); }
+  else { state.page = next; loadRecipes(false); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function appendGalleryCard(rec) {
+  const cover = rec.cover_after || rec.cover_before;
+  const count = Number(rec.favorite_count) || 0;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'gallery-card';
+  btn.setAttribute('aria-label', rec.name);
+  btn.innerHTML = `<img data-original-src="${esc(uploadOriginalUrl(cover))}" src="${esc(thumbUrl(cover, 800))}" srcset="${esc(thumbSrcset(cover))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async"><span class="gallery-meta"><strong>${esc(rec.name)}</strong><span>☆ ${count}</span></span>`;
+  btn.onclick = () => openDetail(rec.id);
+  $('#grid').appendChild(btn);
+}
+
 function appendCard(rec) {
+  if (prefs.displayMode === 'gallery') { appendGalleryCard(rec); return; }
   const isOwn = !!(state.user && rec.author_id === state.user.id);
   const isCommunity = state.view === 'community';
   const isMine = state.view === 'mine';
@@ -236,6 +585,9 @@ function appendCard(rec) {
   const star = rec.is_favorited ? '★' : '☆';
   const staticPill = `<span class="fav static ${rec.is_favorited ? 'on' : ''}">${star} <b>${count}</b></span>`;
   const favButton = `<button class="fav ${rec.is_favorited ? 'on' : ''}">${star} <b>${count}</b></button>`;
+  const authorHtml = rec.author_id
+    ? `<button type="button" class="author-link" data-author-id="${rec.author_id}">@ ${esc(rec.author)}</button>`
+    : `<span>@ ${esc(rec.author || '匿名')}</span>`;
 
   let foot = '';
   let footClass = 'card-foot';
@@ -261,7 +613,7 @@ function appendCard(rec) {
       <div class="card-title" data-id="${rec.id}">${esc(rec.name)}</div>
       <div class="card-desc">${esc(rec.description || '—')}</div>
       <div class="card-meta">
-        <span>@ ${esc(rec.author)}</span>
+        ${authorHtml}
         ${(rec.tags || []).slice(0, 3).map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}
       </div>
       <div class="${footClass}">${foot}</div>
@@ -279,6 +631,11 @@ function appendCard(rec) {
     const fav = card.querySelector('.fav');
     if (fav) fav.onclick = (e) => toggleFavorite(rec, e.currentTarget);
   }
+  const authorLink = card.querySelector('.author-link');
+  if (authorLink) authorLink.onclick = (event) => {
+    event.stopPropagation();
+    openPublicProfile(Number(authorLink.dataset.authorId));
+  };
   $('#grid').appendChild(card);
 }
 
@@ -542,7 +899,7 @@ async function openDetail(id) {
     <h3>${esc(rec.name)}</h3>
     <div class="detail-photos">${pv.html}</div>
     <div class="detail-info">
-      <div class="card-meta"><span>@ ${esc(rec.author)}</span>${rec.category ? `<span class="chip">${esc(rec.category)}</span>` : ''}</div>
+      <div class="card-meta">${rec.author_id ? `<button type="button" class="author-link" data-author-id="${rec.author_id}">@ ${esc(rec.author)}</button>` : `<span>@ ${esc(rec.author)}</span>`}${rec.category ? `<span class="chip">${esc(rec.category)}</span>` : ''}</div>
       <div class="detail-tags">${(rec.tags || []).map((t) => `<span class="chip">#${esc(t)}</span>`).join(' ')}</div>
       <p class="desc">${esc(rec.description || '（暂无说明）')}</p>
       <button class="recipe-toggle" id="recipeToggle" type="button" aria-expanded="false" aria-controls="recipeBody">
@@ -565,6 +922,12 @@ async function openDetail(id) {
       event.stopPropagation();
       openLightbox(img.currentSrc || img.src, img.alt);
     });
+  });
+  $('#detailBody').querySelectorAll('.author-link').forEach((link) => {
+    link.onclick = (event) => {
+      event.stopPropagation();
+      openPublicProfile(Number(link.dataset.authorId));
+    };
   });
   $('#dPreview').onclick = () => previewInEditor(rec.id);
   $('#dCopy').onclick = () => {
@@ -736,10 +1099,13 @@ async function submitPublish() {
     });
     const r = await api('/api/recipes', { method: 'POST', body: { recipe }, auth: true });
     if (!r.ok) { err.textContent = r.data.error || '发布失败'; return; }
+    const newId = r.data?.id ?? r.data?.recipe?.id;
     $('#publishModal').classList.remove('open');
+    $('#detailModal').classList.remove('open');
     toast('发布成功');
     resetPublishForm();
     loadCategories(); loadStats(); loadRecommend(); reloadCurrentView();
+    if (newId) setTimeout(() => openDetail(newId), 260);
   } catch (e) {
     err.textContent = e.message;
   } finally {
@@ -764,14 +1130,18 @@ function resetPublishForm() {
 /* ---------------- 上传记录 ---------------- */
 async function loadRecords(reset) {
   if (!state.user) { toast('请先登录'); openAuth('login'); return; }
-  if (reset) { state.recPage = 1; $('#records').innerHTML = ''; }
+  const request = state.listRequest = (state.listRequest || 0) + 1;
+  if (reset) state.recPage = 1;
+  $('#records').innerHTML = '';
   const p = new URLSearchParams({ page: state.recPage || 1, page_size: 20 });
   const r = await api('/api/me/uploads?' + p.toString(), { auth: true });
+  if (request !== state.listRequest || state.view !== 'records') return;
   if (!r.ok) { toast(r.data.error || '加载失败'); return; }
   state.recTotal = r.data.total || 0;
   (r.data.recipes || []).forEach(appendRecord);
   $('#empty').style.display = (state.recTotal === 0) ? 'block' : 'none';
   $('#empty').textContent = '还没有上传记录';
+  renderPagination();
 }
 
 function appendRecord(rec) {
@@ -826,15 +1196,88 @@ function switchView(view) {
   $('#category').style.display = comm ? '' : 'none';
   $('#grid').style.display = isRecords ? 'none' : '';
   $('#records').style.display = isRecords ? 'flex' : 'none';
-  $('#loadMore').style.display = 'none';
+  const pagination = $('#pagination');
+  if (pagination) pagination.style.display = 'none';
   $('#empty').style.display = 'none';
   if (isRecords) loadRecords(true);
   else loadRecipes(true);
 }
 
+/* ---------------- 用户中心 ---------------- */
+function setUserCenterView(view) {
+  state.listRequest = (state.listRequest || 0) + 1;
+  state.loading = false;
+  $('#empty').style.display = 'none';
+  document.querySelectorAll('.uc-nav button').forEach((b) => b.classList.toggle('active', b.dataset.ucView === view));
+  const account = document.getElementById('ucAccountPanel');
+  const settings = document.getElementById('ucSettingsPanel');
+  const toolbar = document.querySelector('.toolbar');
+  const grid = document.getElementById('grid');
+  const records = document.getElementById('records');
+  if (view === 'account') {
+    clearProfileDraftMarks();
+    if (account) account.hidden = false;
+    if (settings) settings.hidden = true;
+    if (toolbar) toolbar.style.display = 'none';
+    if (grid) grid.style.display = 'none';
+    if (records) records.style.display = 'none';
+    const empty = document.getElementById('empty');
+    const pagination = $('#pagination');
+    if (pagination) pagination.style.display = 'none';
+    renderAccountPanel();
+    loadMyProfile();
+  } else if (view === 'settings') {
+    if (account) account.hidden = true;
+    if (settings) settings.hidden = false;
+    if (toolbar) toolbar.style.display = 'none';
+    if (grid) grid.style.display = 'none';
+    if (records) records.style.display = 'none';
+    const empty = document.getElementById('empty');
+    const pagination = $('#pagination');
+    if (pagination) pagination.style.display = 'none';
+  } else {
+    if (account) account.hidden = true;
+    if (settings) settings.hidden = true;
+    if (toolbar) toolbar.style.display = '';
+    if (view === 'records') switchView('records');
+    else switchView(view);
+  }
+}
+
+function enterUserCenter() {
+  if (!state.user) { toast('请先登录'); openAuth('login'); return; }
+  document.documentElement.classList.add('uc-mode');
+  setUserCenterView('account');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function clearProfileDraftMarks() {
+  for (const id of ['ucDisplayNameInput','ucBioInput','ucLocationInput']) {
+    const input = document.getElementById(id);
+    if (input) delete input.dataset.edited;
+  }
+}
+
+function exitUserCenter(force = false) {
+  if (!force && !document.documentElement.classList.contains('uc-mode')) return;
+  document.documentElement.classList.remove('uc-mode');
+  const account = document.getElementById('ucAccountPanel');
+  if (account) account.hidden = true;
+  const settings = document.getElementById('ucSettingsPanel');
+  if (settings) settings.hidden = true;
+  const toolbar = document.querySelector('.toolbar');
+  if (toolbar) toolbar.style.display = '';
+  switchView('community');
+  loadRecommend();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 /* ---------------- 事件 ---------------- */
 document.addEventListener('DOMContentLoaded', () => {
+  loadPrefs();
+  applyPrefs();
   renderAuth();
+  refreshMe();
   loadStats(); loadCategories(); loadRecommend(); loadRecipes(true);
   updateRecipeStatus();
 
@@ -844,7 +1287,54 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#search').onkeydown = (e) => {
     if (e.key === 'Enter') { state.search = $('#search').value.trim(); if (state.view !== 'community') switchView('community'); else loadRecipes(true); }
   };
-  $('#loadMore').onclick = () => { state.page += 1; loadRecipes(false); };
+  $('#searchSubmit').onclick = () => {
+    state.search = $('#search').value.trim();
+    if (state.view !== 'community') switchView('community'); else loadRecipes(true);
+  };
+  document.querySelectorAll('.uc-nav button').forEach((btn) => {
+    btn.onclick = () => setUserCenterView(btn.dataset.ucView);
+  });
+  const ucBack = $('#ucBack');
+  if (ucBack) ucBack.onclick = exitUserCenter;
+  const ucSaveProfile = $('#ucSaveProfile');
+  if (ucSaveProfile) ucSaveProfile.onclick = saveProfile;
+  for (const id of ['ucDisplayNameInput','ucBioInput','ucLocationInput']) {
+    document.getElementById(id)?.addEventListener('input', event => { event.target.dataset.edited = '1'; });
+  }
+  const ucAvatarPick = $('#ucAvatarPick');
+  const ucAvatarInput = $('#ucAvatarInput');
+  if (ucAvatarPick && ucAvatarInput) {
+    ucAvatarPick.onclick = () => ucAvatarInput.click();
+    ucAvatarInput.onchange = () => {
+      const file = ucAvatarInput.files?.[0];
+      ucAvatarInput.value = '';
+      pickProfileAvatar(file);
+    };
+  }
+  const ucAvatarRemove = $('#ucAvatarRemove');
+  if (ucAvatarRemove) ucAvatarRemove.onclick = () => {
+    state.profileAvatarDraft = '';
+    renderProfileAvatar();
+  };
+  const ucPreviewPublic = $('#ucPreviewPublic');
+  if (ucPreviewPublic) ucPreviewPublic.onclick = () => {
+    if (state.user) openPublicProfile(state.user.id);
+  };
+  document.querySelectorAll('[data-font-scale]').forEach((btn) => {
+    btn.onclick = () => setFontScale(btn.dataset.fontScale);
+  });
+  document.querySelectorAll('[data-display-mode]').forEach((btn) => {
+    btn.onclick = () => setDisplayMode(btn.dataset.displayMode);
+  });
+  const pageNumbers = $('#pageNumbers');
+  if (pageNumbers) pageNumbers.onclick = (e) => {
+    const b = e.target.closest('[data-page]');
+    if (b) goToPage(Number(b.dataset.page));
+  };
+  const prevPage = $('#prevPage');
+  if (prevPage) prevPage.onclick = () => goToPage((state.view === 'records' ? state.recPage : state.page) - 1);
+  const nextPage = $('#nextPage');
+  if (nextPage) nextPage.onclick = () => goToPage((state.view === 'records' ? state.recPage : state.page) + 1);
   $('#publishBtn').onclick = () => {
     if (!state.user) { toast('请先登录'); openAuth('login'); return; }
     state.pairing = 'manual';           // 手动发布默认视为人工来源
@@ -880,4 +1370,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => b.closest('.modal').classList.remove('open'); });
   document.querySelectorAll('.modal').forEach((m) => { m.onclick = (e) => { if (e.target === m) m.classList.remove('open'); }; });
+
+  const syncModalScrollLock = () => {
+    const locked = !!document.querySelector('.modal.open');
+    document.documentElement.classList.toggle('modal-open', locked);
+    document.body.classList.toggle('modal-open', locked);
+  };
+  const modalObserver = new MutationObserver(syncModalScrollLock);
+  document.querySelectorAll('.modal').forEach((modal) => {
+    modalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    modal.addEventListener('wheel', (event) => {
+      if (!modal.classList.contains('open')) return;
+      if (!event.deltaY) return;
+      const card = event.target instanceof Element ? event.target.closest('.modal-card') : null;
+      if (!card) { event.preventDefault(); return; }
+      const canScroll = (el) => {
+        if (!(el instanceof Element)) return false;
+        const overflowY = getComputedStyle(el).overflowY;
+        if (!/(auto|scroll|overlay)/.test(overflowY)) return false;
+        if (el.scrollHeight <= el.clientHeight + 1) return false;
+        return event.deltaY < 0
+          ? el.scrollTop > 0
+          : el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+      };
+      let node = event.target instanceof Element ? event.target : null;
+      while (node && node !== card) {
+        if (canScroll(node)) return;
+        node = node.parentElement;
+      }
+      if (canScroll(card)) return;
+      event.preventDefault();
+    }, { passive: false });
+  });
+  syncModalScrollLock();
 });
+
+/* 嵌入式顶栏：下滑隐藏，上滑显示；上滑越多，搜索框向两边展开 */
+(() => {
+  if (!document.documentElement.classList.contains('embedded')) return;
+  const topbar = document.querySelector('.topbar');
+  const searchWrap = document.querySelector('.search-wrap');
+  if (!topbar || !searchWrap) return;
+  const MAX_W = 760;
+  const MIN_W = 520;
+  const RANGE = 620;
+  let lastY = window.scrollY || 0;
+  let hidden = false;
+  let raf = 0;
+  const render = () => {
+    raf = 0;
+    const y = window.scrollY || 0;
+    const delta = y - lastY;
+    if (y <= 40) hidden = false;
+    else if (delta > 1.5) hidden = true;
+    else if (delta < -1.5) hidden = false;
+    topbar.classList.toggle('search-hidden', hidden);
+    const ratio = Math.min(1, Math.max(0, y / RANGE));
+    const width = Math.round(MAX_W - (MAX_W - MIN_W) * ratio);
+    searchWrap.style.setProperty('--search-width', `${width}px`);
+    lastY = y;
+  };
+  window.addEventListener('scroll', () => {
+    if (!raf) raf = requestAnimationFrame(render);
+  }, { passive: true });
+  render();
+})();

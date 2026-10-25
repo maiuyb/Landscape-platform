@@ -85,7 +85,12 @@ def login_required(fn):
 @auth_bp.route('/api/auth/me', methods=['GET'])
 @login_required
 def me():
-    return jsonify({'user': public_user(g.current_user)})
+    conn = get_db()
+    try:
+        payload = repo.serialize_user(conn, g.current_user, self_view=True)
+    finally:
+        conn.close()
+    return jsonify({'user': payload})
 
 
 @auth_bp.route('/api/auth/logout', methods=['POST'])

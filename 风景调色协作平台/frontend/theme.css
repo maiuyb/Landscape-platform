@@ -217,8 +217,13 @@ button[aria-current=page] {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(23, 24, 23, 0.1);
   border-radius: 999px;
-  padding: 4px 12px 4px 6px;
+  padding: 4px 8px 4px 6px;
+  gap: 6px;
   box-shadow: 0 12px 32px -14px rgba(20, 22, 20, 0.14);
+}
+
+.canvas-toolbar .zoom-label {
+  gap: 0;
 }
 
 .canvas-toolbar button,
@@ -250,6 +255,43 @@ button[aria-current=page] {
   color: #FFFFFF;
   font-weight: 600;
   box-shadow: 0 4px 12px -4px rgba(29, 77, 60, 0.45);
+}
+
+.canvas-toolbar .desktop-compare {
+  position: relative;
+  z-index: 3;
+}
+
+.canvas-toolbar .desktop-compare::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 50%;
+  transform: translate(-50%, -3px);
+  padding: 7px 10px;
+  border: 1px solid rgba(23, 24, 23, 0.12);
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #171817;
+  box-shadow: 0 10px 26px -14px rgba(20, 22, 20, 0.4);
+  font-family: var(--gallery-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease, visibility .15s;
+  z-index: 30;
+}
+
+.canvas-toolbar .desktop-compare:hover::after,
+.canvas-toolbar .desktop-compare:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
 }
 
 .canvas-footer {
@@ -1055,22 +1097,6 @@ dialog::backdrop {
   box-shadow: 0 0 0 2px rgba(29, 77, 60, 0.2), 0 12px 24px -12px rgba(29, 77, 60, 0.25);
 }
 
-.compare-handle {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: rgba(250, 249, 246, 0.94);
-  border: 1px solid rgba(23, 24, 23, 0.22);
-  color: var(--ink);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(8px);
-}
-
-.compare-handle:hover {
-  transform: translate(-50%, -50%) scale(1.08);
-  background: #FFFFFF;
-}
-
 .image-badge {
   background: rgba(23, 24, 23, 0.84);
   backdrop-filter: blur(10px);
@@ -1119,10 +1145,10 @@ dialog::backdrop {
   width: 100%;
   height: calc(100dvh - 225px);
   min-height: 500px;
-  border: 1px solid rgba(23, 24, 23, 0.1);
-  border-radius: 10px;
-  background: #FAF9F6;
-  box-shadow: 0 24px 60px -24px rgba(20, 22, 20, 0.12);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .reuse-options label {

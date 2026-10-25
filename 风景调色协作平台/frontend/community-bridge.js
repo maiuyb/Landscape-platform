@@ -29,6 +29,8 @@
       channel=d.channel;send('landscape:ready');return;
     }
     if(channel&&d.channel===channel&&d.type==='landscape:auth'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){openAuth('login');return;}
+    if(channel&&d.channel===channel&&d.type==='landscape:user-center'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){if(typeof enterUserCenter==='function')enterUserCenter();return;}
+    if(channel&&d.channel===channel&&d.type==='landscape:community'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){if(typeof exitUserCenter==='function')exitUserCenter();return;}
     if(channel&&d.channel===channel&&d.type==='landscape:search'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){
       const query=String(d.query||'').trim();
       const input=document.querySelector('#search');
@@ -65,6 +67,7 @@
   window.addEventListener('storage',e=>{
     if([TOKEN_KEY,USER_KEY,LEGACY_TOKEN_KEY,LEGACY_USER_KEY].includes(e.key)){
       state.token=readToken();state.user=readUser();renderAuth();
+      if(!state.user&&document.documentElement.classList.contains('uc-mode'))exitUserCenter(true);
     }
   });
 })();

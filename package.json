@@ -28,7 +28,9 @@
     "test:history-gesture": "node tests/editor-history-gesture-browser.cjs",
     "test:upright": "node tests/editor-upright-browser.cjs",
     "test:community-compat": "node tests/community-main-compatibility-browser.cjs",
-    "test:community-issue-18": "node tests/community-issue-18-browser.cjs"
+    "test:community-issue-18": "node tests/community-issue-18-browser.cjs",
+    "test:user-center": "node tests/user-center-browser.cjs",
+    "test:profiles": "python tests/profile-api-check.py"
   },
   "dependencies": {
     "vue": "3.5.43"

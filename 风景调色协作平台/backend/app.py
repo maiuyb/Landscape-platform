@@ -65,9 +65,11 @@ with app.app_context():
     from community_modules import db as community_db, repository as repo
     from community_modules.auth import auth_bp, create_token
     from community_modules.community import community_bp
+    from community_modules.profile import profile_bp
     community_db.init_db()
 app.register_blueprint(auth_bp)
 app.register_blueprint(community_bp)
+app.register_blueprint(profile_bp)
 get_db = community_db.get_db
 
 @app.route('/community/')
@@ -105,15 +107,18 @@ def register():
     conn = get_db()
     try:
         password_hash = hashlib.sha256(password.encode()).hexdigest()
-        conn.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)',
-                     (username, password_hash))
+        conn.execute('INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)',
+                     (username, password_hash, username))
         conn.commit()
         uid = conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()['id']
-        return json_ok({'token': create_token(uid), 'user': {'id': uid, 'username': username}})
+        user_payload = repo.serialize_user(
+            conn, conn.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone(),
+            self_view=True)
     except sqlite3.IntegrityError:
         return json_error('用户名已存在')
     finally:
         conn.close()
+    return json_ok({'token': create_token(uid), 'user': user_payload})
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
@@ -122,11 +127,14 @@ def login():
     password = data.get('password', '').strip()
     password_hash = hashlib.sha256(password.encode()).hexdigest()
     conn = get_db()
-    user = conn.execute('SELECT * FROM users WHERE username=? AND password_hash=?',
-                        (username, password_hash)).fetchone()
-    conn.close()
+    try:
+        user = conn.execute('SELECT * FROM users WHERE username=? AND password_hash=?',
+                            (username, password_hash)).fetchone()
+        user_payload = repo.serialize_user(conn, user, self_view=True) if user else None
+    finally:
+        conn.close()
     if user:
-        return json_ok({'token': create_token(user['id']), 'user': {'id': user['id'], 'username': user['username']}})
+        return json_ok({'token': create_token(user['id']), 'user': user_payload})
     return json_error('用户名或密码错误')
 
 # ---------- 图片上传 ----------

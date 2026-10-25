@@ -93,6 +93,7 @@ createApp({
     const mainCanvas = ref(null), compareCanvas = ref(null), canvasContainer = ref(null), communityContainer = ref(null);
     const currentView = ref('editor'), imageLoaded = ref(false), imageLoading = ref(false);
     const originalImageUrl = ref(''), filename = ref(''), message = ref(''), error = ref('');
+    let noticeTimer = null;
     const state = ref(Core.createState()), historyVersion = ref(0);
     const sourceImage = shallowRef(null);
     const photoStripCollapsed=ref(false);
@@ -488,7 +489,7 @@ createApp({
     const shareOpen=ref(false),shareDialog=ref(null),sharing=ref(false),shareSingle=ref(false);
     const waitingRecipe=ref(null),reuseGeometry=ref(false),reuseMasks=ref(false),reuseScope=ref({geometry:false,masks:false});
     const handoffId=()=>Array.from(crypto.getRandomValues(new Uint32Array(4)),v=>v.toString(16).padStart(8,'0')).join('');
-    const communityChannel=handoffId(),seenHandoffs=new Set();let sharePackage=null,loginRequested=false;
+    const communityChannel=handoffId(),seenHandoffs=new Set();let sharePackage=null,loginRequested=false,pendingCommunityMode=null;
     const recipeDetail = ref(null), recipeDetailLoading=ref(false), recipeDetailError=ref('');
     let recipeDetailVersion=0;
     const exportDialog = ref(null), recipeDialog = ref(null);
@@ -540,8 +541,24 @@ createApp({
     }
     const dirty = computed(() => JSON.stringify(state.value) !== JSON.stringify(Core.createState()));
     const locked = computed(() => !imageLoaded.value || imageLoading.value || exporting.value || sharing.value || importing.value || frameExporting.value || !!preview.value || cropOpen.value || straightenOpen.value || perspectiveOpen.value);
-    function notify(text) { error.value = ''; message.value = text; }
-    function fail(text) { message.value = ''; error.value = text; }
+    function notify(text) {
+      error.value = ''; message.value = text;
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => {
+        if (message.value === text) message.value = '';
+        noticeTimer = null;
+      }, 5000);
+    }
+    function fail(text) {
+      clearTimeout(noticeTimer); noticeTimer = null;
+      message.value = ''; error.value = text;
+    }
+    watch(message, value => {
+      if (!value && noticeTimer !== null) {
+        clearTimeout(noticeTimer);
+        noticeTimer = null;
+      }
+    });
     function draw(target, result) {
       if (!target) return;
       target.width = result.width; target.height = result.height;
@@ -777,7 +794,7 @@ createApp({
       closePhotoId.value=null;const index=photos.value.findIndex(p=>p.id===id);if(index<0)return;
       if(id===activePhotoId.value&&photos.value.length>1){await activatePhoto(photos.value[index===photos.value.length-1?index-1:index+1]);if(activePhotoId.value===id)return;}
       photos.value=photos.value.filter(p=>p.id!==id);
-      if(!photos.value.length){editorBlank.value=false;photoStripCollapsed.value=false;importVersion++;aiAbort?.abort();aiRequestToken++;aiLoading.value=false;renderer?.dispose();renderer=null;sourceImage.value&&(sourceImage.value.src='');sourceImage.value=null;if(sourcePreview){sourcePreview.width=1;sourcePreview.height=1;}sourcePreview=null;if(originalImageUrl.value)URL.revokeObjectURL(originalImageUrl.value);originalImageUrl.value='';activePhotoId.value=null;imageLoaded.value=false;state.value=Core.createState();history=Core.createHistory();historyVersion.value++;frameOptions.value=Frames.defaults();filename.value='';currentView.value='editor';notify('已关闭照片，原文件未改变。');}
+      if(!photos.value.length){editorBlank.value=true;photoStripCollapsed.value=false;importVersion++;aiAbort?.abort();aiRequestToken++;aiLoading.value=false;renderer?.dispose();renderer=null;sourceImage.value&&(sourceImage.value.src='');sourceImage.value=null;if(sourcePreview){sourcePreview.width=1;sourcePreview.height=1;}sourcePreview=null;if(originalImageUrl.value)URL.revokeObjectURL(originalImageUrl.value);originalImageUrl.value='';activePhotoId.value=null;imageLoaded.value=false;state.value=Core.createState();history=Core.createHistory();historyVersion.value++;frameOptions.value=Frames.defaults();filename.value='';currentView.value='editor';notify('已关闭照片，原文件未改变。');}
     }
     watch(closePhotoId,async id=>{await nextTick();if(id)closePhotoDialog.value.showModal();else closePhotoDialog.value.close();});
     async function trySample(sample){
@@ -1353,6 +1370,21 @@ createApp({
         });
       }
     }
+    function postCommunityMode(mode){
+      if(!communityFrame.value||!communityReady.value)return;
+      communityFrame.value.contentWindow.postMessage({type:'landscape:'+mode,channel:communityChannel,id:handoffId(),sentAt:Date.now()},location.origin);
+    }
+    function openUserCenter(){
+      pendingCommunityMode='user-center';
+      openCommunity();
+      userMenuOpen.value=false;
+      nextTick(()=>{if(communityReady.value&&pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}});
+    }
+    function openCommunityBrowse(){
+      pendingCommunityMode='community';
+      openCommunity();
+      nextTick(()=>{if(communityReady.value&&pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}});
+    }
     function switchToEditor() {
       if(currentView.value==='editor')return;
       currentView.value='editor';
@@ -1377,7 +1409,7 @@ createApp({
       const d=event.data;
       if(!d||d.channel!==communityChannel||typeof d.id!=='string'||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000||seenHandoffs.has(d.id))return;
       seenHandoffs.add(d.id);if(seenHandoffs.size>100)seenHandoffs.delete(seenHandoffs.values().next().value);
-      if(d.type==='landscape:ready'){communityReady.value=true;sendShare();sendLogin();if(pendingCommunitySearch!==null){const q=pendingCommunitySearch;pendingCommunitySearch=null;postCommunitySearch(q);}}
+      if(d.type==='landscape:ready'){communityReady.value=true;sendShare();sendLogin();if(pendingCommunitySearch!==null){const q=pendingCommunitySearch;pendingCommunitySearch=null;postCommunitySearch(q);}if(pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}}
       else if(d.type==='landscape:share-received'){sharePackage=null;notify('已送到社区发布表单，确认作品信息后再发布。');}
       else if(d.type==='landscape:share-request'&&currentView.value==='community'){
         if(locked.value){fail('请先回到编辑器载入照片，并完成当前预览或构图操作。');return;}
@@ -1488,7 +1520,7 @@ createApp({
     onBeforeUnmount(() => {
       cancelUprightAnalysis();
       stopHeroSplitSweep();if(parallaxRaf!==null)cancelAnimationFrame(parallaxRaf);
-      clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);clearTimeout(editionSwitchTimer);revealObserver?.disconnect();
+      clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);clearTimeout(editionSwitchTimer);clearTimeout(noticeTimer);revealObserver?.disconnect();
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
@@ -1516,7 +1548,7 @@ createApp({
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe, authUser, userMenuOpen, toggleUserMenu, logout
+      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe, authUser, userMenuOpen, toggleUserMenu, logout
     };
   }
 }).mount('#app');

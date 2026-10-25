@@ -28,13 +28,53 @@ h2 { font-size: 16px; } h3, summary { font-size: 13px; font-weight: 650; }
 #app.community-mode .community-view {
   display: flex; flex-direction: column;
   flex: 1; min-height: 0; overflow: hidden;
-  padding: 16px 16px 8px;
+  padding: 0;
 }
 #app.community-mode .community-heading { flex: none; }
 #app.community-mode .community-frame {
   flex: 1 1 auto; height: auto; min-height: 0;
 }
 .app-header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: #fff; }
+.sticky-community-search {
+  position: fixed; left: 50%; z-index: 45;
+  width: min(760px, calc(100vw - 32px)); height: 52px;
+  display: flex; align-items: center;
+  padding-left: 18px;
+  background: #FFFDF5; border: 1px solid #D5D3C5; border-radius: 6px;
+  box-shadow: 0 12px 30px rgba(41, 61, 48, 0.16);
+  transform: translate(-50%, -8px); opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.sticky-community-search.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.sticky-search-label {
+  flex: none; padding-right: 14px; margin-right: 14px;
+  border-right: 1px solid #D5D3C5;
+  color: var(--ink); font-size: 14px; font-weight: 600;
+}
+.sticky-community-search input {
+  flex: 1; min-width: 0; height: 100%;
+  border: none; outline: none; background: none;
+  color: var(--ink); font: inherit; font-size: 14px;
+}
+.sticky-community-search input::placeholder { color: var(--muted); }
+.sticky-community-search input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.sticky-search-clear {
+  flex: none; border: none; background: none; color: var(--muted);
+  font-size: 20px; line-height: 1; padding: 0 8px; cursor: pointer;
+}
+.sticky-search-clear:hover { color: var(--ink); }
+.sticky-search-submit {
+  flex: none; align-self: stretch; width: 64px;
+  border: none; border-radius: 0 5px 5px 0;
+  background: var(--green); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.sticky-search-submit:hover { filter: brightness(1.08); }
+@media (max-width: 760px) {
+  .sticky-community-search { width: calc(100vw - 24px); height: 48px; padding-left: 14px; }
+  .sticky-search-label { display: none; }
+  .sticky-search-submit { width: 54px; }
+}
 .brand { display: flex; gap: 10px; align-items: center; color: var(--ink); text-decoration: none; font-size: 17px; font-weight: 650; }
 .brand img { width: 32px; height: 32px; }
 .brand-sub { margin-left: 12px; font-size: 11px; color: var(--muted); font-weight: 400; }
@@ -76,8 +116,12 @@ nav { display: flex; gap: 8px; align-items: center; }
 .compare-canvas { position: absolute; top: 0; left: 0; }
 .image-badge { position: absolute; left: 10px; top: 10px; font-size: 11px; color: #fff; background: #173524cc; padding: 5px 8px; border-radius: 4px; pointer-events: none; }
 .compare-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; pointer-events: none; }
-.compare-handle { position: absolute; top: 50%; transform: translate(-50%,-50%); width:40px;height:40px;padding:0;border-radius:50%;background:#fff;color:var(--green);pointer-events:auto;touch-action:none;cursor:ew-resize;box-shadow:0 1px 7px #0004; }
-.compare-handle:focus-visible{outline:3px solid var(--green);outline-offset:3px;}
+.compare-grab { position: absolute; top: 0; bottom: 0; left: 50%; width: 32px; transform: translateX(-50%); padding: 0; border: 0; border-radius: 0; background: transparent; color: transparent; box-shadow: none; cursor: ew-resize; touch-action: none; pointer-events: auto; }
+.compare-grab:hover,
+.compare-grab:active,
+.compare-grab:focus,
+.compare-grab:focus-visible { background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+.compare-grab:focus-visible { outline: 1px solid rgba(29, 77, 60, 0.55); outline-offset: -1px; border-radius: 0; }
 .compare-control { display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 12px; }
 .canvas-footer { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 12px 20px; border-top: 1px solid #dce2d8; }
 .canvas-footer > span { font-size: 11px; color: var(--muted); }
