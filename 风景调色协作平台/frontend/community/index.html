@@ -7,12 +7,14 @@
 <script>if (window.parent !== window) document.documentElement.classList.add('embedded');</script>
 <link rel="stylesheet" href="assets/style.css">
 <link rel="stylesheet" href="../community-host.css">
+<link rel="stylesheet" href="../author-portfolio.css">
 </head>
 <body>
 
 <aside class="uc-sidebar" aria-label="用户中心">
   <div class="uc-brand">用户中心</div>
   <nav class="uc-nav">
+    <button type="button" data-uc-view="profile">个人主页</button>
     <button type="button" data-uc-view="account" class="active">账号管理</button>
     <button type="button" data-uc-view="mine">我的上传</button>
     <button type="button" data-uc-view="favorites">我的收藏</button>
@@ -48,6 +50,19 @@
 </section>
 
 <main class="container">
+  <section id="authorPage" class="author-page" aria-label="作者主页" hidden>
+    <div class="author-breadcrumb"><button type="button" id="authorBack" class="btn ghost">← 返回社区</button><span>摄影师作品集</span></div>
+    <div id="authorHeader" class="author-header"></div>
+    <div class="author-toolbar" id="authorToolbar" hidden>
+      <div><h2 id="authorWorksHeading" tabindex="-1">全部作品</h2><span id="authorWorkCount" class="muted"></span></div>
+      <select id="authorSort" class="select" aria-label="作者作品排序"><option value="latest">最新发布</option><option value="favorites">最多收藏</option></select>
+    </div>
+    <p id="authorStatus" class="author-status" role="status"></p>
+    <button type="button" id="authorRetry" class="btn ghost" hidden>重新加载</button>
+    <div id="authorWorks" class="author-works"></div>
+    <nav id="authorPagination" class="pagination" aria-label="作者作品分页" hidden></nav>
+    <div id="authorShareFallback" class="author-share-fallback" hidden><label for="authorShareUrl">复制主页链接</label><input id="authorShareUrl" class="input" readonly></div>
+  </section>
   <section id="ucAccountPanel" class="uc-account-panel" hidden>
     <div class="uc-profile-hero">
       <div class="uc-profile-avatar" id="ucProfileAvatar" aria-hidden="true">
@@ -87,6 +102,7 @@
       <label class="field-label" for="ucLocationInput">所在地</label>
       <input id="ucLocationInput" class="input" maxlength="40" placeholder="例如：杭州">
       <div class="modal-actions">
+        <button type="button" class="btn ghost" id="ucCancelProfile">返回个人主页</button>
         <button type="button" class="btn primary" id="ucSaveProfile">保存资料</button>
       </div>
       <div id="ucProfileError" class="error"></div>
@@ -120,7 +136,7 @@
     <div id="recommend" class="recommend-row"></div>
   </section>
 
-  <section class="section">
+  <section class="section" id="communityListSection">
     <div class="toolbar">
       <div class="tabs">
         <button class="tab active" data-view="community">全部作品</button>
@@ -156,14 +172,6 @@
   <div class="modal-card">
     <button class="close" data-close>&times;</button>
     <div id="detailBody"></div>
-  </div>
-</div>
-
-<!-- 公开主页 -->
-<div id="profileModal" class="modal">
-  <div class="modal-card profile-modal-card">
-    <button class="close" data-close>&times;</button>
-    <div id="publicProfileBody"></div>
   </div>
 </div>
 
@@ -256,7 +264,9 @@
 </div>
 
 <div id="toast" class="toast"></div>
+<script src="../author-route.js"></script>
 <script src="assets/app.js"></script>
+<script src="../author-portfolio.js"></script>
 <script src="../community-bridge.js"></script>
 </body>
 </html>

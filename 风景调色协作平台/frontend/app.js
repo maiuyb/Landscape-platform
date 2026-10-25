@@ -91,7 +91,9 @@ createApp({
   },
   setup() {
     const mainCanvas = ref(null), compareCanvas = ref(null), canvasContainer = ref(null), communityContainer = ref(null);
-    const currentView = ref('editor'), imageLoaded = ref(false), imageLoading = ref(false);
+    const initialAuthorRoute = AuthorRoute.parse(location.search);
+    const mainDocumentTitle = document.title;
+    const currentView = ref(initialAuthorRoute ? 'community' : 'editor'), imageLoaded = ref(false), imageLoading = ref(false);
     const originalImageUrl = ref(''), filename = ref(''), message = ref(''), error = ref('');
     let noticeTimer = null;
     const state = ref(Core.createState()), historyVersion = ref(0);
@@ -491,7 +493,8 @@ createApp({
     let cropDrag = null;
     const rotationAngle = ref(0), exportOpen = ref(false), exporting = ref(false);
     const exportOptions = reactive({ format: 'jpg', quality: 92, scale: 1 });
-    const communityFrame=ref(null), communityMounted=ref(false), communityReady=ref(false);
+    const communityInitialUrl=AuthorRoute.url(new URL('community/',document.baseURI),initialAuthorRoute).href;
+    const communityFrame=ref(null), communityMounted=ref(!!initialAuthorRoute), communityReady=ref(false);
     const communitySearch=ref('');
     let pendingCommunitySearch=null;
     const shareOpen=ref(false),shareDialog=ref(null),sharing=ref(false),shareSingle=ref(false);
@@ -1408,6 +1411,23 @@ createApp({
     function openEditorWorkspace(){if(!imageLoaded.value){editorBlank.value=true;photoStripCollapsed.value=false;}switchToEditor();}
 
     function connectCommunity(){communityReady.value=false;communityFrame.value?.contentWindow?.postMessage({type:'landscape:connect',channel:communityChannel},location.origin);}
+    function postAuthorRoute(route){
+      if(!communityReady.value)return;
+      communityFrame.value.contentWindow.postMessage({type:'landscape:author-route',channel:communityChannel,id:handoffId(),sentAt:Date.now(),route},location.origin);
+    }
+    function authorHistoryChanged(){
+      const route=AuthorRoute.parse(location.search);
+      if(!route)document.title=mainDocumentTitle;
+      if(route||window.history.state?.landscapeView==='community'){
+        communityMounted.value=true;currentView.value='community';
+        nextTick(()=>postAuthorRoute(route));
+      }else{currentView.value='editor';}
+    }
+    watch(currentView,(view)=>{
+      if(view==='editor'&&AuthorRoute.parse(location.search))window.history.pushState({landscapeView:'editor'},'',AuthorRoute.url(location.href,null));
+      else window.history.replaceState({...window.history.state,landscapeView:view},'',location.href);
+      if(view==='editor')document.title=mainDocumentTitle;
+    });
     function sendShare(){
       if(!sharePackage||!communityReady.value)return;
       if(Date.now()-sharePackage.sentAt>300000){sharePackage=null;fail('待发布内容已过期，请从编辑器重新分享。');return;}
@@ -1418,7 +1438,13 @@ createApp({
       const d=event.data;
       if(!d||d.channel!==communityChannel||typeof d.id!=='string'||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000||seenHandoffs.has(d.id))return;
       seenHandoffs.add(d.id);if(seenHandoffs.size>100)seenHandoffs.delete(seenHandoffs.values().next().value);
-      if(d.type==='landscape:ready'){communityReady.value=true;sendShare();sendLogin();if(pendingCommunitySearch!==null){const q=pendingCommunitySearch;pendingCommunitySearch=null;postCommunitySearch(q);}if(pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}}
+      if(d.type==='landscape:ready'){communityReady.value=true;postAuthorRoute(AuthorRoute.parse(location.search));sendShare();sendLogin();if(pendingCommunitySearch!==null){const q=pendingCommunitySearch;pendingCommunitySearch=null;postCommunitySearch(q);}if(pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}}
+      else if(d.type==='landscape:author-route-change'&&currentView.value==='community'){
+        const route=AuthorRoute.normalize(d.route),url=AuthorRoute.url(location.href,route);
+        if(url.href!==location.href){window.history.replaceState({...window.history.state,landscapeView:currentView.value},'',location.href);window.history[d.replace?'replaceState':'pushState']({landscapeView:'community'},'',url);}
+        if(!route)document.title=mainDocumentTitle;
+      }
+      else if(d.type==='landscape:author-title'&&currentView.value==='community'&&AuthorRoute.parse(location.search)?.author===Number(d.author)&&typeof d.title==='string')document.title=d.title.slice(0,100);
       else if(d.type==='landscape:share-received'){sharePackage=null;notify('已送到社区发布表单，确认作品信息后再发布。');}
       else if(d.type==='landscape:share-request'&&currentView.value==='community'){
         if(locked.value){fail('请先回到编辑器载入照片，并完成当前预览或构图操作。');return;}
@@ -1526,7 +1552,7 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
+    onMounted(() => { window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
 
     onBeforeUnmount(() => {
       clearTimeout(compareHintTimer);
@@ -1536,7 +1562,7 @@ createApp({
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); document.removeEventListener('click', closeUserMenu);
+      window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); document.removeEventListener('click', closeUserMenu);
 
     });
     return {
@@ -1556,7 +1582,7 @@ createApp({
       confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
       exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
-      communityFrame,communityMounted,communityReady,connectCommunity,communitySearch,sendCommunitySearch,clearCommunitySearch,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
+      communityInitialUrl,communityFrame,communityMounted,communityReady,connectCommunity,communitySearch,sendCommunitySearch,clearCommunitySearch,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
