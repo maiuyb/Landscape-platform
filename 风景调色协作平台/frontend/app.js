@@ -1434,9 +1434,11 @@ createApp({
       const recipe=Community.reuse(recipeDetail.value,{geometry:reuseGeometry.value,masks:reuseMasks.value});
       beginPreview(recipe,{replaceGeometry:reuseGeometry.value});
     }
-    function openShare(){if(locked.value)return;commit();shareSingle.value=false;shareOpen.value=true;}
+    function openShare(){if(locked.value)return;shareSingle.value=false;shareOpen.value=true;}
     async function prepareShare(){
-      if(sharing.value||!imageLoaded.value)return;
+      if(sharing.value||!imageLoaded.value||!shareOpen.value)return;
+      // Opening/cancelling the confirmation must not redraw the photo or preset grid.
+      commit();
       sharing.value=true;error.value='';
       try{
         const snapshot=Core.clone(state.value),image=sourceImage.value;
