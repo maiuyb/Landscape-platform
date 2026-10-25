@@ -107,6 +107,38 @@ class Profiles(unittest.TestCase):
         self.assertEqual(listing['total'],1)
         self.assertEqual(self.client.get('/api/users/999999').status_code,404)
 
+    def test_owned_deleted_records_filter_pagination_and_recovery(self):
+        uid, other_id = [user['user']['id'] for user in self.users]
+        with closing(sqlite3.connect(self.database)) as conn:
+            for index in range(2):
+                conn.execute("INSERT INTO recipes(name,author,author_id) VALUES(?,?,?)", ('published-'+str(index), 'synthetic-owner', uid))
+            for index in range(22):
+                conn.execute("INSERT INTO recipes(name,author,author_id,deleted_at) VALUES(?,?,?,datetime('now','-1 hour'))", ('deleted-'+str(index), 'synthetic-owner', uid))
+            expired = conn.execute("INSERT INTO recipes(name,author,author_id,deleted_at) VALUES('expired','synthetic-owner',?,datetime('now','-8 days'))", (uid,)).lastrowid
+            conn.execute("INSERT INTO recipes(name,author,author_id,deleted_at) VALUES('foreign','synthetic-other',?,datetime('now'))", (other_id,))
+            conn.commit()
+        self.assertEqual(self.client.get('/api/me/uploads?status=deleted').status_code, 401)
+        self.assertEqual(self.client.get('/api/me/uploads?status=invalid', headers=self.headers).status_code, 400)
+        self.assertEqual(self.client.get('/api/me/uploads', headers=self.headers).json['total'], 25)
+        first = self.client.get('/api/me/uploads?status=deleted&page_size=10', headers=self.headers).json
+        self.assertEqual(first['total'], 23)
+        self.assertEqual(len(first['recipes']), 10)
+        self.assertTrue(first['has_more'])
+        self.assertTrue(all(row['deleted'] and row['author_id'] == uid for row in first['recipes']))
+        last = self.client.get('/api/me/uploads?status=deleted&page_size=10&page=3', headers=self.headers).json
+        self.assertEqual(len(last['recipes']), 3)
+        self.assertFalse(last['has_more'])
+        old = next(row for row in last['recipes'] if row['id'] == expired)
+        self.assertFalse(old['recoverable'])
+        self.assertEqual(self.client.post('/api/recipes/'+str(expired)+'/restore', headers=self.headers).status_code, 400)
+        recent = first['recipes'][0]['id']
+        foreign_headers = {'Authorization': 'Bearer '+self.users[1]['token']}
+        self.assertEqual(self.client.post('/api/recipes/'+str(recent)+'/restore', headers=foreign_headers).status_code, 403)
+        self.assertEqual(self.client.post('/api/recipes/'+str(recent)+'/restore', headers=self.headers).status_code, 200)
+        self.assertEqual(self.client.get('/api/me/uploads?status=deleted', headers=self.headers).json['total'], 22)
+        self.assertEqual(self.client.get('/api/me/recipes', headers=self.headers).json['total'], 3)
+        self.assertEqual(self.client.get('/api/recipes?author_id='+str(uid)).json['total'], 3)
+
     def test_legacy_migration_preserves_password_and_session(self):
         legacy = self.root/'legacy.db'
         c = sqlite3.connect(legacy)
