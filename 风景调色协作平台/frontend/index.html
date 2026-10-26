@@ -438,7 +438,7 @@
  <details class="subgroup ai-privacy"><summary>图片如何用于建议？</summary><p class="small">点击获取建议后，当前照片的压缩参考图、描述、编辑参数及本张照片最近三轮成功交流会发送到本项目后端；云端模式下转交千问分析。原尺寸照片和蒙版笔迹不随此请求发送，本项目后端不落盘保存 AI 参考图或交流内容。普通调色与导出在你的设备上完成。未配置密钥时明确展示固定演示方案。</p></details>
  </section>
  </div>
- <details class="workspace-output" open><summary>配方与作品</summary><div class="recipe-actions"><button @click="copyRecipe" :disabled="locked">复制配方</button><button @click="pasteRecipe" :disabled="locked || pastingRecipe">{{ pastingRecipe ? '正在读取…' : '粘贴配方' }}</button><button @click="downloadRecipe" :disabled="locked">下载配方</button><label class="button" :class="{ disabled: locked }">导入配方<input type="file" accept=".json,application/json" @change="importRecipe" :disabled="locked" aria-label="导入配方"></label></div><p class="small">刷新或关闭前，请导出照片或配方。</p></details>
+ <details class="workspace-output" open><summary>配方与作品</summary><div class="recipe-actions"><button @click="copyRecipe" :disabled="locked">复制配方</button><button @click="pasteRecipe" :disabled="locked || pastingRecipe">{{ pastingRecipe ? '正在读取…' : '粘贴配方' }}</button><button @click="downloadRecipe" :disabled="locked">下载配方</button><label class="button" :class="{ disabled: locked }">导入配方<input type="file" accept=".json,application/json" @change="importRecipe" :disabled="locked" aria-label="导入配方"></label></div></details>
 </aside>
       </template>
     </main>
