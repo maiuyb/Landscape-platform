@@ -504,6 +504,12 @@ createApp({
     const recipeDetail = ref(null), recipeDetailLoading=ref(false), recipeDetailError=ref('');
     let recipeDetailVersion=0;
     const exportDialog = ref(null), recipeDialog = ref(null);
+    const pasteRecipeDialog = ref(null), pasteRecipeOpen = ref(false), pasteRecipeText = ref(''), pasteRecipeError = ref(''), pastingRecipe = ref(false);
+    watch(pasteRecipeOpen, async open => {
+      await nextTick();
+      if (open) { pasteRecipeDialog.value.showModal(); pasteRecipeDialog.value.querySelector('textarea').focus(); }
+      else pasteRecipeDialog.value.close();
+    });
     watch(exportOpen, async open => { await nextTick(); if (open) exportDialog.value.showModal(); else exportDialog.value.close(); });
     watch(recipeDetail, async recipe => { await nextTick(); if (recipe) {if(!recipeDialog.value.open)recipeDialog.value.showModal();} else if(recipeDialog.value.open)recipeDialog.value.close(); });
     watch(shareOpen,async open=>{await nextTick();if(open)shareDialog.value.showModal();else shareDialog.value.close();});
@@ -1526,6 +1532,34 @@ createApp({
       }
       catch { fail('剪贴板不可用，请使用“下载配方”保存文件。'); }
     }
+    function closeRecipePaste() {
+      pasteRecipeOpen.value = false;
+      pasteRecipeText.value = ''; pasteRecipeError.value = '';
+    }
+    function readPastedRecipe() {
+      if (locked.value) return false;
+      if (!pasteRecipeText.value.trim()) { pasteRecipeError.value = '请先粘贴配方内容。'; return false; }
+      let recipe;
+      try { recipe = Community.normalize(JSON.parse(pasteRecipeText.value)); }
+      catch { pasteRecipeError.value = '内容不是有效的配方，请重新复制完整配方后重试。'; return false; }
+      pasteRecipeDialog.value.close();
+      closeRecipePaste();
+      openCommunityRecipe(recipe);
+      return true;
+    }
+    async function pasteRecipe() {
+      if (locked.value || pastingRecipe.value) return;
+      const photo = activePhotoId.value;
+      pasteRecipeText.value = ''; pasteRecipeError.value = ''; pastingRecipe.value = true;
+      try {
+        if (navigator.clipboard?.readText) {
+          try { pasteRecipeText.value = await navigator.clipboard.readText(); } catch { /* Manual paste remains available. */ }
+        }
+        if (photo !== activePhotoId.value || locked.value) return;
+        if (pasteRecipeText.value.trim() && readPastedRecipe()) return;
+        pasteRecipeOpen.value = true;
+      } finally { pastingRecipe.value = false; }
+    }
     function downloadRecipe() {
       if (locked.value) return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(Core.toRecipe(state.value), null, 2)], { type: 'application/json' }));
@@ -1586,7 +1620,7 @@ createApp({
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, copyRecipe, downloadRecipe, importRecipe, authUser, userMenuOpen, toggleUserMenu, logout
+      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, copyRecipe, pasteRecipe, pastingRecipe, pasteRecipeDialog, pasteRecipeText, pasteRecipeError, readPastedRecipe, closeRecipePaste, downloadRecipe, importRecipe, authUser, userMenuOpen, toggleUserMenu, logout
     };
   }
 }).mount('#app');
