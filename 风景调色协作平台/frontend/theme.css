@@ -433,6 +433,8 @@ button[aria-current=page] {
 
 .workspace-output > summary {
   font-family: var(--gallery-serif);
+  font-size: 20px;
+  letter-spacing: 0.01em;
   color: var(--ink);
   font-weight: 600;
 }
@@ -447,21 +449,11 @@ button[aria-current=page] {
 }
 
 #panel-edit > .panel-heading {
-  position: relative;
-  padding-top: 14px;
   margin-bottom: 14px;
 }
 
-#panel-edit > .panel-heading::before {
-  content: 'CURATORIAL DARKROOM CONTROLS';
-  position: absolute;
-  top: 0;
-  left: 0;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  color: var(--bronze);
-}
+.panel-scroll > .editor-histogram { margin: -18px -14px 16px; }
+.recipe-paste-dialog textarea { display: block; width: 100%; margin-top: 8px; padding: 10px; resize: vertical; min-height: 140px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 12px/1.5 monospace; }
 
 .panel-heading h2 {
   font-family: var(--gallery-serif);
