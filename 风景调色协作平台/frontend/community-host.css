@@ -33,3 +33,15 @@ html:not(.uc-mode) .grid.gallery-mode {
 @media (max-width: 480px) {
   .work-management-tabs .tab { flex: 1 1 auto; padding-inline: 10px; }
 }
+
+/* Issue 34: existing theme tokens, functional segmented switch and account menu. */
+.display-mode-toggle { display: inline-flex; gap: 0; border: 1px solid var(--line, #d6d7cd); border-radius: 8px; overflow: hidden; }
+.display-mode-toggle button { border: 0; padding: 8px 13px; color: var(--text, #234d3d); background: transparent; cursor: pointer; font: inherit; }
+.display-mode-toggle button[aria-pressed="true"] { background: var(--primary, #234d3d); color: #fff; }
+.display-mode-toggle button:focus-visible { outline: 2px solid #a7874c; outline-offset: -3px; }
+.account-menu { position: relative; }
+.account-dropdown { position: absolute; top: 100%; right: 0; min-width: 140px; padding: 8px; border: 1px solid var(--line, #d6d7cd); background: var(--paper, #faf9f5); border-radius: 8px; display: none; z-index: 70; }
+.account-dropdown button { width: 100%; text-align: left; }
+.account-menu:not(.menu-dismissed):hover .account-dropdown, .account-menu:not(.menu-dismissed):focus-within .account-dropdown { display: block; }
+.editable-avatar { cursor: pointer; }
+.editable-avatar:focus-visible { outline: 2px solid #a7874c; outline-offset: 4px; }

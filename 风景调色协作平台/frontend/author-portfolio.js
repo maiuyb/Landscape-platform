@@ -26,6 +26,7 @@
 
   function refreshActions() {
     const owner = !!(user && state.user && user.id === state.user.id);
+    const avatar=el('authorHeader').querySelector('.public-profile-avatar');if(avatar){avatar.setAttribute('role',owner?'button':'img');avatar.setAttribute('tabindex',owner?'0':'-1');avatar.setAttribute('aria-label',owner?'更换头像':'作者头像');avatar.classList.toggle('editable-avatar',owner);}
     for (const id of ['authorEdit', 'authorManage']) {
       if (el(id)) el(id).hidden = !owner;
     }
@@ -110,6 +111,7 @@
     el('authorPage').hidden = false;
     el('ucAccountPanel').hidden = true;
     el('ucSettingsPanel').hidden = true;
+    el('ucSavedRecipesPanel').hidden = true;window.RecipeLibrary?.closePanel();
     document.querySelector('.toolbar').style.display = '';
     el('detailModal').classList.remove('open');
     closeLightbox();

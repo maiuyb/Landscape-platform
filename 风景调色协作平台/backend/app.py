@@ -66,10 +66,12 @@ with app.app_context():
     from community_modules.auth import auth_bp, create_token
     from community_modules.community import community_bp
     from community_modules.profile import profile_bp
+    from community_modules.saved_recipes import saved_recipes_bp
     community_db.init_db()
 app.register_blueprint(auth_bp)
 app.register_blueprint(community_bp)
 app.register_blueprint(profile_bp)
+app.register_blueprint(saved_recipes_bp)
 get_db = community_db.get_db
 
 @app.route('/community/')

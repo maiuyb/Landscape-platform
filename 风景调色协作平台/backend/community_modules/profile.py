@@ -84,14 +84,13 @@ def update_my_profile():
         return jsonify({'error': '资料格式不正确'}), 400
     user = g.current_user
     try:
-        display_name = _clean_text(
-            data.get('display_name', user['display_name'] or user['username']),
-            MAX_DISPLAY_NAME_LEN, '昵称')
+        display_name = (_clean_text(data['display_name'], MAX_DISPLAY_NAME_LEN, '昵称')
+                        if 'display_name' in data else user['display_name'] or user['username'])
         if not display_name:
             raise ValueError('昵称不能为空')
-        bio = _clean_text(data.get('bio', user['bio']), MAX_BIO_LEN, '简介')
-        location = _clean_text(
-            data.get('location', user['location']), MAX_LOCATION_LEN, '所在地')
+        bio = _clean_text(data['bio'], MAX_BIO_LEN, '简介') if 'bio' in data else user['bio']
+        location = (_clean_text(data['location'], MAX_LOCATION_LEN, '所在地')
+                    if 'location' in data else user['location'])
         avatar = user['avatar'] or ''
         if 'avatar' in data:
             avatar = _normalize_avatar(data.get('avatar'))
