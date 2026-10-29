@@ -53,7 +53,7 @@ function applyPrefs() {
   if (grid) grid.classList.toggle('gallery-mode', prefs.displayMode === 'gallery');
   document.querySelectorAll('[data-font-scale]').forEach((b) => b.classList.toggle('active', Number(b.dataset.fontScale) === prefs.fontScale));
   const displayMode = document.getElementById('displayMode');
-  if (displayMode) displayMode.value = prefs.displayMode;
+  if (displayMode) displayMode.querySelectorAll('[data-display-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.displayMode===prefs.displayMode)));
 }
 
 function setFontScale(scale) {
@@ -186,6 +186,7 @@ async function copyText(text) {
 
 /* ---------------- 认证 ---------------- */
 function renderAuth() {
+  window.RecipeLibrary?.sessionChanged();
   window.AuthorPortfolio?.refreshActions();
   const area = $('#authArea');
   if (!area) return;
@@ -535,7 +536,7 @@ function appendGalleryCard(rec) {
   btn.type = 'button';
   btn.className = 'gallery-card';
   btn.setAttribute('aria-label', rec.name);
-  btn.innerHTML = `<img data-original-src="${esc(uploadOriginalUrl(cover))}" src="${esc(thumbUrl(cover, 800))}" srcset="${esc(thumbSrcset(cover))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async"><span class="gallery-meta"><strong>${esc(rec.name)}</strong><span>☆ ${count}</span></span>`;
+  btn.innerHTML = `<img data-original-src="${esc(uploadOriginalUrl(cover))}" src="${esc(thumbUrl(cover, 800))}" srcset="${esc(thumbSrcset(cover))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async"><span class="gallery-meta"><strong>${esc(rec.name)}</strong><span>${rec.category ? esc(rec.category)+' · ' : ''}☆ ${count}</span></span>`;
   btn.onclick = () => openDetail(rec.id);
   if (state.view === 'mine') {
     const wrapper = document.createElement('div');
@@ -891,7 +892,7 @@ async function openDetail(id) {
       </div>
       <div class="modal-actions" style="margin-top:16px">
         <button class="btn primary" id="dPreview">在我的照片上预览</button>
-        <button class="btn ghost" id="dCopy">复制配方</button>
+        <button class="btn ghost" id="dSaveRecipe">存取配方</button>
         ${favBtn}${delBtn}
       </div>
       <div class="hint">预览会把完整配方送到编辑器，套用在**你自己的照片**上；不会替换你的原图。</div>
@@ -910,12 +911,7 @@ async function openDetail(id) {
     };
   });
   $('#dPreview').onclick = () => previewInEditor(rec.id);
-  $('#dCopy').onclick = () => {
-    const recipe = { version: rec.version || 1 };
-    if (rec.rendering != null) recipe.rendering = rec.rendering;
-    recipe.steps = rec.steps || [];
-    copyText(JSON.stringify(recipe, null, 2)).then(() => toast('已复制配方'), () => toast('复制失败，请展开“调色配方”手动复制'));
-  };
+  $('#dSaveRecipe').onclick = () => RecipeLibrary.saveSource(rec.id);
   const recipeToggle = $('#recipeToggle');
   if (recipeToggle) {
     recipeToggle.onclick = () => {
@@ -1026,10 +1022,7 @@ function loadHandoff() {
     if (!$('#pName').value && (meta.name || recipe.name)) $('#pName').value = meta.name || recipe.name;
     if (!$('#pDesc').value && (meta.description || recipe.description)) $('#pDesc').value = meta.description || recipe.description;
     if (!$('#pCategory').value && (meta.category || recipe.category)) $('#pCategory').value = meta.category || recipe.category;
-    if (!$('#pTags').value) {
-      const tags = meta.tags || recipe.tags;
-      if (Array.isArray(tags)) $('#pTags').value = tags.join(',');
-    }
+
   } catch (e) { /* ignore */ }
   updateRecipeStatus();
   toast('已读取编辑器配方');
@@ -1068,7 +1061,7 @@ async function submitPublish() {
       name,
       description: $('#pDesc').value.trim(),
       category: $('#pCategory').value.trim(),
-      tags: $('#pTags').value.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
+      tags: [],
       cover_before, cover_after,
       pairing,
     });
@@ -1089,7 +1082,7 @@ async function submitPublish() {
 }
 
 function resetPublishForm() {
-  ['#pName', '#pDesc', '#pCategory', '#pTags', '#pRecipeJson', '#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
+  ['#pName', '#pDesc', '#pCategory', '#pRecipeJson', '#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
   ['#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) delete el.dataset.fromEditor; });
   document.querySelectorAll('.file-note').forEach((n) => { n.textContent = '默认使用编辑器内图片'; });
   const toggle = $('#pRecipeToggle');
@@ -1201,6 +1194,8 @@ function reloadCurrentView() {
 }
 
 function switchView(view) {
+  RecipeLibrary.closePanel();
+  $('#ucSavedRecipesPanel').hidden=true;
   window.AuthorPortfolio?.leave();
   if (view === 'records' && !state.user) { toast('请先登录'); openAuth('login'); view = 'community'; }
   state.view = view;
@@ -1224,6 +1219,8 @@ function switchView(view) {
 function setUserCenterView(view) {
   if (!state.user) { toast('请先登录'); openAuth('login'); return; }
   if (view === 'profile') { if (state.user) openPublicProfile(state.user.id); return; }
+  RecipeLibrary.closePanel();
+  $('#ucSavedRecipesPanel').hidden=true;
   window.AuthorPortfolio?.leave();
   state.listRequest = (state.listRequest || 0) + 1;
   state.loading = false;
@@ -1237,7 +1234,9 @@ function setUserCenterView(view) {
   const toolbar = document.querySelector('.toolbar');
   const grid = document.getElementById('grid');
   const records = document.getElementById('records');
-  if (view === 'account') {
+  if(view==='saved'){
+    account.hidden=true;settings.hidden=true;toolbar.style.display='none';grid.style.display='none';records.style.display='none';$('#pagination').style.display='none';$('#ucSavedRecipesPanel').hidden=false;RecipeLibrary.showIn($('#ucSavedRecipesContent'));
+  } else if (view === 'account') {
     clearProfileDraftMarks();
     if (account) account.hidden = false;
     if (settings) settings.hidden = true;
@@ -1269,7 +1268,8 @@ function setUserCenterView(view) {
 
 function enterUserCenter() {
   if (!state.user) { toast('请先登录'); openAuth('login'); return; }
-  openPublicProfile(state.user.id);
+  document.documentElement.classList.add('uc-mode');
+  setUserCenterView('account');
 }
 
 function clearProfileDraftMarks() {
@@ -1306,7 +1306,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('.toolbar .tabs [data-view]').forEach((t) => { t.onclick = () => switchView(t.dataset.view); });
   $('#sort').onchange = (e) => { state.sort = e.target.value; loadRecipes(true); };
-  $('#displayMode').onchange = (e) => setDisplayMode(e.target.value);
+  $('#displayMode').querySelectorAll('[data-display-mode]').forEach(button=>button.onclick=()=>setDisplayMode(button.dataset.displayMode));
   $('#category').onchange = (e) => { state.category = e.target.value; loadRecipes(true); };
   $('#search').onkeydown = (e) => {
     if (e.key === 'Enter') { state.search = $('#search').value.trim(); if (state.view !== 'community' || window.AuthorPortfolio?.active()) switchView('community'); else loadRecipes(true); }

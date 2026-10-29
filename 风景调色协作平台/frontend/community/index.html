@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="assets/style.css">
 <link rel="stylesheet" href="../community-host.css">
 <link rel="stylesheet" href="../author-portfolio.css">
+<link rel="stylesheet" href="../saved-recipes.css">
 </head>
 <body>
 
@@ -17,6 +18,7 @@
     <button type="button" data-uc-view="profile">个人主页</button>
     <button type="button" data-uc-view="mine">我的作品</button>
     <button type="button" data-uc-view="favorites">我的收藏</button>
+    <button type="button" data-uc-view="saved">常用配方</button>
     <button type="button" data-uc-view="account">账号管理</button>
     <button type="button" data-uc-view="settings">个性化设置</button>
   </nav>
@@ -26,7 +28,6 @@
 <header class="topbar">
   <div class="brand">风景调色<span>社区</span></div>
   <div class="search-wrap">
-    <span class="search-scope">配方</span>
     <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none"
          stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line>
@@ -115,6 +116,8 @@
     <p class="hint">头像与资料仅用于社区展示；登录密码和登录安全设置暂未在此修改。</p>
   </section>
 
+  <section id="ucSavedRecipesPanel" class="uc-account-panel" hidden><h1>常用配方</h1><div id="ucSavedRecipesContent"></div></section>
+
   <section id="ucSettingsPanel" class="uc-account-panel" hidden>
     <h1>个性化设置</h1>
     <div class="uc-setting-group">
@@ -157,10 +160,7 @@
           <option value="favorites">按收藏数</option>
           <option value="latest">按最新</option>
         </select>
-        <select id="displayMode" class="select" aria-label="作品展示模式" title="切换作品的卡片或画廊展示">
-          <option value="card">卡片模式</option>
-          <option value="gallery">画廊模式</option>
-        </select>
+        <div id="displayMode" class="display-mode-toggle" role="group" aria-label="作品展示模式"><button type="button" data-display-mode="card" aria-pressed="true">卡片</button><button type="button" data-display-mode="gallery" aria-pressed="false">画廊</button></div>
         <button id="publishBtn" class="btn primary">发布作品</button>
       </div>
     </div>
@@ -218,7 +218,7 @@
   <div class="modal-card">
     <button class="close" data-close>&times;</button>
     <h3>发布作品</h3>
-    <p class="hint">分享的是**编辑器里的完整调色配方**（兼容 v1–v8），不是简化参数。用编辑器导出后，这里读取或粘贴即可。</p>
+    <p class="hint">分享的是**编辑器里的完整调色配方**（兼容 v1–v8），不是简化参数。可从编辑器分享到这里，或粘贴复制的配方。</p>
     <div class="form">
       <button class="publish-recipe-toggle" id="pRecipeToggle" type="button" aria-expanded="false" aria-controls="pRecipeBody">
         <span>配方（来自编辑器）</span>
@@ -226,7 +226,7 @@
       </button>
       <div id="pRecipeBody" class="publish-recipe-body" hidden>
         <textarea id="pRecipeJson" class="input recipe-json" rows="6"
-          placeholder='粘贴编辑器导出的配方 JSON，例如 {"version":6,"rendering":{"legacyTone":{"highlights":false,"shadows":false}},"steps":[...]}'></textarea>
+          placeholder='粘贴复制的配方 JSON，例如 {"version":6,"rendering":{"legacyTone":{"highlights":false,"shadows":false}},"steps":[...]}'></textarea>
         <div class="row">
           <button id="pLoadHandoff" class="btn ghost" type="button">从编辑器读取配方</button>
           <button id="pClearRecipe" class="btn ghost" type="button">清空配方</button>
@@ -236,16 +236,13 @@
 
       <label class="field-label">作品名称</label>
       <input id="pName" class="input" placeholder="例如：通透日落">
-      <label class="field-label">配方说明</label>
-      <input id="pDesc" class="input" placeholder="一句话说明效果与适用场景">
+      <label class="field-label" for="pDesc">配方说明</label>
+      <input id="pDesc" class="input" aria-describedby="pDescHint" placeholder="例如：柔和暖调，适合傍晚山景，保留高光层次">
+      <p id="pDescHint" class="hint">描述调色效果、适用场景或使用建议；内容分类用于区分日落、雪景等拍摄题材。</p>
       <div class="row">
         <div class="col">
           <label class="field-label">作品内容分类</label>
           <input id="pCategory" class="input" placeholder="例如：日落 / 雪景">
-        </div>
-        <div class="col">
-          <label class="field-label">标签</label>
-          <input id="pTags" class="input" placeholder="逗号分隔，例如：日落,通透">
         </div>
       </div>
       <div class="row">
@@ -276,6 +273,8 @@
 <script src="../author-route.js"></script>
 <script src="assets/app.js"></script>
 <script src="../author-portfolio.js"></script>
+<script src="../saved-recipes.js"></script>
+<script src="../community-usability.js"></script>
 <script src="../community-bridge.js"></script>
 </body>
 </html>

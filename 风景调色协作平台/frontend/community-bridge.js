@@ -30,6 +30,7 @@
     }
     if(channel&&d.channel===channel&&d.type==='landscape:auth'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){openAuth('login');return;}
     if(channel&&d.channel===channel&&d.type==='landscape:user-center'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){if(typeof enterUserCenter==='function')enterUserCenter();return;}
+    if(channel&&d.channel===channel&&d.type==='landscape:own-profile'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){if(state.user)openPublicProfile(state.user.id);return;}
     if(channel&&d.channel===channel&&d.type==='landscape:community'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){if(typeof exitUserCenter==='function')exitUserCenter();return;}
     if(channel&&d.channel===channel&&d.type==='landscape:author-route'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){AuthorPortfolio.restore(d.route);return;}
     if(channel&&d.channel===channel&&d.type==='landscape:search'&&Number.isFinite(d.sentAt)&&Math.abs(Date.now()-d.sentAt)<=300000){
@@ -60,6 +61,7 @@
   });
   // Preserve the community DOM, filters and scroll, and return to the live editor.
   previewInEditor=async id=>{
+    if(typeof id==='object'){if(!channel){toast('编辑器连接尚未就绪，请稍后重试');return;}send('landscape:preview',{payload:{recipe:id,meta:{name:id.name}}});return;}
     const button=document.querySelector('#dPreview'),request=++previewRequest;
     const r=await api('/api/recipes/'+id,{auth:true});
     if(request!==previewRequest||!button?.isConnected||!document.querySelector('#detailModal').classList.contains('open'))return;

@@ -74,6 +74,20 @@ def init_db():
         )''')
 
         # 兼容早期原型数据库
+        c.execute('''CREATE TABLE IF NOT EXISTS saved_recipes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            source_recipe_id INTEGER,
+            name TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            author TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
+            tags TEXT NOT NULL DEFAULT '[]',
+            recipe TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, source_recipe_id)
+        )''')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_saved_recipes_user ON saved_recipes(user_id, id)')
         _add_column_if_missing(conn, 'recipes', 'author_id', 'INTEGER')
         _add_column_if_missing(conn, 'recipes', 'category', "TEXT DEFAULT ''")
         _add_column_if_missing(conn, 'recipes', 'tags', "TEXT DEFAULT '[]'")

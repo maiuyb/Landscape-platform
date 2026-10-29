@@ -55,6 +55,16 @@ class Profiles(unittest.TestCase):
             self.assertNotIn('password_hash',response.json['user'])
         self.assertEqual(self.client.post('/api/auth/login',json={'username':'synthetic-owner','password':'synthetic-only'}).status_code,200)
 
+    def test_avatar_only_update_preserves_legacy_long_display_name(self):
+        with self.backend.app.app_context():
+            conn = self.backend.get_db()
+            conn.execute('UPDATE users SET display_name = ? WHERE id = ?', ('legacy-display-name-longer-than-twenty', self.users[0]['user']['id']))
+            conn.commit(); conn.close()
+        response = self.client.put('/api/users/me', headers=self.headers, json={'avatar': ''})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['user']['display_name'], 'legacy-display-name-longer-than-twenty')
+        self.assertEqual(self.client.put('/api/users/me', headers=self.headers, json={'display_name': 'x'*21}).status_code, 400)
+
     def test_update_is_owned_and_authentication_required(self):
         self.assertEqual(self.client.put('/api/users/me',json={}).status_code,401)
         response = self.client.put('/api/users/me',headers=self.headers,json={

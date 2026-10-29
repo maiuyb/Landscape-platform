@@ -271,6 +271,7 @@ createApp({
     const curveDraft = reactive({});
     let curveDrag = null;
     const preview = ref(null), aiLoading = ref(false), aiResults = ref([]), aiStatus = ref('');
+    const displayState=computed(()=>preview.value?.state || state.value);
     const panelTab=ref('edit'),panelScroller=ref(null),aiDraft=ref(''),aiInput=ref(null),aiMessages=ref([]),aiUnread=ref(false),aiDemo=ref(false),aiAppliedName=ref(''),compareGroup=ref(null);
     let aiContext = [];
     const aiConnection=ref('checking');
@@ -347,7 +348,7 @@ createApp({
       if(!panelTabs.some(t=>t.key===key)||exporting.value)return;
       if(key===panelTab.value){if(focus&&key==='ai'){await nextTick();aiInput.value?.focus({preventScroll:true});}return;}
       if(panelScroller.value)panelScroll[panelTab.value]=panelScroller.value.scrollTop;
-      maskPointerUp();maskEditing.value=false;wbPicking.value=false;hoverFilter.value=null;compareGroup.value=null;preview.value=null;
+      maskPointerUp();maskEditing.value=false;wbPicking.value=false;hoverFilter.value=null;compareGroup.value=null;
       // Geometric drafts remain visibly active until explicitly applied or cancelled.
       if(dragging)commit();panelTab.value=key;if(key==='ai')aiUnread.value=false;
       await nextTick();if(panelScroller.value)panelScroller.value.scrollTop=panelScroll[key];requestThumbnails();
@@ -356,10 +357,18 @@ createApp({
     }
     function tabKey(event,index){let next;if(event.key==='ArrowRight')next=(index+1)%3;else if(event.key==='ArrowLeft')next=(index+2)%3;else if(event.key==='Home')next=0;else if(event.key==='End')next=2;else return;event.preventDefault();switchPanel(panelTabs[next].key);nextTick(()=>document.getElementById('tab-'+panelTabs[next].key)?.focus());}
     function openMasks(){switchPanel('edit');nextTick(()=>{const el=document.getElementById('masks-group');if(el){el.open=true;el.scrollIntoView({block:'start',behavior:'smooth'});}});}
-    const groupAdjusted=computed(()=>{const s=state.value,z=Core.createState();return{basic:JSON.stringify([s.adjustments,s.whiteBalance])!==JSON.stringify([z.adjustments,z.whiteBalance]),fine:JSON.stringify([s.hsl,s.curves,s.effects.calibration])!==JSON.stringify([z.hsl,z.curves,z.effects.calibration]),detail:JSON.stringify(s.detail)!==JSON.stringify(z.detail)||!!(s.effects.clarity||s.effects.dehaze),vignette:!!s.effects.vignette.amount,masks:s.masks.some(Core.masks.active)};});
-    function withoutGroup(base,key){const s=Core.clone(base),z=Core.createState();if(key==='basic'){s.adjustments=z.adjustments;s.whiteBalance=z.whiteBalance;s.legacyTone=z.legacyTone;}if(key==='fine'){s.hsl=z.hsl;s.curves=z.curves;s.effects.calibration=z.effects.calibration;}if(key==='detail'){s.detail=z.detail;s.effects.clarity=0;s.effects.dehaze=0;}if(key==='vignette')s.effects.vignette=z.effects.vignette;if(key==='masks')s.masks=[];return s;}
+    const groupAdjusted=computed(()=>{const s=displayState.value,z=Core.createState();return{composition:!!s.geometry.length,basic:JSON.stringify([s.adjustments,s.whiteBalance])!==JSON.stringify([z.adjustments,z.whiteBalance]),fine:JSON.stringify([s.hsl,s.curves,s.effects.calibration])!==JSON.stringify([z.hsl,z.curves,z.effects.calibration]),detail:JSON.stringify(s.detail)!==JSON.stringify(z.detail)||!!(s.effects.clarity||s.effects.dehaze),vignette:!!s.effects.vignette.amount,masks:s.masks.some(Core.masks.active)};});
+    function withoutGroup(base,key){const s=Core.clone(base),z=Core.createState();if(key==='composition')s.geometry=[];if(key==='basic'){s.adjustments=z.adjustments;s.whiteBalance=z.whiteBalance;s.legacyTone=z.legacyTone;}if(key==='fine'){s.hsl=z.hsl;s.curves=z.curves;s.effects.calibration=z.effects.calibration;}if(key==='detail'){s.detail=z.detail;s.effects.clarity=0;s.effects.dehaze=0;}if(key==='vignette')s.effects.vignette=z.effects.vignette;if(key==='masks')s.masks=[];return s;}
     function holdGroup(key,event){if(locked.value||!groupAdjusted.value[key])return;hoverFilter.value=null;compareMode.value='edited';compareGroup.value=key;if(event?.pointerId!==undefined)event.currentTarget.setPointerCapture(event.pointerId);}
-    function resetToolGroup(key){const next=withoutGroup(state.value,key);state.value=next;if(key==='vignette')vignetteDirection.value='dark';commit();}
+    function resetToolGroup(key){if(locked.value)return;const next=withoutGroup(state.value,key);state.value=next;if(key==='vignette')vignetteDirection.value='dark';commit();}
+    function geometryLabel(step){
+      const p=step.params||{},percent=v=>Math.round(v*1000)/10+'%';
+      if(step.type==='crop')return `裁剪：左 ${percent(p.x)}，上 ${percent(p.y)}，宽 ${percent(p.width)}，高 ${percent(p.height)}`;
+      if(step.type==='rotate')return `旋转：${p.angle}°`;
+      if(step.type==='flip')return p.direction==='h'?'水平翻转':'垂直翻转';
+      if(step.type==='straighten')return `拉直：${p.angle}°${p.autoCrop?'，自动裁去空白':''}`;
+      return `透视矫正${p.autoCrop?'，自动裁去空白':''}`;
+    }
     function proposalSummary(recipe){try{const next=Core.recipeState(state.value,recipe).state,parts=[];for(const c of Core.controls)if(next.adjustments[c.key]!==state.value.adjustments[c.key])parts.push(`${c.label} ${Number(next.adjustments[c.key]).toFixed(c.key==='exposure'?2:0)}${c.unit?' '+c.unit:''}`);if(next.filter!==state.value.filter)parts.push(next.filter?'风格 · '+(Core.filters.find(f=>f.name===next.filter)?.label||next.filter):'移除风格');return parts.join(' · ')||recipe.description||'保留当前设置，可先预览比较';}catch{return'配方暂时无法读取';}}
     async function locateProposal(recipe) {
       let target='exposure',mode=null;
@@ -382,7 +391,6 @@ createApp({
       const el=document.getElementById(target);
       if(el){for(let p=el;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;await nextTick();el.scrollIntoView({block:'center'});el.focus({preventScroll:true});}
     }
-    const galleryLoading = ref(false), galleryResults = ref([]);
     const compareMode = ref('edited'), sliderPos = ref(50), zoom = ref(100);
     const compareHandleVisible = ref(false), compareDragging = ref(false);
     let compareHintTimer;
@@ -470,14 +478,14 @@ createApp({
     const detailControls = Core.detail.controls.map(c=>({unit:'',...c}));
     const effectControls=Core.effects.controls.map(c=>({...c,key:'effect-'+c.key,field:c.key,kind:'effect'}));
     const vignetteDirection=ref('dark');
-    const vignetteMode=computed(()=>state.value.effects.vignette.amount>0?'bright':state.value.effects.vignette.amount<0?'dark':vignetteDirection.value);
+    const vignetteMode=computed(()=>displayState.value.effects.vignette.amount>0?'bright':displayState.value.effects.vignette.amount<0?'dark':vignetteDirection.value);
     const vignetteControls=computed(()=>Core.effects.vignetteControls.map(c=>({...c,key:'vignette-'+c.key,field:c.key,kind:'vignette',...(c.key==='amount'?{min:0,label:vignetteMode.value==='dark'?'暗角强度':'亮角强度',hint:vignetteMode.value==='dark'?'向右加深黑色暗角；0 为无效果':'向右增强白色亮角；0 为无效果'}:{})})));
     function changeVignetteMode(event){const mode=event.target.value;if(!['dark','bright'].includes(mode))return;vignetteDirection.value=mode;state.value.effects.vignette.amount=Math.abs(state.value.effects.vignette.amount)*(mode==='dark'?-1:1);commit();}
     const calibrationControls=['red','green','blue'].flatMap((band,i)=>['hue','saturation'].map(field=>({key:`cal-${band}-${field}`,kind:'calibration',band,field,label:['红','绿','蓝'][i]+'原色'+(field==='hue'?'色相':'饱和度'),min:-100,max:100,step:1,default:0,unit:'',hint:field==='hue'?'改变原色方向，也会影响由它混合而成的颜色':'改变原色的色彩强度'})));
     const maskControls=Core.masks.controls.map(c=>({...c,key:'mask-'+c.key,field:c.key,kind:'mask'}));
     const maskId=ref(null),maskEditing=ref(false),showMask=ref(true),maskErase=ref(false),brushSize=ref(12),brushFeather=ref(70),maskCanvas=ref(null);
     let maskDrag=null;
-    const selectedMask=computed(()=>state.value.masks.find(m=>m.id===maskId.value)||null);
+    const selectedMask=computed(()=>displayState.value.masks.find(m=>m.id===maskId.value)||null);
     const maskFrame=computed(()=>sourceImage.value?Core.geometryFrame(sourceImage.value.naturalWidth,sourceImage.value.naturalHeight,state.value.geometry):null);
     function maskScreen(p){const f=maskFrame.value,q=Core.masks.transform(f.transform,p[0]*f.sourceWidth,p[1]*f.sourceHeight);return[q[0]/f.fullWidth,q[1]/f.fullHeight];}
     const maskHandles=computed(()=>{const m=selectedMask.value;if(!m||m.type==='brush'||!maskFrame.value)return[];return(m.type==='linear'?[['start',m.start,'渐变起点'],['end',m.end,'渐变终点']]:[['center',m.center,'径向中心'],['radius',[m.center[0]+m.radius[0],m.center[1]+m.radius[1]],'径向范围']]).map(([key,p,label])=>{const q=maskScreen(p);return{key,label,style:{left:q[0]*100+'%',top:q[1]*100+'%'}};});});
@@ -521,10 +529,10 @@ createApp({
       if(hoverFilter.value.id)return Presets.apply(state.value,hoverFilter.value.id);
       const next=state.value.presetSession?Presets.remove(state.value):Core.clone(state.value);delete next.presetSession;next.filter=hoverFilter.value.name;next.filterStrength=100;return next;
     });
-    const legacyBalanceValues = computed(()=>state.value.whiteBalance.model!=='relative'&&state.value.adjustments.temperature===0&&state.value.adjustments.tint===0&&state.value.whiteBalance.gains.some(v=>v!==1)?Core.tools.whiteBalanceValues(state.value.whiteBalance.gains):null);
-    const colorControls = computed(()=>Core.controls.filter(c=>c.group==='color').map(c=>(state.value.whiteBalance.model==='relative'||legacyBalanceValues.value)&&['temperature','tint'].includes(c.key)?{...c,step:.1,precision:2}:c));
+    const legacyBalanceValues = computed(()=>displayState.value.whiteBalance.model!=='relative'&&displayState.value.adjustments.temperature===0&&displayState.value.adjustments.tint===0&&displayState.value.whiteBalance.gains.some(v=>v!==1)?Core.tools.whiteBalanceValues(displayState.value.whiteBalance.gains):null);
+    const colorControls = computed(()=>Core.controls.filter(c=>c.group==='color').map(c=>(displayState.value.whiteBalance.model==='relative'||legacyBalanceValues.value)&&['temperature','tint'].includes(c.key)?{...c,step:.1,precision:2}:c));
     const legacyBrightnessControl={...Core.controls.find(c=>c.key==='brightness'),label:'整体亮度（兼容配方）'};
-    function adjustmentValue(key) {return legacyBalanceValues.value&&['temperature','tint'].includes(key)?legacyBalanceValues.value[key]:state.value.adjustments[key];}
+    function adjustmentValue(key) {return legacyBalanceValues.value&&['temperature','tint'].includes(key)?legacyBalanceValues.value[key]:displayState.value.adjustments[key];}
     const activeState = computed(() => {
       let base=preview.value?.state || hoveredState.value || state.value;
       if(compareGroup.value)base=withoutGroup(base,compareGroup.value);
@@ -548,7 +556,7 @@ createApp({
       gradient:hslMode.value==='hue'?`linear-gradient(90deg,hsl(${b.hue-30} 55% 55%),hsl(${b.hue} 55% 55%),hsl(${b.hue+30} 55% 55%))`:hslMode.value==='saturation'?`linear-gradient(90deg,#78828c,hsl(${b.hue} 70% 55%))`:`linear-gradient(90deg,#29313e,hsl(${b.hue} 55% 55%),#e7edf3)`,
       hint:{hue:'调整此颜色的偏向',saturation:'调整此颜色的浓淡',luminance:'调整此颜色的明暗'}[hslMode.value]
     })));
-    const curvePoints = computed(() => state.value.curves[curveChannel.value]);
+    const curvePoints = computed(() => displayState.value.curves[curveChannel.value]);
     const selectedPoint = computed(() => curvePoints.value[Math.min(selectedCurvePoint.value,curvePoints.value.length-1)]);
     watch(selectedPoint,()=>Object.keys(curveDraft).forEach(key=>delete curveDraft[key]));
     watch(curvePoints,points=>{selectedCurvePoint.value=Math.min(selectedCurvePoint.value,points.length-1);});
@@ -657,7 +665,7 @@ createApp({
     watch(aiMessages,async()=>{if(panelTab.value!=='ai')return;await nextTick();const log=document.querySelector('.ai-conversation');if(log)log.scrollTop=log.scrollHeight;},{deep:true});
     function invalidateProposals() {
       if (aiResults.value.length) aiStatus.value = '当前编辑已改变，请重新获取建议。';
-      aiResults.value = []; galleryResults.value = [];
+      aiResults.value = [];
     }
     function commit() {
       thumbnailDirty=true;
@@ -727,15 +735,15 @@ createApp({
       commit();if(panelScroller.value)panelScroll[panelTab.value]=panelScroller.value.scrollTop;
       if(aiLoading.value){aiAbort?.abort();aiRequestToken++;aiLoading.value=false;aiStatus.value='已停止等待上次分析，可以重新获取建议。';}
       entry.history=history;
-      entry.snapshot=Core.clone({state:state.value,aiDraft:aiDraft.value,aiMessages:aiMessages.value,aiContext,aiStatus:aiStatus.value,aiResults:aiResults.value,aiDemo:aiDemo.value,aiAppliedName:aiAppliedName.value,aiUnread:aiUnread.value,galleryResults:galleryResults.value,panelTab:panelTab.value,panelScroll,presetCategory:presetCategory.value,presetSearch:presetSearch.value,maskId:maskId.value,vignetteDirection:vignetteDirection.value,inspectorOpen:inspectorOpen.value,inspectorBefore:inspectorBefore.value,inspectorPosition,hslMode:hslMode.value,curveChannel:curveChannel.value,selectedCurvePoint:selectedCurvePoint.value,zoom:zoom.value,compareMode:compareMode.value,sliderPos:sliderPos.value,frameOptions:frameOptions.value,frameScale:frameScale.value,exportOptions});
+      entry.snapshot=Core.clone({state:state.value,aiDraft:aiDraft.value,aiMessages:aiMessages.value,aiContext,aiStatus:aiStatus.value,aiResults:aiResults.value,aiDemo:aiDemo.value,aiAppliedName:aiAppliedName.value,aiUnread:aiUnread.value,panelTab:panelTab.value,panelScroll,presetCategory:presetCategory.value,presetSearch:presetSearch.value,maskId:maskId.value,vignetteDirection:vignetteDirection.value,inspectorOpen:inspectorOpen.value,inspectorBefore:inspectorBefore.value,inspectorPosition,hslMode:hslMode.value,curveChannel:curveChannel.value,selectedCurvePoint:selectedCurvePoint.value,zoom:zoom.value,compareMode:compareMode.value,sliderPos:sliderPos.value,frameOptions:frameOptions.value,frameScale:frameScale.value,exportOptions});
       entry.edited=dirty.value||JSON.stringify(frameOptions.value)!==JSON.stringify(Frames.defaults());photos.value=[...photos.value];
     }
     function restorePhoto(entry){
       const saved=entry.snapshot;
       state.value=saved?Core.clone(saved.state):Core.createState();history=entry.history||Core.createHistory(state.value);historyVersion.value++;
-      for(const [target,key,initial]of[[aiDraft,'aiDraft',''],[aiMessages,'aiMessages',[]],[aiStatus,'aiStatus',''],[aiResults,'aiResults',[]],[aiDemo,'aiDemo',false],[aiAppliedName,'aiAppliedName',''],[aiUnread,'aiUnread',false],[galleryResults,'galleryResults',[]],[panelTab,'panelTab','edit'],[presetCategory,'presetCategory','all'],[presetSearch,'presetSearch',''],[maskId,'maskId',null],[vignetteDirection,'vignetteDirection','dark'],[inspectorOpen,'inspectorOpen',false],[inspectorBefore,'inspectorBefore',false],[hslMode,'hslMode','hue'],[curveChannel,'curveChannel','master'],[selectedCurvePoint,'selectedCurvePoint',0],[zoom,'zoom',100],[compareMode,'compareMode','edited'],[sliderPos,'sliderPos',50],[frameOptions,'frameOptions',Frames.defaults()],[frameScale,'frameScale',1]])target.value=Core.clone(saved?.[key]??initial);
+      for(const [target,key,initial]of[[aiDraft,'aiDraft',''],[aiMessages,'aiMessages',[]],[aiStatus,'aiStatus',''],[aiResults,'aiResults',[]],[aiDemo,'aiDemo',false],[aiAppliedName,'aiAppliedName',''],[aiUnread,'aiUnread',false],[panelTab,'panelTab','edit'],[presetCategory,'presetCategory','all'],[presetSearch,'presetSearch',''],[maskId,'maskId',null],[vignetteDirection,'vignetteDirection','dark'],[inspectorOpen,'inspectorOpen',false],[inspectorBefore,'inspectorBefore',false],[hslMode,'hslMode','hue'],[curveChannel,'curveChannel','master'],[selectedCurvePoint,'selectedCurvePoint',0],[zoom,'zoom',100],[compareMode,'compareMode','edited'],[sliderPos,'sliderPos',50],[frameOptions,'frameOptions',Frames.defaults()],[frameScale,'frameScale',1]])target.value=Core.clone(saved?.[key]??initial);
       Object.assign(exportOptions,saved?.exportOptions||{format:'jpg',quality:92,scale:1});aiContext=Core.clone(saved?.aiContext||[]);Object.assign(panelScroll,saved?.panelScroll||{edit:0,presets:0,ai:0});Object.assign(inspectorPosition,saved?.inspectorPosition||{x:.5,y:.5});
-      aiLoading.value=false;galleryLoading.value=false;
+      aiLoading.value=false;
     }
     function canChangePhoto(){
       if(photoBusy.value)return false;
@@ -992,7 +1000,7 @@ createApp({
     function resetDetail(key) {setDetail(key,detailControls.find(c=>c.key===key).default);commit();}
     function resetDetails() {state.value.detail=Core.detail.defaults();state.value.effects.clarity=0;state.value.effects.dehaze=0;commit();notify('已复位细节，可撤销。');}
     function advancedTarget(control){return control.kind==='effect'?state.value.effects:control.kind==='vignette'?state.value.effects.vignette:control.kind==='calibration'?state.value.effects.calibration[control.band]:selectedMask.value?.adjustments;}
-    function advancedValue(control){const value=advancedTarget(control)?.[control.field]??control.default;return control.kind==='vignette'&&control.field==='amount'?Math.abs(value):value;}
+    function advancedValue(control){const shown=displayState.value;const target=control.kind==='effect'?shown.effects:control.kind==='vignette'?shown.effects.vignette:control.kind==='calibration'?shown.effects.calibration[control.band]:selectedMask.value?.adjustments;const value=target?.[control.field]??control.default;return control.kind==='vignette'&&control.field==='amount'?Math.abs(value):value;}
     function setAdvanced(control,value){const target=advancedTarget(control);if(target){if(control.kind==='vignette'){target.profile='corner';if(control.field==='amount'){vignetteDirection.value=vignetteMode.value;value=Math.abs(value)*(vignetteMode.value==='dark'?-1:1);}}target[control.field]=value;}error.value='';}
     function inputAdvanced(control,event){const v=event.target.valueAsNumber;if(!Number.isFinite(v)||v<control.min||v>control.max||(control.step===1&&!Number.isInteger(v))){event.target.value=advancedValue(control);return fail(`${control.label}请输入 ${control.min} 到 ${control.max} 之间的${control.step===1?'整数':'数值'}。`);}setAdvanced(control,Math.round(v*100)/100);commit();}
     function resetAdvanced(key){const c=[...effectControls,...vignetteControls.value,...calibrationControls,...maskControls].find(c=>c.key===key);if(c){setAdvanced(c,c.default);commit();}}
@@ -1212,7 +1220,7 @@ createApp({
         const proposal = Core.recipeState(base, recipe);
         delete proposal.state.presetSession;
         preview.value = { name: recipe.name, state: proposal.state, warnings: proposal.warnings };
-        closeRecipeDetail(); currentView.value = 'editor'; compareMode.value = 'edited';
+        closeRecipeDetail(); currentView.value = 'editor'; panelTab.value='edit'; compareMode.value = 'edited';
         if (proposal.warnings.length) notify(proposal.warnings.join('；'));
       } catch (e) { fail(e.message); }
     }
@@ -1317,17 +1325,6 @@ createApp({
       finally{if(requestId===aiRequestToken){aiLoading.value=false;aiAbort=null;if(version===importVersion&&panelTab.value!=='ai')aiUnread.value=true;}}
     }
     onMounted(refreshAIStatus);
-    async function matchGallery() {
-      if (locked.value || galleryLoading.value) return;
-      galleryLoading.value = true; const version = importVersion;
-      const baseState = JSON.stringify(state.value);
-      try {
-        const d = diagnosis();
-        const data = await api('/gallery/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ features: { avgV: d.avgV, avgS: d.avgS, avgH: d.avgH } }) });
-        if (version === importVersion && baseState === JSON.stringify(state.value)) galleryResults.value = data.results || [];
-      } catch (e) { if (version === importVersion) fail(`图库匹配失败：${e.message}`); }
-      finally { if(version===importVersion)galleryLoading.value = false; }
-    }
     function closeRecipeDetail(){recipeDetailVersion++;recipeDetailLoading.value=false;recipeDetailError.value='';recipeDetail.value=null;}
     async function openCommunityRecipe(record){
       const version=++recipeDetailVersion;
@@ -1348,12 +1345,14 @@ createApp({
     const authUser = ref(readAuthUser());
     const userMenuOpen = ref(false);
     function readAuthUser(){ try { const raw=localStorage.getItem('landscape:user')||localStorage.getItem('cd_user'); return raw?JSON.parse(raw):null; } catch { return null; } }
-    function refreshAuthUser(){ authUser.value=readAuthUser(); }
+    function refreshAuthUser(){ authUser.value=readAuthUser(); RecipeLibrary.sessionChanged(); }
     function authStorageChanged(event){ if(!event.key||['landscape:token','landscape:user','cd_token','cd_user'].includes(event.key)) refreshAuthUser(); }
-    function toggleUserMenu(){ userMenuOpen.value=!userMenuOpen.value; }
+    function leaveUserMenu(event){if(!event.currentTarget.contains(event.relatedTarget))userMenuOpen.value=false;}
+    function avatarUrl(value){const u=new URL(value,location.href);return u.origin===location.origin?u.pathname:'';}
+    function openOwnProfile(){if(!authUser.value)return;pendingCommunityMode='own-profile';openCommunity();userMenuOpen.value=false;nextTick(()=>{if(communityReady.value&&pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}});}
     function closeUserMenu(){ userMenuOpen.value=false; }
     async function logout(){
-      try { await api('/api/auth/logout',{method:'POST'}); } catch(e){ /* ignore */ }
+      try { await api('/auth/logout',{method:'POST'}); } catch(e){ /* ignore */ }
       for(const k of ['landscape:token','landscape:user','cd_token','cd_user']) localStorage.removeItem(k);
       refreshAuthUser(); userMenuOpen.value=false; notify('已退出登录');
     }
@@ -1530,8 +1529,14 @@ createApp({
         }
         notify('当前配方已复制，可在其他照片上复用。');
       }
-      catch { fail('剪贴板不可用，请使用“下载配方”保存文件。'); }
+      catch { fail('剪贴板不可用，可以登录后保存到“常用配方”。'); }
     }
+    RecipeLibrary.configure({
+      request:(path,method,body)=>api(path,{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})}),
+      login:openLogin, notify, preview:recipe=>{if(photoBusy.value||preview.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value){notify('请先完成当前预览或操作，再使用常用配方。');return;}openCommunityRecipe(recipe);}
+    });
+    function openSavedRecipes(){RecipeLibrary.open();}
+    function saveCurrentRecipe(){if(locked.value)return;commit();RecipeLibrary.saveCurrent(Core.toRecipe(state.value),(filename.value.replace(/\.[^.]+$/,'')+'的配方').slice(0,100));}
     function closeRecipePaste() {
       pasteRecipeOpen.value = false;
       pasteRecipeText.value = ''; pasteRecipeError.value = '';
@@ -1560,19 +1565,8 @@ createApp({
         pasteRecipeOpen.value = true;
       } finally { pastingRecipe.value = false; }
     }
-    function downloadRecipe() {
-      if (locked.value) return;
-      const url = URL.createObjectURL(new Blob([JSON.stringify(Core.toRecipe(state.value), null, 2)], { type: 'application/json' }));
-      const link = document.createElement('a'); link.href = url; link.download = '调色配方.json'; link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 60000); notify('已发起配方下载。');
-    }
-    async function importRecipe(event) {
-      const file = event.target.files[0]; event.target.value = ''; if (!file || locked.value) return;
-      try { const recipe = JSON.parse(await file.text()); beginPreview({ ...recipe, name: recipe.name || '导入配方' }); }
-      catch { fail('配方无法读取，请选择有效的 JSON 配方文件。'); }
-    }
     function keydown(event) {
-      if(frameOpen.value)return;
+      if(frameOpen.value || document.querySelector('.saved-recipes-dialog[open]'))return;
       if(currentView.value!=='editor'||exportOpen.value||shareOpen.value||recipeDetail.value||pendingPreset.value)return;
       if(event.key==='Enter'&&(event.target.closest('button,a')||event.target.tagName==='SUMMARY'&&!event.target.parentElement.classList.contains('geometry-tool')))return;
       if(event.key==='Enter'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!(event.target.isContentEditable||/TEXTAREA|SELECT/.test(event.target.tagName))){
@@ -1600,6 +1594,7 @@ createApp({
 
     });
     return {
+      displayState, geometryLabel, openSavedRecipes, saveCurrentRecipe,
       uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
@@ -1615,12 +1610,12 @@ createApp({
       straightenControl:{key:'straighten-angle',label:'拉直角度',min:-45,max:45,step:.1,precision:1,unit:'°',hint:'微调倾斜地平线；应用保存一次构图，取消保持原样。'},detailControls,setDetail,inputDetail,resetDetail,resetDetails,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
       confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
-      exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus, galleryLoading, galleryResults,
+      exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus,
       communityInitialUrl,communityFrame,communityMounted,communityReady,connectCommunity,communitySearch,sendCommunitySearch,clearCommunitySearch,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
-      beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI, matchGallery,
+      beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, copyRecipe, pasteRecipe, pastingRecipe, pasteRecipeDialog, pasteRecipeText, pasteRecipeError, readPastedRecipe, closeRecipePaste, downloadRecipe, importRecipe, authUser, userMenuOpen, toggleUserMenu, logout
+      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, copyRecipe, pasteRecipe, pastingRecipe, pasteRecipeDialog, pasteRecipeText, pasteRecipeError, readPastedRecipe, closeRecipePaste, authUser, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout
     };
   }
 }).mount('#app');
