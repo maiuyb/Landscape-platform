@@ -10,7 +10,6 @@
 #composition-group .subgroup>summary{min-height:40px}
 #composition-group .subgroup:first-child{border-top:0}
 #composition-group .geometry-tool>summary{display:flex;align-items:center;gap:8px}
-#composition-group .geometry-tool>summary[aria-disabled=true]{opacity:.5}
 .draft-state{margin-left:auto;font-size:11px;font-weight:500;color:#8C653E}
 #composition-group .geometry-draft{padding:0;margin:4px 0 14px;border:0;background:transparent;overflow:visible;max-height:none}
 #composition-group .geometry-draft p{font-size:12px;line-height:1.8;margin-bottom:10px}
@@ -1271,3 +1270,29 @@
   .hg-curtain-core{padding:22px 20px}
 }
 .upright-modes{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.upright-modes button{flex:1;font-size:13px;min-height:38px}.upright-modes button[aria-pressed=true]{background:rgba(29,77,60,0.08);border-color:#1D4D3C;color:#1D4D3C;font-weight:600}.upright-status{padding:8px;background:#FAF9F6;border-radius:6px}.upright-guide-controls{font-size:13px}.upright-guide-controls>label{display:flex;align-items:center;gap:8px}.upright-guide-row{display:flex;align-items:center;justify-content:space-between;margin:6px 0}.upright-guide-row button{font-size:12px;padding:5px 10px}.upright-layer{position:absolute;inset:0;z-index:6;touch-action:none;cursor:crosshair}.upright-layer svg{width:100%;height:100%;position:absolute;inset:0;pointer-events:none;overflow:hidden}.upright-layer line{stroke:#E2B882;stroke-width:2;vector-effect:non-scaling-stroke;filter:drop-shadow(0 1px 1px #000)}.upright-layer line.selected{stroke:#fff}.upright-endpoint{position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;padding:0;border:0;background:transparent;cursor:move;touch-action:none}.upright-endpoint::after{content:'';position:absolute;inset:10px;background:#fff;border:2px solid #1D4D3C;border-radius:50%;box-shadow:0 0 0 1px #fff}.upright-endpoint:focus-visible{outline:2px solid #8C653E;outline-offset:0;border-radius:50%}@media(max-width:760px){.upright-endpoint{width:44px;height:44px}.upright-endpoint::after{inset:15px}}
+
+/* Softer welcome header controls, matching the editor palette. */
+#app.welcome-active .app-header nav > button[aria-current=page] {
+  background: #E5EFE3;
+  border-color: rgba(29, 77, 60, 0.28);
+  color: #1D4D3C;
+  box-shadow: 0 4px 12px -8px rgba(29, 77, 60, 0.28);
+}
+#app.welcome-active .app-header nav > button[aria-current=page]:hover {
+  background: #D8E7DB;
+  border-color: rgba(29, 77, 60, 0.38);
+  color: #153B2E;
+}
+#app.welcome-active .app-header nav .button.primary,
+#app.welcome-active .app-header nav > button.primary {
+  background: #E3EFE6;
+  border-color: rgba(29, 77, 60, 0.28);
+  color: #1D4D3C;
+  box-shadow: 0 4px 12px -8px rgba(29, 77, 60, 0.24);
+}
+#app.welcome-active .app-header nav .button.primary:hover,
+#app.welcome-active .app-header nav > button.primary:hover {
+  background: #D8E7DB;
+  border-color: rgba(29, 77, 60, 0.38);
+  color: #153B2E;
+}

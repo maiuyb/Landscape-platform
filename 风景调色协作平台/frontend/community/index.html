@@ -108,12 +108,35 @@
       <div id="ucProfileError" class="error"></div>
     </div>
 
+    <div class="uc-account-card uc-password-card">
+      <div class="uc-section-head">
+        <h2>修改密码</h2>
+        <span class="hint">修改后请使用新密码登录，当前登录状态保持不变。</span>
+      </div>
+      <label class="field-label" for="ucCurrentPassword">当前密码</label>
+      <input id="ucCurrentPassword" class="input" type="password" maxlength="128" autocomplete="current-password" placeholder="请输入当前密码">
+      <div class="uc-password-grid">
+        <div>
+          <label class="field-label" for="ucNewPassword">新密码</label>
+          <input id="ucNewPassword" class="input" type="password" maxlength="128" autocomplete="new-password" placeholder="至少 4 位">
+        </div>
+        <div>
+          <label class="field-label" for="ucConfirmPassword">确认新密码</label>
+          <input id="ucConfirmPassword" class="input" type="password" maxlength="128" autocomplete="new-password" placeholder="请再次输入新密码">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn primary" id="ucChangePassword">更新密码</button>
+      </div>
+      <div id="ucPasswordError" class="error"></div>
+    </div>
+
     <div class="uc-account-card">
       <div class="uc-field"><span>登录账号</span><strong id="ucAccountName">—</strong></div>
       <div class="uc-field"><span>加入时间</span><strong id="ucJoinedAt">—</strong></div>
       <div class="uc-field"><span>账号状态</span><strong>正常</strong></div>
     </div>
-    <p class="hint">头像与资料仅用于社区展示；登录密码和登录安全设置暂未在此修改。</p>
+    <p class="hint">头像与资料仅用于社区展示；修改密码不会影响当前登录状态。</p>
   </section>
 
   <section id="ucSavedRecipesPanel" class="uc-account-panel" hidden><h1>常用配方</h1><div id="ucSavedRecipesContent"></div></section>

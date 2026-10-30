@@ -374,6 +374,58 @@ async function saveProfile() {
   openPublicProfile(state.user.id);
 }
 
+function setPasswordError(message = '') {
+  const el = $('#ucPasswordError');
+  if (el) el.textContent = message;
+}
+
+async function changePassword() {
+  if (!state.user) return;
+  setPasswordError('');
+  const currentPassword = $('#ucCurrentPassword').value.trim();
+  const newPassword = $('#ucNewPassword').value.trim();
+  const confirmPassword = $('#ucConfirmPassword').value.trim();
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    setPasswordError('请填写当前密码和两次新密码');
+    return;
+  }
+  if (newPassword.length < 4) {
+    setPasswordError('新密码至少 4 位');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    setPasswordError('两次输入的新密码不一致');
+    return;
+  }
+  if (newPassword === currentPassword) {
+    setPasswordError('新密码不能与当前密码相同');
+    return;
+  }
+  const button = $('#ucChangePassword');
+  if (button) button.disabled = true;
+  const token = state.token;
+  const r = await api('/api/users/me/password', {
+    method: 'PUT',
+    auth: true,
+    body: {
+      current_password: currentPassword,
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    },
+  });
+  if (button) button.disabled = false;
+  if (state.token !== token) return;
+  if (!r.ok) {
+    setPasswordError(r.data.error || '密码修改失败');
+    return;
+  }
+  ['ucCurrentPassword', 'ucNewPassword', 'ucConfirmPassword'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  toast('密码已更新');
+}
+
 async function openPublicProfile(userId) {
   return window.AuthorPortfolio.open(userId);
 }
@@ -1321,6 +1373,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (ucBack) ucBack.onclick = exitUserCenter;
   const ucSaveProfile = $('#ucSaveProfile');
   if (ucSaveProfile) ucSaveProfile.onclick = saveProfile;
+  const ucChangePassword = $('#ucChangePassword');
+  if (ucChangePassword) ucChangePassword.onclick = changePassword;
   $('#ucCancelProfile').onclick = () => { if (state.user) openPublicProfile(state.user.id); };
   for (const id of ['ucDisplayNameInput','ucBioInput','ucLocationInput']) {
     document.getElementById(id)?.addEventListener('input', event => { event.target.dataset.edited = '1'; });

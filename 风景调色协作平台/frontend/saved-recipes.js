@@ -32,6 +32,7 @@ window.RecipeLibrary = (() => {
     find('savedRecipePrev').onclick=()=>{page--;load();};find('savedRecipeNext').onclick=()=>{page++;load();};find('savedRecipeRetry').onclick=load;
     find('savedRecipeList').onclick=async e=>{
       const button=e.target.closest('button[data-saved-action]');if(!button)return;
+      e.preventDefault();e.stopPropagation();
       const entry=button.closest('[data-saved-id]').recipe;
       if(button.dataset.savedAction==='preview'){
         list.close();options.preview({...entry.recipe,name:entry.name,description:entry.note||entry.description,author:entry.author});
@@ -78,7 +79,12 @@ window.RecipeLibrary = (() => {
       find('savedRecipePage').textContent=`${page} / ${pages}`;find('savedRecipePrev').disabled=page<=1;find('savedRecipeNext').disabled=page>=pages;
       for(const entry of data.recipes){
         const article=document.createElement('details');article.className='saved-recipe-entry';article.dataset.savedId=entry.id;article.recipe=entry;article.open=expanded.has(String(entry.id));
-        article.innerHTML=`<summary><strong>${esc(entry.name)}</strong><span class="saved-recipe-chevron" aria-hidden="true"></span></summary><div class="saved-recipe-body">${entry.author?`<p class="saved-recipes-hint">来自 ${esc(entry.author)}</p>`:''}<p>${esc(entry.note||entry.description||'尚未添加备注')}</p>${entry.tags?.length?`<p class="saved-recipes-hint">${entry.tags.map(esc).join(' · ')}</p>`:''}<div class="saved-recipes-actions"><button type="button" data-saved-action="preview">在我的照片上预览</button><button type="button" data-saved-action="edit">编辑备注</button><button type="button" data-saved-action="remove">移除</button></div></div>`;
+        const steps=Array.isArray(entry.recipe?.steps)?entry.recipe.steps:[];
+        const stepHtml=steps.map(step=>{const params=step?.params&&typeof step.params==='object'?step.params:{};const value=params.value!=null?`${Number(params.value)>0?'+':''}${params.value}`:(params.name!=null?params.name:JSON.stringify(params));return `<li><span>${esc(step?.type||'调整')}</span><span>${esc(value)}</span></li>`;}).join('');
+        const note=String(entry.note||'').trim();
+        const description=String(entry.description||'').trim();
+        const tags=Array.isArray(entry.tags)?entry.tags:[];
+        article.innerHTML=`<summary><strong>${esc(entry.name)}</strong><span class="saved-recipe-summary-actions"><button type="button" class="saved-recipe-quick-preview" data-saved-action="preview">预览</button><span class="saved-recipe-chevron" aria-hidden="true"></span></span></summary><div class="saved-recipe-body">${entry.author?`<p class="saved-recipes-hint">来自 ${esc(entry.author)}</p>`:''}<div class="saved-recipe-fields"><div class="saved-recipe-field"><span class="saved-recipe-field-label">配方描述</span><span class="saved-recipe-field-value">${esc(description||'暂无描述')}</span></div><div class="saved-recipe-field"><span class="saved-recipe-field-label">配方标签</span><span class="saved-recipe-field-value">${tags.length?tags.map(esc).join(' · '):'暂无标签'}</span></div>${note?`<div class="saved-recipe-field"><span class="saved-recipe-field-label">我的备注</span><span class="saved-recipe-field-value">${esc(note)}</span></div>`:''}</div>${stepHtml?`<details class="saved-recipe-formula"><summary><span>调色配方</span><span class="saved-recipe-formula-caret" aria-hidden="true"></span></summary><ul class="saved-recipe-steps">${stepHtml}</ul></details>`:''}<div class="saved-recipes-actions"><button type="button" data-saved-action="preview">在我的照片上预览</button><button type="button" data-saved-action="edit">编辑备注</button><button type="button" data-saved-action="remove">移除</button></div></div>`;
         find('savedRecipeList').append(article);
       }
     }catch(error){if(version===generation){find('savedRecipeStatus').textContent=error.message;find('savedRecipeRetry').hidden=false;}}
