@@ -54,11 +54,16 @@ html.author-mode #communityListSection { display: none !important; }
   transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease;
 }
 
-.author-identity .public-profile-avatar.editable-avatar {
+.author-identity .public-profile-avatar.editable-avatar,
+.uc-profile-avatar.editable-avatar,
+.uc-avatar-preview.editable-avatar {
   cursor: pointer;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease;
 }
 
-.author-identity .public-profile-avatar.editable-avatar::after {
+.author-identity .public-profile-avatar.editable-avatar::after,
+.uc-profile-avatar.editable-avatar::after,
+.uc-avatar-preview.editable-avatar::after {
   content: '更换头像';
   position: absolute;
   inset: 0;
@@ -77,7 +82,11 @@ html.author-mode #communityListSection { display: none !important; }
 }
 
 .author-identity .public-profile-avatar.editable-avatar:hover,
-.author-identity .public-profile-avatar.editable-avatar:focus-visible {
+.author-identity .public-profile-avatar.editable-avatar:focus-visible,
+.uc-profile-avatar.editable-avatar:hover,
+.uc-profile-avatar.editable-avatar:focus-visible,
+.uc-avatar-preview.editable-avatar:hover,
+.uc-avatar-preview.editable-avatar:focus-visible {
   transform: scale(1.04);
   box-shadow:
     0 0 0 3px #FFFFFF,
@@ -87,7 +96,11 @@ html.author-mode #communityListSection { display: none !important; }
 }
 
 .author-identity .public-profile-avatar.editable-avatar:hover::after,
-.author-identity .public-profile-avatar.editable-avatar:focus-visible::after {
+.author-identity .public-profile-avatar.editable-avatar:focus-visible::after,
+.uc-profile-avatar.editable-avatar:hover::after,
+.uc-profile-avatar.editable-avatar:focus-visible::after,
+.uc-avatar-preview.editable-avatar:hover::after,
+.uc-avatar-preview.editable-avatar:focus-visible::after {
   opacity: 1;
 }
 
