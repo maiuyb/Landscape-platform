@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="welcome-workspace.css">
   <link rel="stylesheet" href="saved-recipes.css">
+  <style>[v-cloak]{display:none!important}</style>
 </head>
 <body>
   <div id="app" v-cloak>
@@ -112,8 +113,8 @@
       </nav>
     </header>
     <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden :disabled="photoBusy || photos.length >= 6" @change="handleUpload" aria-label="选择照片">
-    <div class="notice error notice-toast" v-if="error" role="alert"><span>{{ error }}</span><button type="button" class="notice-close" aria-label="关闭错误提示" @click="error = ''">×</button></div>
-    <div class="notice notice-toast" v-else-if="message" role="status"><span>{{ message }}</span><button type="button" class="notice-close" aria-label="关闭提示" @click="message = ''">×</button></div>
+    <div class="notice error notice-toast" v-if="error" role="alert"><span v-text="error"></span><button type="button" class="notice-close" aria-label="关闭错误提示" @click="error = ''">×</button></div>
+    <div class="notice notice-toast" v-else-if="message" role="status"><span v-text="message"></span><button type="button" class="notice-close" aria-label="关闭提示" @click="message = ''">×</button></div>
 
     <div class="notice" v-if="waitingRecipe && !imageLoaded"><span>待用配方「{{ waitingRecipe.name }}」· 选择自己的照片后再预览。</span><button @click="waitingRecipe=null">取消待用配方</button></div>
     <main class="workspace" :class="{'welcome-mode':!imageLoaded && !editorBlank}" v-show="currentView === 'editor'">
