@@ -7,7 +7,7 @@
 
 import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 RECOVER_DAYS = 7
 
@@ -109,6 +109,12 @@ def serialize_user(conn, user, self_view=False):
     }
     if self_view:
         data['favorites_given'] = stats['favorites_given']
+        keys = set(user.keys())
+        today_str = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime('%Y-%m-%d')
+        data['credits'] = int(user['credits']) if 'credits' in keys and user['credits'] is not None else 10
+        data['checked_in_today'] = (user['last_checkin_date'] == today_str) if 'last_checkin_date' in keys else False
+        data['email'] = (user['email'] or '') if 'email' in keys else ''
+        data['email_verified'] = bool(user['email_verified']) if 'email_verified' in keys else False
     return data
 
 

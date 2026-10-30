@@ -1335,9 +1335,14 @@ createApp({
       aiMessages.value.push({role:'user',text:intent||'请分析当前照片，给我一些调整建议。'});aiMessages.value=aiMessages.value.slice(-12);
       try {
         const d=diagnosis(512);
+        const creditIdentity=localStorage.getItem('landscape:token')||localStorage.getItem('cd_token')||'';
         const data=await api('/ai/recommend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
           intent,current_state:AI.context(base),history:aiContext.slice(-6),image_base64:d.canvas.toDataURL('image/jpeg',0.75).split(',')[1]
         }),signal:aiAbort.signal});
+        if(Number.isFinite(data.credits)&&authUser.value&&creditIdentity===(localStorage.getItem('landscape:token')||localStorage.getItem('cd_token')||'')){
+          authUser.value={...authUser.value,credits:Number(data.credits)};
+          if(window.CreditSponsor)window.CreditSponsor.saveUser(authUser.value);
+        }
         if(version!==importVersion)return;
         if(baseState!==JSON.stringify(state.value)){
           aiResults.value=[];aiStatus.value='分析期间编辑已改变，请重新获取当前版本的建议。';return;
@@ -1372,12 +1377,29 @@ createApp({
       }catch(e){if(version===recipeDetailVersion)recipeDetailError.value=e.message;}
       finally{if(version===recipeDetailVersion)recipeDetailLoading.value=false;}
     }
-    // ---- 登录态 / 用户中心 ----
+    // ---- 登录态 / 用户中心 / 显影积分 ----
     const authUser = ref(readAuthUser());
     const userMenuOpen = ref(false);
+    const creditBusy = ref(false);
     function readAuthUser(){ try { const raw=localStorage.getItem('landscape:user')||localStorage.getItem('cd_user'); return raw?JSON.parse(raw):null; } catch { return null; } }
-    function refreshAuthUser(){ authUser.value=readAuthUser(); RecipeLibrary.sessionChanged(); }
+    function refreshAuthUser(){ authUser.value=readAuthUser(); RecipeLibrary.sessionChanged(); window.CreditSponsor?.sessionChanged(); }
     function authStorageChanged(event){ if(!event.key||['landscape:token','landscape:user','cd_token','cd_user'].includes(event.key)) refreshAuthUser(); }
+    function onUserUpdated(){ authUser.value=readAuthUser(); }
+    async function dailyCheckin(){
+      if(creditBusy.value)return;
+      if(!authUser.value){openLogin();return;}
+      creditBusy.value=true;
+      try{
+        if(window.CreditSponsor){
+          await window.CreditSponsor.checkin({silentToast:(msg,isErr)=>isErr?fail(msg):notify(msg)});
+          authUser.value=readAuthUser();
+        }
+      }finally{creditBusy.value=false;userMenuOpen.value=false;}
+    }
+    function openCreditSponsor(tab='redeem'){
+      userMenuOpen.value=false;
+      if(window.CreditSponsor)window.CreditSponsor.open(tab);
+    }
     function leaveUserMenu(event){if(!event.currentTarget.contains(event.relatedTarget))userMenuOpen.value=false;}
     function avatarUrl(value){const u=new URL(value,location.href);return u.origin===location.origin?u.pathname:'';}
     function openOwnProfile(){if(!authUser.value)return;pendingCommunityMode='own-profile';openCommunity();userMenuOpen.value=false;nextTick(()=>{if(communityReady.value&&pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}});}
@@ -1598,7 +1620,7 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { const oneTimeRecipe=RecipeHandoff.take();if(oneTimeRecipe)openCommunityRecipe(oneTimeRecipe);window.addEventListener('resize',hideUprightLoupe);window.addEventListener('scroll',hideUprightLoupe,true);window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
+    onMounted(() => { const oneTimeRecipe=RecipeHandoff.take();if(oneTimeRecipe)openCommunityRecipe(oneTimeRecipe);window.addEventListener('resize',hideUprightLoupe);window.addEventListener('scroll',hideUprightLoupe,true);window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); window.addEventListener('landscape:user-updated', onUserUpdated); document.addEventListener('click', closeUserMenu); refreshAuthUser(); if(window.CreditSponsor)window.CreditSponsor.refresh(); });
 
     onBeforeUnmount(() => {
       hideUprightLoupe();window.removeEventListener('resize',hideUprightLoupe);window.removeEventListener('scroll',hideUprightLoupe,true);
@@ -1609,7 +1631,7 @@ createApp({
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); document.removeEventListener('click', closeUserMenu);
+      window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); window.removeEventListener('landscape:user-updated', onUserUpdated); document.removeEventListener('click', closeUserMenu);
 
     });
     return {
@@ -1634,7 +1656,8 @@ createApp({
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, authUser, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout
+      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, authUser, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout,
+      creditBusy, dailyCheckin, openCreditSponsor
     };
   }
 }).mount('#app');
