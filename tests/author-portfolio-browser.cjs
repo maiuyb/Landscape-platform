@@ -3,6 +3,7 @@ const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const { start } = require('./isolated-browser-support.cjs');
+const {observe,previewRecipe}=require('./editor-test-observer.cjs');
 
 (async () => {
   const browser = await chromium.launch(), report = [], folder = 'test-results/author-portfolio';
@@ -12,7 +13,7 @@ const { start } = require('./isolated-browser-support.cjs');
       const server = await start({ prefix }), base = server.url.replace(/\/$/, '');
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
       const page = await context.newPage(), errors = [], escaped = [];
-      page.setDefaultTimeout(12000);
+      await observe(page);page.setDefaultTimeout(12000);
       page.on('pageerror', error => errors.push(error.message));
       page.on('request', request => {
         const url = new URL(request.url());
@@ -151,7 +152,7 @@ const { start } = require('./isolated-browser-support.cjs');
         const ready = () => page.waitForFunction(() => document.querySelector('#mainCanvas')?.dataset.previewStatus === 'ready');
         await ready();
         const recipe = await page.evaluate(() => { const s = EditorCore.createState(); s.adjustments.exposure = .3; return EditorCore.toRecipe(s); });
-        await page.getByRole('button',{name:'粘贴配方',exact:true}).click();await page.getByRole('textbox',{name:'粘贴配方内容',exact:true}).fill(JSON.stringify(recipe));await page.getByRole('button',{name:'读取配方',exact:true}).click();await page.getByRole('button',{name:'在我的照片上预览',exact:true}).click();
+        await previewRecipe(page,recipe);
         await page.getByRole('button', { name: '应用到照片', exact: true }).click(); await ready();
         const edited = await page.locator('#mainCanvas').evaluate(c => c.toDataURL());
         await page.locator('.user-chip').click();

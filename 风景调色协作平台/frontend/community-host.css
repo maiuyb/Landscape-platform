@@ -165,3 +165,9 @@ html:not(.uc-mode) .grid.gallery-mode {
   outline: 2px solid var(--gallery-bronze, #8C653E);
   outline-offset: 4px;
 }
+
+.auth-user.avatar-only{padding:3px;border:0;border-radius:50%;background:transparent;gap:0;min-width:0;box-shadow:none}
+.auth-user.avatar-only .auth-avatar{width:36px;height:36px}
+.account-dropdown{min-width:200px}
+.account-menu-identity{padding:12px 12px 14px;display:flex;flex-direction:column;gap:3px;margin-bottom:5px;border-bottom:1px solid rgba(23,24,23,.1);max-width:240px;overflow-wrap:anywhere}
+.account-menu-identity strong{font-size:15px;color:var(--gallery-ink,#171817);font-weight:600}.account-menu-identity span{font-size:12px;color:var(--gallery-caption,#6b706b)}

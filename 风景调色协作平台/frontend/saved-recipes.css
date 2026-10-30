@@ -248,3 +248,10 @@
     padding: 14px;
   }
 }
+/* Compact disclosure rows reuse the Gallery surface and typography. */
+.saved-recipe-entry>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;list-style:none;cursor:pointer;font-family:var(--gallery-serif,"Songti SC",serif);font-size:16px;min-height:26px}
+.saved-recipe-entry>summary::-webkit-details-marker{display:none}
+.saved-recipe-entry>summary:focus-visible{outline:2px solid var(--green,#1D4D3C);outline-offset:5px;border-radius:3px}
+.saved-recipe-chevron{width:8px;height:8px;flex-shrink:0;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.saved-recipe-entry[open] .saved-recipe-chevron{transform:rotate(45deg)}
+.saved-recipe-body{margin-top:12px;padding-top:10px;border-top:1px solid rgba(23,24,23,.08)}

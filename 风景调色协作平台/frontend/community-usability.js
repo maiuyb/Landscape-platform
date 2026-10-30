@@ -8,8 +8,7 @@
   const originalPreview=previewInEditor;
   previewInEditor=async value=>{
     if(typeof value!=='object')return originalPreview(value);
-    try{await copyText(JSON.stringify(value,null,2));toast('已复制常用配方，请到编辑器粘贴并选择自己的照片。');}
-    catch{toast('无法复制配方，请在平台主站打开常用配方后预览。');}
+    try{RecipeHandoff.open(value,EDITOR_URL);}catch(error){toast(error.message||'请从平台主站打开常用配方后预览。');}
   };
 
   const originalRenderAuth=renderAuth;
@@ -17,11 +16,13 @@
     originalRenderAuth();
     const trigger=$('#authUserBtn'),logout=$('#logoutBtn');if(!trigger||!logout)return;
     const area=$('#authArea');area.classList.add('account-menu');
+    trigger.classList.add('avatar-only');trigger.querySelectorAll(':scope>span:not(.auth-avatar)').forEach(el=>el.remove());
     trigger.onclick=()=>openPublicProfile(state.user.id);trigger.setAttribute('aria-label','打开个人主页');
     trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-controls','accountDropdown');
     const menu=document.createElement('div');menu.id='accountDropdown';menu.className='account-dropdown';
+    const identity=document.createElement('div');identity.className='account-menu-identity';const name=document.createElement('strong'),handle=document.createElement('span');name.textContent=state.user.display_name||state.user.username;handle.textContent='@'+state.user.username;identity.append(name,handle);
     const management=document.createElement('button');management.type='button';management.className='btn ghost';management.textContent='用户中心';management.onclick=enterUserCenter;
-    menu.append(management,logout);area.append(menu);
+    menu.append(identity,management,logout);area.append(menu);
     area.onmouseenter=()=>{area.classList.remove('menu-dismissed');trigger.setAttribute('aria-expanded','true');};
     area.onmouseleave=()=>trigger.setAttribute('aria-expanded','false');
     area.onfocusin=()=>{area.classList.remove('menu-dismissed');trigger.setAttribute('aria-expanded','true');};
