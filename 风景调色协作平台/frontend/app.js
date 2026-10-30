@@ -537,6 +537,7 @@ createApp({
     const communitySearch=ref('');
     let pendingCommunitySearch=null;
     const shareOpen=ref(false),shareDialog=ref(null),sharing=ref(false),shareSingle=ref(false);
+    const returnHomeDialog=ref(null);
     const waitingRecipe=ref(null),reuseGeometry=ref(false),reuseMasks=ref(false),reuseScope=ref({geometry:false,masks:false});
     const handoffId=()=>Array.from(crypto.getRandomValues(new Uint32Array(4)),v=>v.toString(16).padStart(8,'0')).join('');
     const communityChannel=handoffId(),seenHandoffs=new Set();let sharePackage=null,loginRequested=false,pendingCommunityMode=null;
@@ -1444,6 +1445,19 @@ createApp({
       });
     }
     function openEditorWorkspace(){if(!imageLoaded.value){editorBlank.value=true;photoStripCollapsed.value=false;}switchToEditor();}
+    function returnToHome(){
+      if(photos.value.length){
+        returnHomeDialog.value?.showModal();
+        return;
+      }
+      editorBlank.value=false;
+      currentView.value='editor';
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+    function confirmReturnHome(){
+      returnHomeDialog.value?.close();
+      window.location.assign(window.location.pathname);
+    }
 
     function connectCommunity(){communityReady.value=false;communityFrame.value?.contentWindow?.postMessage({type:'landscape:connect',channel:communityChannel},location.origin);}
     function postAuthorRoute(route){
@@ -1585,7 +1599,7 @@ createApp({
       uprightLoupe,uprightLoupeCanvas,uprightEndpointFocus,hideUprightLoupe,uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
-      openLogin,editorBlank,openEditorWorkspace,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
+      openLogin,editorBlank,openEditorWorkspace,returnToHome,confirmReturnHome,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
 
       legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
@@ -1598,7 +1612,7 @@ createApp({
       confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
       exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus,
-      communityInitialUrl,communityFrame,communityMounted,communityReady,connectCommunity,communitySearch,sendCommunitySearch,clearCommunitySearch,shareOpen,shareDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
+      communityInitialUrl,communityFrame,communityMounted,communityReady,connectCommunity,communitySearch,sendCommunitySearch,clearCommunitySearch,shareOpen,shareDialog,returnHomeDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,

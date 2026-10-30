@@ -687,30 +687,6 @@
     box-shadow 0.55s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Interactive Museum Glass Specular Glare + Track-Light Sheen */
-.passepartout-frame::before,
-.panorama-exhibit::before,
-.diptych-frame::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    640px circle at var(--spot-x, 50%) var(--spot-y, 20%),
-    rgba(255, 253, 247, 0.72) 0%,
-    rgba(200, 157, 102, 0.16) 34%,
-    transparent 68%
-  );
-  opacity: 0;
-  transition: opacity 0.38s ease;
-  z-index: 3;
-  mix-blend-mode: overlay;
-}
-.passepartout-frame:hover::before,
-.panorama-exhibit:hover::before,
-.diptych-frame:hover::before {
-  opacity: 1;
-}
 .passepartout-frame > *,
 .panorama-exhibit > *,
 .diptych-frame > * {
