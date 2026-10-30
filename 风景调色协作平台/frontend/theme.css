@@ -214,6 +214,29 @@ button[aria-current=page] {
   gap: 2px;
 }
 
+.canvas-home-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid rgba(23, 24, 23, 0.14);
+  border-radius: 999px;
+  background: #F4F1EA;
+  color: #464946;
+  font-family: var(--gallery-sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.canvas-home-btn:hover {
+  background: #FFFFFF;
+  border-color: rgba(23, 24, 23, 0.3);
+  color: var(--ink);
+}
+
 .file-info strong {
   font-family: var(--gallery-serif);
   font-size: 16px;
@@ -400,6 +423,7 @@ button[aria-current=page] {
   backdrop-filter: blur(12px);
   font-family: var(--gallery-serif);
   color: var(--muted);
+  padding-block: 4.5px;
 }
 
 .canvas-footer button {
@@ -442,7 +466,7 @@ button[aria-current=page] {
 }
 
 .workspace-tabs button {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   border-radius: 999px;
   min-height: 34px;
@@ -450,6 +474,26 @@ button[aria-current=page] {
   background: rgba(255, 255, 255, 0.68);
   color: #565A56;
   transition: all 0.24s var(--ease-apple);
+}
+
+@media (min-width: 761px) {
+  .canvas-heading {
+    height: 51px;
+    box-sizing: border-box;
+    padding: 0 20px;
+  }
+
+  .workspace-tabs {
+    height: 51px;
+    box-sizing: border-box;
+    padding: 0 12px;
+    align-items: center;
+  }
+
+  .workspace-tabs button {
+    min-height: 32px;
+    padding: 6px 10px;
+  }
 }
 
 .workspace-tabs button:hover {
@@ -482,6 +526,21 @@ button[aria-current=page] {
   letter-spacing: 0.01em;
   color: var(--ink);
   font-weight: 600;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(23, 24, 23, 0.1);
+}
+
+@media (min-width: 761px) {
+  .workspace-output {
+    height: 106px;
+    min-height: 106px;
+    max-height: 106px;
+    box-sizing: border-box;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    overflow: hidden;
+  }
 }
 
 .workspace-output .recipe-actions {
@@ -632,6 +691,10 @@ button[aria-current=page] {
   font-size: 14px;
   font-weight: 600;
   color: #464A46;
+}
+
+#panel-edit.no-image .subgroup > summary {
+  opacity: 0.5;
 }
 
 #panel-edit .subgroup[open] > summary {
@@ -1646,4 +1709,57 @@ dialog::backdrop {
   .app-header:has(.user-center) .brand{padding-right:48px}
   .app-header:has(.user-center) nav{flex-basis:100%;width:100%}
   .app-header .user-center{position:absolute;right:16px;top:12px}
+}
+
+/* Softer editor control palette: retain contrast without heavy solid fills. */
+.app-header nav > button[aria-current=page] {
+  background: #E5EFE3;
+  border-color: rgba(29, 77, 60, 0.28);
+  color: #1D4D3C;
+  box-shadow: 0 4px 12px -8px rgba(29, 77, 60, 0.28);
+}
+.app-header nav > button[aria-current=page]:hover:not(:disabled) {
+  background: #D8E7DB;
+  border-color: rgba(29, 77, 60, 0.38);
+  color: #153B2E;
+}
+.app-header nav > button.primary {
+  background: #E3EFE6;
+  border-color: rgba(29, 77, 60, 0.28);
+  color: #1D4D3C;
+  box-shadow: 0 4px 12px -8px rgba(29, 77, 60, 0.24);
+}
+.app-header nav > button.primary:hover:not(:disabled) {
+  background: #D8E7DB;
+  border-color: rgba(29, 77, 60, 0.38);
+  color: #153B2E;
+}
+.canvas-heading .ai-shortcut {
+  background: #F3E9DD;
+  border-color: rgba(140, 101, 62, 0.3);
+  color: #6E4D2C;
+  box-shadow: 0 4px 12px -10px rgba(140, 101, 62, 0.3);
+}
+.canvas-heading .ai-shortcut:hover {
+  background: #EDE0D0;
+  border-color: rgba(140, 101, 62, 0.42);
+  color: #5B3F24;
+  box-shadow: 0 6px 16px -10px rgba(140, 101, 62, 0.35);
+}
+.workspace-tabs button[aria-selected=true] {
+  background: #E5EFE3;
+  border-color: rgba(29, 77, 60, 0.26);
+  color: #1D4D3C;
+  box-shadow: none;
+}
+.workspace-tabs button[aria-selected=true]:hover {
+  background: #D8E7DB;
+  border-color: rgba(29, 77, 60, 0.36);
+  color: #153B2E;
+}
+.canvas-toolbar .segmented button[aria-pressed=true] {
+  background: #E2EEE5;
+  border-color: rgba(29, 77, 60, 0.24);
+  color: #1D4D3C;
+  box-shadow: none;
 }

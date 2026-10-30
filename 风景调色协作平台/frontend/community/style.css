@@ -725,6 +725,15 @@ html.uc-mode .toolbar .tabs { display: none; }
 }
 .uc-stat span { display: block; margin-top: 4px; color: var(--gallery-caption); font-size: 12px; }
 .uc-profile-edit { padding: 20px 22px; margin-bottom: 16px; }
+.uc-password-card { padding: 20px 22px; margin-bottom: 16px; }
+.uc-password-card .uc-section-head { margin-bottom: 12px; }
+.uc-password-card .field-label { margin-top: 14px; }
+.uc-password-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.uc-password-grid .field-label { margin-top: 14px; }
+.uc-password-card .input { margin-bottom: 4px; }
+@media (max-width: 620px) {
+  .uc-password-grid { grid-template-columns: 1fr; gap: 0; }
+}
 .uc-section-head {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; margin-bottom: 12px;

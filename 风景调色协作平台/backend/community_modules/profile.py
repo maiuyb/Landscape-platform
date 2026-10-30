@@ -10,7 +10,7 @@ from PIL import Image
 from flask import Blueprint, jsonify, request, g
 from thumbnails import upload_path
 
-from .auth import login_required
+from .auth import hash_password, login_required
 from .config import UPLOAD_DIR
 from .db import get_db
 from . import repository as repo
@@ -104,6 +104,36 @@ def update_my_profile():
     finally:
         conn.close()
     return jsonify({'message': '资料已保存', 'user': payload})
+
+
+@profile_bp.route('/api/users/me/password', methods=['PUT'])
+@login_required
+def update_my_password():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': '请求格式不正确'}), 400
+    current_password = str(data.get('current_password', ''))
+    new_password = str(data.get('new_password', ''))
+    confirm_password = str(data.get('confirm_password', ''))
+    if not current_password or not new_password:
+        return jsonify({'error': '请填写当前密码和新密码'}), 400
+    if len(new_password) < 4:
+        return jsonify({'error': '新密码至少 4 位'}), 400
+    if new_password != confirm_password:
+        return jsonify({'error': '两次输入的新密码不一致'}), 400
+    if hash_password(current_password) != g.current_user['password_hash']:
+        return jsonify({'error': '当前密码不正确'}), 400
+    if new_password == current_password:
+        return jsonify({'error': '新密码不能与当前密码相同'}), 400
+
+    conn = get_db()
+    try:
+        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                     (hash_password(new_password), g.current_user['id']))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'message': '密码已更新'})
 
 
 @profile_bp.route('/api/users/<int:user_id>', methods=['GET'])
