@@ -1638,7 +1638,8 @@ dialog::backdrop {
 .user-menu button {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 7px;
   background: none;
   border: none;
   text-align: left;
