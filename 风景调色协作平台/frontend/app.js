@@ -1433,23 +1433,41 @@ createApp({
       openCommunity();
       nextTick(()=>{if(communityReady.value&&pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}});
     }
-    function switchToEditor() {
-      if(currentView.value==='editor')return;
-      currentView.value='editor';
+    function playEditorCurtain() {
       runCurtainSequence({
         code:'CHAMBER I // FINE-ART PRINT DARKROOM',
         title:imageLoaded.value||editorBlank.value?'返 回 暗 房 工 作 区':'返 回 画 廊 主 展 厅',
         sub:'本地无损阶调显影 · 留白卡纸装裱',
         coord:"DARKROOM // 35°41'N · 139°41'E",
-        holdMs:480
+        holdMs:520
       });
     }
-    function openEditorWorkspace(){if(!imageLoaded.value){editorBlank.value=true;photoStripCollapsed.value=false;}switchToEditor();}
+    function playHomeCurtain() {
+      runCurtainSequence({
+        code:'CHAMBER III // RETURN TO EXHIBITION HALL',
+        title:'返 回 画 廊 主 展 厅',
+        sub:'在静谧留白之中，重现山川与暮海的呼吸',
+        coord:"GALLERY // 46°37'N · 12°17'E",
+        holdMs:520
+      });
+    }
+    function switchToEditor() {
+      if(currentView.value==='editor')return;
+      currentView.value='editor';
+      playEditorCurtain();
+    }
+    function openEditorWorkspace(){
+      const wasWelcome=!imageLoaded.value&&!editorBlank.value;
+      if(!imageLoaded.value){editorBlank.value=true;photoStripCollapsed.value=false;}
+      if(wasWelcome){playEditorCurtain();return;}
+      switchToEditor();
+    }
     function returnToHome(){
       if(photos.value.length){
         returnHomeDialog.value?.showModal();
         return;
       }
+      playHomeCurtain();
       editorBlank.value=false;
       currentView.value='editor';
       window.scrollTo({top:0,behavior:'smooth'});
