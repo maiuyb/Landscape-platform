@@ -170,5 +170,14 @@ html:not(.uc-mode) .grid.gallery-mode {
 .auth-user.avatar-only{padding:3px;border:0;border-radius:50%;background:transparent;gap:0;min-width:0;box-shadow:none}
 .auth-user.avatar-only .auth-avatar{width:36px;height:36px}
 .account-dropdown{min-width:200px}
+
+/* Auth controls remain readable and fit inside the shared Gallery dialog. */
+#authModal [hidden]{display:none!important}
+#authModal .modal-card.small{max-height:calc(100dvh - 32px);overflow-y:auto}
+.auth-captcha{margin:12px 0}
+.auth-captcha-row{display:flex;gap:8px;align-items:center}
+.auth-captcha-row>.input{min-width:0;flex:1;text-transform:uppercase}
+.auth-captcha-row>.btn{padding:0;flex:0 0 auto;overflow:hidden;border:1px solid #ceb28d}
+.auth-captcha-row img{display:block;width:144px;height:45px;object-fit:contain}
 .account-menu-identity{padding:12px 12px 14px;display:flex;flex-direction:column;gap:3px;margin-bottom:5px;border-bottom:1px solid rgba(23,24,23,.1);max-width:240px;overflow-wrap:anywhere}
 .account-menu-identity strong{font-size:15px;color:var(--gallery-ink,#171817);font-weight:600}.account-menu-identity span{font-size:12px;color:var(--gallery-caption,#6b706b)}

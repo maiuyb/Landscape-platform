@@ -10,7 +10,7 @@ from PIL import Image
 from flask import Blueprint, jsonify, request, g
 from thumbnails import upload_path
 
-from .auth import hash_password, login_required
+from .auth import hash_password, verify_password, login_required
 from .config import UPLOAD_DIR
 from .db import get_db
 from . import repository as repo
@@ -121,7 +121,7 @@ def update_my_password():
         return jsonify({'error': '新密码至少 4 位'}), 400
     if new_password != confirm_password:
         return jsonify({'error': '两次输入的新密码不一致'}), 400
-    if hash_password(current_password) != g.current_user['password_hash']:
+    if len(current_password)>128 or len(new_password)>128 or not verify_password(g.current_user['password_hash'], current_password):
         return jsonify({'error': '当前密码不正确'}), 400
     if new_password == current_password:
         return jsonify({'error': '新密码不能与当前密码相同'}), 400

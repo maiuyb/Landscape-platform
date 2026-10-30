@@ -74,7 +74,7 @@
       chkBtn.disabled=!!u.checked_in_today;
     }
     if(emailStatus){
-      emailStatus.textContent=(u.email_verified&&u.email)?`已验证 (${u.email})`:'未绑定（首次验证赠送 +5 积分）';
+      emailStatus.textContent=(u.email_verified&&u.email)?`已验证 (${u.email})`:'未绑定（建议绑定以使用邮箱验证码登录，首次验证 +5 积分）';
     }
   }
 
@@ -115,7 +115,9 @@
   if(emailToggle&&emailBox){
     emailToggle.addEventListener('click',()=>{
       emailBox.hidden=!emailBox.hidden;
-      if(!emailBox.hidden)emailInput?.focus();
+      $('#authPasswordFields').hidden=!emailBox.hidden;$('#authSubmit').hidden=!emailBox.hidden;
+      emailToggle.textContent=emailBox.hidden?'✉️ 邮箱验证码登录':'返回密码登录';
+      if(!emailBox.hidden){window.AuthGuard?.refresh('email');emailInput?.focus();}
     });
   }
   if(sendCodeBtn){
@@ -124,12 +126,14 @@
       if(!email){$('#authError').textContent='请输入有效的邮箱地址';return;}
       sendCodeBtn.disabled=true;
       try{
-        const r=await api('/api/auth/email/send-code',{method:'POST',body:{email,purpose:'login'}});
+        const mode=state.authMode;
+        const r=await api('/api/auth/email/send-code',{method:'POST',body:{email,purpose:mode==='register'?'register':'login',...window.AuthGuard?.body('email')}});
+        if(mode!==state.authMode)return;
         if(!r.ok){$('#authError').textContent=r.data?.error||'验证码发送失败';return;}
         $('#authError').textContent='';
         toast(r.data?.message||'验证码已发送，请查收邮件');
         emailCode?.focus();
-      }finally{sendCodeBtn.disabled=false;}
+      }finally{sendCodeBtn.disabled=false;window.AuthGuard?.refresh('email');}
     });
   }
   async function submitEmailAuth(){
@@ -157,7 +161,7 @@
     }finally{if(verifyEmailBtn)verifyEmailBtn.disabled=false;}
   }
   verifyEmailBtn?.addEventListener('click',submitEmailAuth);
-  emailCode?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitEmailAuth();}});
+  emailCode?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();state.authMode==='register'?submitAuth():submitEmailAuth();}});
 
   syncCreditsUI();
 

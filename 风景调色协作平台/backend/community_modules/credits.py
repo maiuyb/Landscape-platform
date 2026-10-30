@@ -216,11 +216,16 @@ def daily_checkin():
 def send_email_code():
     data, user = _data(), current_user()
     email = _email(data.get('email'))
-    purpose = 'bind' if user else 'login'
-    if not email or data.get('purpose', purpose) != purpose:
+    purpose = 'bind' if user else data.get('purpose', 'login')
+    if not email or purpose not in (('bind',) if user else ('login', 'register')) or data.get('purpose', purpose) != purpose:
         return jsonify(error='邮箱地址或验证用途不正确，请重新打开登录／绑定入口。'), 400
     if not _smtp_config()['configured']:
         return jsonify(error='邮箱服务暂不可用，请使用账号密码登录或稍后重试。'), 503
+    from .security import consume_captcha, captcha_required, limits
+    if not user and not consume_captcha(data, 'email'):
+        return captcha_required()
+    # A distributed sender must not exhaust the site's SMTP account.
+    limits(('email-site-hour', 'site', 100, 3600), ('email-site-day', 'site', 500, 86400))
     code, salt = str(secrets.randbelow(900000)+100000), secrets.token_hex(16)
     digest = salt + ':' + sha256((salt+code).encode()).hexdigest()
     conn = get_db()
@@ -250,6 +255,24 @@ def send_email_code():
         conn.close()
 
 
+def consume_email_code(conn, email, code, purpose, uid):
+    """Caller owns the success transaction; wrong attempts must remain durable."""
+    if not isinstance(code, str) or not re.fullmatch(r'[0-9]{6}', code):
+        conn.commit()
+        return jsonify(error='请填写邮箱收到的 6 位数字验证码。'), 400
+    row = conn.execute('SELECT * FROM email_verifications WHERE email=? AND purpose=? AND user_id IS ? ORDER BY id DESC LIMIT 1', (email, purpose, uid)).fetchone()
+    if not row or row['used'] or not row['delivered'] or row['expires_at'] < _shanghai_dt_str() or row['attempts'] >= 5:
+        conn.commit()
+        return jsonify(error='验证码错误或已失效，请重新获取。'), 400
+    salt, _, digest = row['code'].partition(':')
+    if not digest or not hmac.compare_digest(sha256((salt+code).encode()).hexdigest(), digest):
+        conn.execute('UPDATE email_verifications SET attempts=attempts+1,used=CASE WHEN attempts>=4 THEN 1 ELSE 0 END WHERE id=?', (row['id'],))
+        conn.commit()
+        return jsonify(error='验证码错误；连续错误 5 次后需重新获取。'), 400
+    conn.execute('UPDATE email_verifications SET used=1 WHERE id=?', (row['id'],))
+    return None
+
+
 @credits_bp.route('/api/auth/email/verify', methods=['POST'])
 def verify_email_code():
     data, user = _data(), current_user()
@@ -261,21 +284,13 @@ def verify_email_code():
     try:
         conn.execute('BEGIN IMMEDIATE')
         _limit(conn, 'verify-ip', request.remote_addr, 30, 600)
-        row = conn.execute('SELECT * FROM email_verifications WHERE email=? AND purpose=? AND user_id IS ? ORDER BY id DESC LIMIT 1', (email, purpose, uid)).fetchone()
-        if not row or row['used'] or not row['delivered'] or row['expires_at'] < _shanghai_dt_str() or row['attempts'] >= 5:
-            conn.commit()
-            return jsonify(error='验证码错误或已失效，请重新获取。'), 400
-        salt, _, digest = row['code'].partition(':')
-        if not digest or not hmac.compare_digest(sha256((salt+code).encode()).hexdigest(), digest):
-            conn.execute('UPDATE email_verifications SET attempts=attempts+1,used=CASE WHEN attempts>=4 THEN 1 ELSE 0 END WHERE id=?', (row['id'],))
-            conn.commit()
-            return jsonify(error='验证码错误；连续错误 5 次后需重新获取。'), 400
+        error = consume_email_code(conn, email, code, purpose, uid)
+        if error:
+            return error
         existing = conn.execute("SELECT * FROM users WHERE lower(trim(email))=? AND email_verified=1", (email,)).fetchone()
         if user and existing and existing['id'] != uid:
-            conn.execute('UPDATE email_verifications SET used=1 WHERE id=?', (row['id'],))
             conn.commit()
             return jsonify(error='此邮箱已绑定其他账号，请使用其他邮箱。'), 409
-        conn.execute('UPDATE email_verifications SET used=1 WHERE id=?', (row['id'],))
         token, bonus = None, 0
         if user:
             fresh = repo.get_user_by_id(conn, uid)
@@ -284,6 +299,9 @@ def verify_email_code():
         elif existing:
             uid = existing['id']
         else:
+            # Email-only sign-up shares the same creation budget as password sign-up.
+            _limit(conn, 'account-created-hour', request.remote_addr, 10, 3600)
+            _limit(conn, 'account-created-day', request.remote_addr, 30, 86400)
             name = re.sub(r'[^A-Za-z0-9_]', '', email.split('@')[0])[:12] or 'user'
             candidate = name
             while repo.get_user_by_username(conn, candidate):

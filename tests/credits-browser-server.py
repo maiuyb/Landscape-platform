@@ -29,6 +29,8 @@ with tempfile.TemporaryDirectory(prefix='hmi-credits-browser-') as tmp:
         try:return jsonify(count=conn.execute('SELECT count(*) n FROM redemption_codes').fetchone()['n'])
         finally:conn.close()
     cfg=dict(configured=True,host='unused',port=465,user='synthetic@example.test',password='synthetic-only',admin_email='admin@example.test',public_origin='')
+    from auth_test_support import install_fixture
+    install_fixture(app.app)
     prefix=os.environ.get('HMI_TEST_PREFIX','')
     application=DispatcherMiddleware(Response('Other site',status=404),{prefix:app.app}) if prefix else app.app
     with patch.object(credits,'_smtp_config',return_value=cfg),patch.object(credits,'send_email_163',side_effect=mail):

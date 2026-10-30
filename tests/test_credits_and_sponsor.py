@@ -80,12 +80,14 @@ class CreditsAndSponsorTests(unittest.TestCase):
                 conn.close()
 
     def register(self, name='synthetic'):
-        response = self.client.post('/api/auth/register', json=dict(username=name, password='synthetic-only'))
-        self.assertEqual(response.status_code, 200)
-        return response.json['user'], {'Authorization': 'Bearer '+response.json['token']}
+        from auth_test_support import seed_user
+        account = seed_user(self.app, name)
+        return account['user'], {'Authorization': 'Bearer '+account['token']}
 
     def send(self, email, headers=None):
-        return self.client.post('/api/auth/email/send-code', json=dict(email=email, purpose='bind' if headers else 'login'), headers=headers or {})
+        from community_modules import security
+        with patch.object(security, 'consume_captcha', return_value=True):
+            return self.client.post('/api/auth/email/send-code', json=dict(email=email, purpose='bind' if headers else 'login'), headers=headers or {})
 
     def verify(self, email, headers=None, code=None):
         return self.client.post('/api/auth/email/verify', json=dict(email=email, code=code or self.codes[email]), headers=headers or {})

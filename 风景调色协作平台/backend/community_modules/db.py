@@ -173,6 +173,15 @@ def init_db():
         )''')
 
         c.execute('CREATE INDEX IF NOT EXISTS idx_ai_credit_reservations_status ON ai_credit_reservations(status, created_at, user_id)')
+        c.execute('''CREATE TABLE IF NOT EXISTS auth_rate_limits (
+            action TEXT NOT NULL, subject TEXT NOT NULL, window_start INTEGER NOT NULL,
+            hits INTEGER NOT NULL, PRIMARY KEY(action, subject))''')
+        c.execute('''CREATE TABLE IF NOT EXISTS auth_failures (
+            subject TEXT PRIMARY KEY, started_at INTEGER NOT NULL,
+            hits INTEGER NOT NULL, cooldown_until INTEGER NOT NULL)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS auth_captchas (
+            id TEXT PRIMARY KEY, subject TEXT NOT NULL, purpose TEXT NOT NULL,
+            salt TEXT NOT NULL, answer_hash TEXT NOT NULL, expires_at INTEGER NOT NULL)''')
         c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_recipe ON favorites(recipe_id)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_recipes_author ON recipes(author_id)')

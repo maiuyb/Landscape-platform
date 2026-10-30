@@ -7,7 +7,7 @@ const {observe,readRecipe}=require('./editor-test-observer.cjs');
  try{for(const prefix of ['', '/landscape']){
   const server=await start({prefix}),base=server.url.replace(/\/$/,''),context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage(),errors=[];page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
   try{
-   const account=await(await page.request.post(base+'/api/auth/register',{data:{username:'synthetic-loupe',password:'synthetic-only'}})).json(),headers={Authorization:'Bearer '+account.token};
+   const account=await(await page.request.post(base+'/__test/register',{data:{username:'synthetic-loupe',password:'synthetic-only'}})).json(),headers={Authorization:'Bearer '+account.token};
    await context.addInitScript(({account,compatible})=>{localStorage.setItem('landscape:token',account.token);localStorage.setItem('landscape:user',JSON.stringify(account.user));if(compatible)window.Worker=undefined;},{account,compatible:!!prefix});await observe(page);await page.goto(base+'/');
    const button=name=>page.getByRole('button',{name,exact:true}),ready=()=>page.waitForFunction(()=>document.querySelector('#mainCanvas')?.dataset.previewStatus==='ready');
    assert.equal((await page.locator('.user-chip').innerText()).trim().toUpperCase(),'S');assert.equal(await page.locator('.user-chip-caret,.user-chip .user-name').count(),0);await page.locator('.user-chip').hover();assert.match(await page.locator('.account-menu-identity').textContent(),/synthetic-loupe/);await page.keyboard.press('Escape');

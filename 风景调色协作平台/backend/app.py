@@ -75,6 +75,8 @@ app.register_blueprint(profile_bp)
 app.register_blueprint(saved_recipes_bp)
 app.register_blueprint(credits_bp)
 get_db = community_db.get_db
+from community_modules.security import install as install_auth_security
+install_auth_security(app)
 
 @app.route('/community/')
 def community_index():
@@ -97,49 +99,6 @@ def json_error(msg, status=400):
 @app.errorhandler(RequestEntityTooLarge)
 def upload_too_large(error):
     return json_error('上传文件或请求过大，单张图片最大 20MB，请重新选择图片。', 413)
-
-# ---------- 认证 ----------
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    data = request.json
-    username = data.get('username', '').strip()
-    password = data.get('password', '').strip()
-    if not username or not password:
-        return json_error('用户名和密码不能为空')
-    if len(username) < 2 or len(password) < 4:
-        return json_error('用户名至少2位，密码至少4位')
-    conn = get_db()
-    try:
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        conn.execute('INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)',
-                     (username, password_hash, username))
-        conn.commit()
-        uid = conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()['id']
-        user_payload = repo.serialize_user(
-            conn, conn.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone(),
-            self_view=True)
-    except sqlite3.IntegrityError:
-        return json_error('用户名已存在')
-    finally:
-        conn.close()
-    return json_ok({'token': create_token(uid), 'user': user_payload})
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    data = request.json
-    username = data.get('username', '').strip()
-    password = data.get('password', '').strip()
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
-    conn = get_db()
-    try:
-        user = conn.execute('SELECT * FROM users WHERE username=? AND password_hash=?',
-                            (username, password_hash)).fetchone()
-        user_payload = repo.serialize_user(conn, user, self_view=True) if user else None
-    finally:
-        conn.close()
-    if user:
-        return json_ok({'token': create_token(user['id']), 'user': user_payload})
-    return json_error('用户名或密码错误')
 
 # ---------- 图片上传 ----------
 @app.route('/api/upload', methods=['POST'])
