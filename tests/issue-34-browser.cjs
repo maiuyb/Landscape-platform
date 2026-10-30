@@ -11,7 +11,7 @@ const {observe,readRecipe}=require('./editor-test-observer.cjs');
   const mainState=()=>readRecipe(page);
   const pixels=()=>page.locator('#mainCanvas').evaluate(c=>c.toDataURL());
   try{
-   const account=await(await page.request.post(base+'/api/auth/register',{data:{username:'synthetic-review-user',password:'synthetic-only'}})).json(),headers={Authorization:'Bearer '+account.token};
+   const account=await(await page.request.post(base+'/__test/register',{data:{username:'synthetic-review-user',password:'synthetic-only'}})).json(),headers={Authorization:'Bearer '+account.token};
    await context.addInitScript(({account,compatible})=>{localStorage.setItem('landscape:token',account.token);localStorage.setItem('landscape:user',JSON.stringify(account.user));if(compatible)window.Worker=undefined;},{account,compatible:!!prefix});
    await observe(page);await page.goto(base+'/');await button('编辑器').click();
    assert.equal(await page.locator('.app-header .upload-button').count(),0);assert.equal(await page.locator('#basic-group').getAttribute('open'),null);

@@ -22,8 +22,8 @@ const {observe,previewRecipe}=require('./editor-test-observer.cjs');
       const child = () => page.frames().find(frame => new URL(frame.url()).pathname.endsWith('/community/'));
       const frame = page.frameLocator('iframe');
       try {
-        const author = await (await page.request.post(base + '/api/auth/register', { data: { username: 'synthetic-photographer', password: 'synthetic-only' } })).json();
-        const other = await (await page.request.post(base + '/api/auth/register', { data: { username: 'synthetic-visitor', password: 'synthetic-only' } })).json();
+        const author = await (await page.request.post(base + '/__test/register', { data: { username: 'synthetic-photographer', password: 'synthetic-only' } })).json();
+        const other = await (await page.request.post(base + '/__test/register', { data: { username: 'synthetic-visitor', password: 'synthetic-only' } })).json();
         const headers = { Authorization: 'Bearer ' + author.token };
         await page.goto(base + '/community/');
         const png = await page.evaluate(() => {

@@ -8,8 +8,8 @@ const {start}=require('./isolated-browser-support.cjs');
   page.setDefaultTimeout(12000);page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{const url=new URL(request.url());if(prefix&&url.origin===new URL(base).origin&&/^\/(api|uploads)\//.test(url.pathname))escaped.push(url.pathname);});
   const frame=page.frameLocator('iframe'),child=()=>page.frames().find(f=>new URL(f.url()).pathname.endsWith('/community/'));
   try{
-   const login=await(await page.request.post(base+'/api/auth/register',{data:{username:'synthetic-manager',password:'synthetic-only'}})).json(),headers={Authorization:'Bearer '+login.token};
-   const other=await(await page.request.post(base+'/api/auth/register',{data:{username:'synthetic-foreign',password:'synthetic-only'}})).json();
+   const login=await(await page.request.post(base+'/__test/register',{data:{username:'synthetic-manager',password:'synthetic-only'}})).json(),headers={Authorization:'Bearer '+login.token};
+   const other=await(await page.request.post(base+'/__test/register',{data:{username:'synthetic-foreign',password:'synthetic-only'}})).json();
    await context.addInitScript(login=>{localStorage.setItem('landscape:token',login.token);localStorage.setItem('landscape:user',JSON.stringify(login.user));},login);
    await page.goto(base+'/community/');
    const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=480;c.height=320;const x=c.getContext('2d');x.fillStyle='#78958a';x.fillRect(0,0,480,320);x.fillStyle='#335e4a';x.beginPath();x.moveTo(0,320);x.lineTo(220,40);x.lineTo(480,320);x.fill();return c.toDataURL().split(',')[1];});

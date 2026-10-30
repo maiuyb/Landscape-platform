@@ -18,6 +18,8 @@ with tempfile.TemporaryDirectory(prefix='hmi-community-browser-') as tmp:
     import ai_service
     with patch.object(ai_service,'dotenv_values',return_value={}), patch('dotenv.dotenv_values',return_value={}):
         import app
+    from auth_test_support import install_fixture
+    install_fixture(app.app)
     prefix = os.environ.get('HMI_TEST_PREFIX', '')
     application = DispatcherMiddleware(Response('Other site', status=404), {prefix: app.app}) if prefix else app.app
     server=make_server('127.0.0.1',0,application)

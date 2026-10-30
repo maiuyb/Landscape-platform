@@ -43,7 +43,8 @@ with tempfile.TemporaryDirectory(prefix='hmi-roundtrip-') as tmp:
             spec.loader.exec_module(module)
         app=module.app
     c=app.test_client()
-    reg=c.post('/api/auth/register',json={'username':'synthetic','password':'fixture-only'}).get_json()
+    from auth_test_support import seed_user
+    reg=seed_user(app, 'synthetic', 'fixture-only')
     headers={'Authorization':'Bearer '+reg['token']}
     output=[]
     for recipe in recipes:

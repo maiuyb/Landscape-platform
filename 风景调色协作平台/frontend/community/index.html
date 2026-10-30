@@ -239,25 +239,31 @@
 </div>
 
 <!-- 登录 -->
-<div id="authModal" class="modal">
+<div id="authModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
   <div class="modal-card small">
     <button class="close" data-close>&times;</button>
     <h3 id="authTitle">登录</h3>
-    <label class="field-label">用户名</label>
+    <div id="authPasswordFields">
+    <label class="field-label" for="authUser">用户名</label>
     <input id="authUser" name="username" class="input" placeholder="用户名" autocomplete="username">
-    <label class="field-label">密码</label>
+    <label class="field-label" for="authPass">密码</label>
     <input id="authPass" name="password" class="input" type="password" placeholder="密码" autocomplete="current-password">
-    <div class="modal-actions">
-      <button id="authSubmit" class="btn primary">登录</button>
-      <button id="authToggle" class="btn ghost">没有账号？去注册</button>
+    <div id="authLoginCaptcha" class="auth-captcha" hidden>
+      <label class="field-label" for="authLoginCaptchaAnswer">图形验证码</label>
+      <div class="auth-captcha-row"><input id="authLoginCaptchaAnswer" class="input" maxlength="5" autocomplete="off" autocapitalize="characters"><button type="button" id="authLoginCaptchaRefresh" class="btn ghost" aria-label="更换登录图形验证码"><img id="authLoginCaptchaImage" alt="图形验证码，点击可更换" width="180" height="56"></button></div>
     </div>
-    <div class="auth-email-divider">
+    </div>
+    <div class="auth-email-divider" id="authEmailDivider">
       <span>支持邮箱验证码免密登录</span>
       <button type="button" id="authEmailModeToggle" class="auth-email-toggle-btn">✉️ 邮箱验证码登录</button>
     </div>
     <div id="authEmailBox" class="auth-email-box" hidden>
       <label class="field-label" for="authEmailInput">邮箱地址（首次验证赠送 +5 积分）</label>
       <input id="authEmailInput" type="email" class="input" placeholder="输入邮箱，例如 name@163.com" autocomplete="email">
+      <div id="authEmailCaptcha" class="auth-captcha">
+        <label class="field-label" for="authEmailCaptchaAnswer">图形验证码（获取邮件前填写）</label>
+        <div class="auth-captcha-row"><input id="authEmailCaptchaAnswer" class="input" maxlength="5" autocomplete="off" autocapitalize="characters"><button type="button" id="authEmailCaptchaRefresh" class="btn ghost" aria-label="更换邮件图形验证码"><img id="authEmailCaptchaImage" alt="图形验证码，点击可更换" width="180" height="56"></button></div>
+      </div>
       <div class="auth-email-code-row">
         <input id="authEmailCode" type="text" class="input" maxlength="6" inputmode="numeric" placeholder="6 位数字验证码">
         <button type="button" id="authSendCodeBtn" class="btn ghost">获取验证码</button>
@@ -266,7 +272,11 @@
         <button type="button" id="authEmailVerifyBtn" class="btn primary">验证并登录</button>
       </div>
     </div>
-    <div id="authError" class="error"></div>
+    <div class="modal-actions">
+      <button id="authSubmit" class="btn primary">登录</button>
+      <button id="authToggle" class="btn ghost">没有账号？去注册</button>
+    </div>
+    <div id="authError" class="error" role="status" aria-live="polite"></div>
   </div>
 </div>
 
@@ -333,6 +343,7 @@
 <script src="../author-portfolio.js"></script>
 <script src="../saved-recipes.js"></script>
 <script src="../credits-sponsor.js"></script>
+<script src="../auth-guard.js"></script>
 <script src="../community-usability.js"></script>
 <script src="../community-bridge.js"></script>
 </body>

@@ -439,22 +439,29 @@ function openAuth(mode) {
   $('#authPass').value = '';
   $('#authPass').autocomplete = state.authMode === 'login' ? 'current-password' : 'new-password';
   $('#authError').textContent = '';
+  window.AuthGuard?.opened();
   $('#authModal').classList.add('open');
   requestAnimationFrame(() => $('#authUser')?.focus());
 }
 
 async function submitAuth() {
+  const submit=$('#authSubmit');if(submit.disabled)return;submit.disabled=true;
+  const mode=state.authMode;
+  try {
   const username = $('#authUser').value.trim();
   const password = $('#authPass').value.trim();
   const path = state.authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
-  const r = await api(path, { method: 'POST', body: { username, password } });
-  if (!r.ok) { $('#authError').textContent = r.data.error || '操作失败'; return; }
+  const fields=mode==='register'?{email:$('#authEmailInput').value.trim(),code:$('#authEmailCode').value.trim()}:window.AuthGuard?.body('login');
+  const r = await api(path, { method: 'POST', body: { username, password,...fields } });
+  if(mode!==state.authMode)return;
+  if (!r.ok) { $('#authError').textContent = r.data.error || '操作失败'; await window.AuthGuard?.failed(r.data); return; }
   state.token = r.data.token; state.user = r.data.user; state.profileAvatarDraft = null;
   writeSession(state.token, state.user);
   $('#authModal').classList.remove('open');
   renderAuth();
   toast(state.authMode === 'login' ? '登录成功' : '注册成功');
   loadStats(); loadRecommend(); reloadCurrentView();
+  } finally {submit.disabled=false;}
 }
 
 /* ---------------- 推荐 & 统计 ---------------- */

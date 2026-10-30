@@ -40,9 +40,8 @@ class Profiles(unittest.TestCase):
         self.client = self.backend.app.test_client()
         self.users = []
         for name in ('synthetic-owner','synthetic-other'):
-            response = self.client.post('/api/auth/register',json={'username':name,'password':'synthetic-only'})
-            self.assertEqual(response.status_code,200)
-            self.users.append(response.json)
+            from auth_test_support import seed_user
+            self.users.append(seed_user(self.backend.app, name))
         self.headers = {'Authorization':'Bearer '+self.users[0]['token']}
 
     def test_registration_login_and_self_profile(self):
@@ -164,7 +163,7 @@ class Profiles(unittest.TestCase):
         self.assertEqual(result.json['user']['display_name'],'legacy-user')
         with self.backend.app.app_context():self.backend.community_db.init_db()
         self.assertEqual(self.client.get('/api/auth/me',headers={'Authorization':'Bearer '+result.json['token']}).status_code,200)
-        c = sqlite3.connect(legacy);self.assertEqual(c.execute('SELECT password_hash FROM users').fetchone()[0],password);c.close()
+        c = sqlite3.connect(legacy);self.assertTrue(c.execute('SELECT password_hash FROM users').fetchone()[0].startswith('pbkdf2:sha256:600000$'));c.close()
 
 
 if __name__ == '__main__':
