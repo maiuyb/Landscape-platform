@@ -49,7 +49,8 @@
       if(window.CreditSponsor)window.CreditSponsor.open('redeem');
     };
 
-    const management=document.createElement('button');management.type='button';management.className='btn ghost';management.textContent='用户中心';management.onclick=enterUserCenter;
+    const management=document.createElement('button');management.type='button';management.className='btn ghost';management.innerHTML='<svg class="account-menu-icon" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="6" r="3"/><path d="M4 17v-1a6 6 0 0 1 12 0v1"/></svg><span>用户中心</span>';management.onclick=enterUserCenter;
+    logout.innerHTML='<svg class="account-menu-icon" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7M5 4.5a7.5 7.5 0 1 0 10 0"/></svg><span>退出登录</span>';
     menu.append(identity,checkinBtn,giftBtn,management,logout);area.append(menu);
     area.onmouseenter=()=>{area.classList.remove('menu-dismissed');trigger.setAttribute('aria-expanded','true');};
     area.onmouseleave=()=>trigger.setAttribute('aria-expanded','false');
