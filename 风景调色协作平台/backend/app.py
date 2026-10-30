@@ -63,15 +63,17 @@ def frontend_file(filename):
 app.config['COMMUNITY_DB_PATH'] = os.environ.get('LANDSCAPE_DB', DB_PATH)
 with app.app_context():
     from community_modules import db as community_db, repository as repo
-    from community_modules.auth import auth_bp, create_token
+    from community_modules.auth import auth_bp, create_token, current_user
     from community_modules.community import community_bp
     from community_modules.profile import profile_bp
     from community_modules.saved_recipes import saved_recipes_bp
+    from community_modules.credits import credits_bp
     community_db.init_db()
 app.register_blueprint(auth_bp)
 app.register_blueprint(community_bp)
 app.register_blueprint(profile_bp)
 app.register_blueprint(saved_recipes_bp)
+app.register_blueprint(credits_bp)
 get_db = community_db.get_db
 
 @app.route('/community/')
@@ -212,7 +214,49 @@ def ai_recommend():
         if not request.is_json:
             raise AIError('请使用 JSON 请求。')
         data = validate_request(request.get_json(silent=True))
+
+        status_info = ai_service.status()
+        is_live = status_info.get('mode') == 'live' and not status_info.get('requires_key')
+        auth_header = request.headers.get('Authorization', '').strip()
+        enforce_auth = (not app.config.get('TESTING')) or bool(app.config.get('ENFORCE_CREDITS_IN_TESTS'))
+
+        user_id = None
+        user_credits = None
+        if auth_header or (is_live and enforce_auth):
+            user = current_user()
+            if user:
+                user_id = user['id']
+                user_credits = int(user['credits']) if 'credits' in user.keys() and user['credits'] is not None else 10
+
+            if is_live:
+                if not user_id and enforce_auth:
+                    return jsonify({
+                        'error': '云端 AI 建议需登录后使用（新用户赠送 10 积分，每日签到 +3 积分）。请先登录账号。',
+                        'code': 'auth_required',
+                    }), 401
+                if user_id and user_credits is not None and user_credits < 1:
+                    return jsonify({
+                        'error': '显影积分不足（当前 0 积分）。可通过右上角头像菜单「每日签到 (+3)」或「兑换码 / 赞助」补充积分。',
+                        'code': 'insufficient_credits',
+                        'credits': 0,
+                    }), 402
+
         result = ai_service.recommend(data)
+        if user_id is not None:
+            if not result.get('demo'):
+                conn = get_db()
+                try:
+                    conn.execute(
+                        'UPDATE users SET credits = MAX(0, COALESCE(credits, 10) - 1) WHERE id = ?',
+                        (user_id,),
+                    )
+                    conn.commit()
+                    row = conn.execute('SELECT credits FROM users WHERE id = ?', (user_id,)).fetchone()
+                    result['credits'] = int(row['credits']) if row and row['credits'] is not None else 0
+                finally:
+                    conn.close()
+            else:
+                result['credits'] = user_credits
         response = jsonify(result)
         response.headers['Cache-Control'] = 'no-store'
         return response

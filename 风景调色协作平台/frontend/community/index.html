@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../community-host.css">
 <link rel="stylesheet" href="../author-portfolio.css">
 <link rel="stylesheet" href="../saved-recipes.css">
+<link rel="stylesheet" href="../credits-sponsor.css">
 </head>
 <body>
 
@@ -106,6 +107,24 @@
         <button type="button" class="btn primary" id="ucSaveProfile">保存资料</button>
       </div>
       <div id="ucProfileError" class="error"></div>
+    </div>
+
+    <div class="uc-account-card uc-credits-card" id="ucCreditsCard">
+      <div class="uc-credits-header">
+        <div>
+          <h2>显影积分与开发者赞助</h2>
+          <span class="hint">云端 AI 建议消耗 1 积分/次 · 每日签到 +3 积分 · 首次验证邮箱 +5 积分</span>
+        </div>
+        <div class="uc-credits-badge-big">当前余额 <strong id="ucCreditBalance">10</strong> 积分</div>
+      </div>
+      <div class="uc-field"><span>今日签到</span><strong id="ucCheckinStatus">今日尚未签到 (+3 积分)</strong></div>
+      <div class="uc-field"><span>绑定邮箱</span><strong id="ucEmailStatus">未绑定（首次验证赠送 +5 积分）</strong></div>
+      <div class="uc-credits-actions">
+        <button type="button" class="btn ghost" id="ucCheckinBtn">📅 每日签到 (+3)</button>
+        <button type="button" class="btn ghost" id="ucRedeemBtn">🎁 兑换码核销</button>
+        <button type="button" class="btn ghost" id="ucBindEmailBtn">✉️ 绑定/验证邮箱</button>
+        <button type="button" class="btn btn-sponsor-gold" id="ucSponsorBtn">✦ 赞助开发者 / 获取积分</button>
+      </div>
     </div>
 
     <div class="uc-account-card">
@@ -209,6 +228,21 @@
       <button id="authSubmit" class="btn primary">登录</button>
       <button id="authToggle" class="btn ghost">没有账号？去注册</button>
     </div>
+    <div class="auth-email-divider">
+      <span>支持邮箱验证码免密登录</span>
+      <button type="button" id="authEmailModeToggle" class="auth-email-toggle-btn">✉️ 邮箱验证码登录</button>
+    </div>
+    <div id="authEmailBox" class="auth-email-box" hidden>
+      <label class="field-label" for="authEmailInput">邮箱地址（首次验证赠送 +5 积分）</label>
+      <input id="authEmailInput" type="email" class="input" placeholder="输入邮箱，例如 name@163.com" autocomplete="email">
+      <div class="auth-email-code-row">
+        <input id="authEmailCode" type="text" class="input" maxlength="6" inputmode="numeric" placeholder="6 位数字验证码">
+        <button type="button" id="authSendCodeBtn" class="btn ghost">获取验证码</button>
+      </div>
+      <div class="modal-actions" style="margin-top:10px;">
+        <button type="button" id="authEmailVerifyBtn" class="btn primary">验证并登录</button>
+      </div>
+    </div>
     <div id="authError" class="error"></div>
   </div>
 </div>
@@ -275,6 +309,7 @@
 <script src="assets/app.js"></script>
 <script src="../author-portfolio.js"></script>
 <script src="../saved-recipes.js"></script>
+<script src="../credits-sponsor.js"></script>
 <script src="../community-usability.js"></script>
 <script src="../community-bridge.js"></script>
 </body>

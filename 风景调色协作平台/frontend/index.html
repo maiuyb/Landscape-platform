@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="welcome-workspace.css">
   <link rel="stylesheet" href="saved-recipes.css">
+  <link rel="stylesheet" href="credits-sponsor.css">
   <style>[v-cloak]{display:none!important}</style>
 </head>
 <body>
@@ -104,7 +105,9 @@
         <button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button>
         <div class="user-center" v-if="authUser" @click.stop @mouseenter="userMenuOpen=true" @mouseleave="userMenuOpen=false" @focusin="userMenuOpen=true" @focusout="leaveUserMenu" @keydown.esc.stop="userMenuOpen=false">
           <button class="user-chip avatar-only" type="button" @click.stop="openOwnProfile" :aria-expanded="userMenuOpen" aria-label="打开个人主页"><span class="user-avatar"><img v-if="authUser.avatar" :src="avatarUrl(authUser.avatar)" alt=""><span v-else>{{ (authUser.display_name || authUser.username || '?').slice(0,1) }}</span></span></button>
-          <div class="user-menu" v-if="userMenuOpen" role="menu"><div class="account-menu-identity" role="presentation"><strong>{{ authUser.display_name || authUser.username }}</strong><span>@{{ authUser.username }}</span></div>
+          <div class="user-menu" v-if="userMenuOpen" role="menu"><div class="account-menu-identity" role="presentation"><strong>{{ authUser.display_name || authUser.username }}</strong><span>@{{ authUser.username }}</span><span class="account-menu-credit-tag">✦ {{ authUser.credits ?? 10 }} 显影积分</span></div>
+            <button role="menuitem" type="button" class="user-menu-credit-btn" @click="dailyCheckin" :disabled="authUser.checked_in_today || creditBusy">{{ authUser.checked_in_today ? '✓ 今日已签到' : '📅 每日签到 (+3)' }}</button>
+            <button role="menuitem" type="button" class="user-menu-gift-btn" @click="openCreditSponsor('redeem')"><svg class="gift-icon" viewBox="0 0 20 20" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="14" height="9" rx="1.5"/><path d="M2 5.5h16v2.5H2zM10 5.5v11.5M10 5.5c-1.5-2.5-4-2.5-4-.5s2.5 1 4 .5zm0 0c1.5-2.5 4-2.5 4-.5s-2.5 1-4 .5z"/></svg><span>兑换码</span></button>
             <button role="menuitem" type="button" @click="openUserCenter">用户中心</button>
             <button role="menuitem" type="button" class="user-menu-danger" @click="logout">退出登录</button>
           </div>
@@ -302,7 +305,7 @@
       </section>
       <template v-else>
         <section class="canvas-panel" aria-label="照片画布" @dragover.prevent @drop.prevent="handleDrop">
-          <div class="canvas-heading"><div class="file-info"><strong>{{ filename || '未选择照片' }}</strong><span v-if="imageLoaded">{{ outputDimensions.width }} × {{ outputDimensions.height }} · {{ perspectiveOpen ? '透视校正预览 · 尚未应用' : straightenOpen ? '拉直预览 · 尚未应用' : preview ? '方案预览' : dirty ? '已编辑' : '原图' }}</span></div><button class="ai-shortcut" aria-label="AI 建议" @click="switchPanel('ai',true)" :aria-pressed="panelTab === 'ai'">✧ AI 建议</button></div>
+          <div class="canvas-heading"><div class="file-info"><strong>{{ filename || '未选择照片' }}</strong><span v-if="imageLoaded">{{ outputDimensions.width }} × {{ outputDimensions.height }} · {{ perspectiveOpen ? '透视校正预览 · 尚未应用' : straightenOpen ? '拉直预览 · 尚未应用' : preview ? '方案预览' : dirty ? '已编辑' : '原图' }}</span></div><button class="ai-shortcut" aria-label="AI 建议" @click="switchPanel('ai',true)" :aria-pressed="panelTab === 'ai'"><span>✧ AI 建议</span><span class="ai-credit-pill" v-if="authUser" :title="'当前显影积分：' + (authUser.credits ?? 10)">{{ authUser.credits ?? 10 }} 积分</span></button></div>
           <div class="canvas-viewer">
           <div class="canvas-toolbar">
             <div class="canvas-view-tools"><div class="segmented" aria-label="画布显示">
@@ -437,6 +440,18 @@
  <section id="panel-ai" class="ai-panel" role="tabpanel" aria-labelledby="tab-ai" v-show="panelTab === 'ai'">
  <div class="panel-intro"><p class="eyebrow">一起寻找方向</p><h2>AI 助手</h2><p>描述你想要的感觉，先比较建议，再决定是否应用。</p></div>
  <div class="ai-service-status small" role="status"><span>{{ aiConnection === 'live' ? '云端 AI 已配置' : aiConnection === 'demo' ? '当前为演示模式' : aiConnection === 'missing' ? 'AI 尚未配置密钥' : aiConnection === 'checking' ? '正在检查 AI 连接配置…' : '暂时无法读取 AI 配置' }}</span><button class="text-button" @click="refreshAIStatus" :disabled="aiLoading">刷新状态</button></div>
+ <div class="ai-credit-banner" aria-label="显影积分与签到">
+   <div class="ai-credit-banner-head">
+     <span>当前显影积分：<strong v-if="authUser">{{ authUser.credits ?? 10 }}</strong><strong v-else>未登录（注册送 10）</strong></span>
+     <span>云端建议 1 积分/次</span>
+   </div>
+   <div class="ai-credit-banner-actions">
+     <button v-if="authUser" type="button" @click="dailyCheckin" :disabled="authUser.checked_in_today || creditBusy">{{ authUser.checked_in_today ? '✓ 今日已签到' : '📅 每日签到 +3' }}</button>
+     <button v-else type="button" @click="openLogin">登录领积分</button>
+     <button type="button" class="sponsor-accent-btn" @click="openCreditSponsor('redeem')">🎁 兑换码</button>
+     <button type="button" class="sponsor-accent-btn" @click="openCreditSponsor('sponsor')">✦ 赞助获取</button>
+   </div>
+ </div>
  <div class="ai-conversation" role="log" aria-label="本次交流"><p v-for="(entry,index) in aiMessages" :key="index" :class="'chat-'+entry.role"><span>{{ entry.role === 'user' ? '你' : '助手' }}</span>{{ entry.text }}</p></div>
  <form @submit.prevent="requestAI"><label class="ai-compose-label" for="ai-intent">你想怎样调整？</label><textarea id="ai-intent" ref="aiInput" v-model="aiDraft" maxlength="800" rows="4" placeholder="例如：保留夕阳的暖色，让前景更清楚一些" aria-label="描述想要的效果"></textarea><div class="ai-prompts"><button type="button" @click="aiDraft='让照片更自然通透，保留真实颜色'">自然通透</button><button type="button" @click="aiDraft='保留暖色氛围，避免天空过亮'">温暖氛围</button></div><p class="small ai-send-note">使用云端建议会发送压缩参考图、当前参数与最近交流。普通调色和导出在你的设备上完成。</p><button type="submit" class="primary full-width" :disabled="locked || aiLoading">{{ aiLoading ? '正在分析…' : '获取 AI 建议' }}</button></form>
  <p class="ai-status small" role="status">{{ aiStatus }}</p><button v-if="aiAppliedName" class="full-width" @click="switchPanel('edit')">继续手动微调</button>
@@ -495,6 +510,7 @@
   <script src="saved-recipes.js"></script>
   <script src="editor-loupe.js"></script>
   <script src="recipe-handoff.js"></script>
+  <script src="credits-sponsor.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
