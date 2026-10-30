@@ -547,7 +547,6 @@ button[aria-current=page] {
 }
 
 .panel-scroll > .editor-histogram { margin: -18px -14px 16px; }
-.recipe-paste-dialog textarea { display: block; width: 100%; margin-top: 8px; padding: 10px; resize: vertical; min-height: 140px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 12px/1.5 monospace; }
 
 .panel-heading h2 {
   font-family: var(--gallery-serif);
@@ -1593,3 +1592,23 @@ dialog::backdrop {
 }
 
 .preview-parameters { padding: 8px 0; }
+
+/* Avatar trigger stays compact; account identity lives in its menu. */
+.user-chip.avatar-only{padding:3px;border:0;border-radius:50%;background:transparent;box-shadow:none;gap:0;min-width:0}
+.user-chip.avatar-only .user-avatar{width:36px;height:36px;flex-basis:36px}
+.account-menu-identity{padding:12px 12px 14px;border-bottom:1px solid var(--line);margin-bottom:5px;display:flex;flex-direction:column;gap:3px;max-width:240px;overflow-wrap:anywhere}
+.account-menu-identity strong{font-size:15px;color:var(--ink);font-weight:600}.account-menu-identity span{font-size:12px;color:var(--muted,#6b706b)}
+.user-menu{min-width:200px}
+.upright-loupe{position:fixed;z-index:95;pointer-events:none;width:248px;box-sizing:border-box;padding:10px 11px;border:1px solid var(--bronze);border-radius:10px;background:var(--paper,#faf9f6);color:var(--ink);box-shadow:0 10px 28px #0003}
+.loupe-heading{display:flex;justify-content:space-between;gap:6px;align-items:center;margin-bottom:8px;font:11px/1.5 var(--gallery-sans,sans-serif)}
+.loupe-heading strong{font-weight:600}.loupe-heading span{font-variant-numeric:tabular-nums;color:var(--muted,#656b66)}
+.loupe-image{position:relative;width:224px;height:224px;background:repeating-conic-gradient(#e1e1db 0 25%,#f6f6f0 0 50%) 0/12px 12px;overflow:hidden}
+.loupe-image canvas{display:block;width:224px;height:224px;image-rendering:pixelated}
+.loupe-crosshair{position:absolute;left:50%;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);filter:drop-shadow(0 0 1px #000)}
+.loupe-crosshair::before,.loupe-crosshair::after{content:'';position:absolute;background:white}.loupe-crosshair::before{height:1px;left:0;right:0;top:50%}.loupe-crosshair::after{width:1px;top:0;bottom:0;left:50%}
+.upright-loupe p{font-size:11px;margin:6px 0 0}
+@media(max-width:760px){
+  .app-header:has(.user-center) .brand{padding-right:48px}
+  .app-header:has(.user-center) nav{flex-basis:100%;width:100%}
+  .app-header .user-center{position:absolute;right:16px;top:12px}
+}

@@ -464,6 +464,37 @@ createApp({
     const perspectiveOpen=ref(false),perspectiveDraft=reactive({vertical:0,horizontal:0,autoCrop:true});
     const uprightMode=ref('manual'),uprightSolution=ref(null),uprightGuides=ref([]),uprightAxis=ref('vertical'),uprightSelected=ref(null),uprightStatus=ref(''),uprightInvalid=ref(false),uprightBusy=ref(false),uprightDrawing=ref(false);
     let uprightDrag=null,uprightSequence=0,uprightJob=null,uprightVersion=0;
+    const uprightLoupe=reactive({visible:false,left:0,top:0,x:0,y:0,error:''}),uprightLoupeCanvas=ref(null);
+    let loupeFrame=null,loupeTimer=null,loupePoint=null,loupeVersion=0;
+    function hideUprightLoupe(){uprightLoupe.visible=false;loupeVersion++;clearTimeout(loupeTimer);if(loupeFrame!==null)cancelAnimationFrame(loupeFrame);loupeFrame=null;loupePoint=null;}
+    function showUprightLoupe(clientX,clientY,layer){
+      if(!sourceImage.value||!perspectiveOpen.value||uprightMode.value!=='guided'||!layer)return;
+      const bounds=layer.getBoundingClientRect(),size=EditorLoupe.side*EditorLoupe.scale+24,height=size+45;
+      if(!bounds.width||!bounds.height)return;
+      const minX=Math.max(8,bounds.left),maxX=Math.min(innerWidth-8,bounds.right);
+      uprightLoupe.left=Core.clamp(clientX+24+size<=maxX?clientX+24:clientX-size-24,minX,Math.max(minX,maxX-size));
+      uprightLoupe.top=Core.clamp(clientY-height-24>=8?clientY-height-24:clientY+24,8,Math.max(8,innerHeight-height-8));
+      uprightLoupe.visible=true;uprightLoupe.error='';clearTimeout(loupeTimer);
+      loupePoint={x:Core.clamp((clientX-bounds.left)/bounds.width,0,1),y:Core.clamp((clientY-bounds.top)/bounds.height,0,1)};
+      if(loupeFrame!==null)return;
+      const version=loupeVersion;
+      nextTick(()=>{if(version!==loupeVersion||!uprightLoupe.visible||loupeFrame!==null)return;loupeFrame=requestAnimationFrame(()=>{
+        loupeFrame=null;if(!loupePoint||version!==loupeVersion)return;
+        try{
+          const result=EditorLoupe.sample(sourceImage.value,activeState.value.geometry,loupePoint),canvas=uprightLoupeCanvas.value;
+          if(!canvas)return;canvas.width=canvas.height=EditorLoupe.side*EditorLoupe.scale;
+          const context=canvas.getContext('2d');context.imageSmoothingEnabled=false;context.drawImage(result.tile,0,0,canvas.width,canvas.height);
+          canvas.dataset.regionPixels=result.regionPixels;canvas.dataset.sampleX=result.x;canvas.dataset.sampleY=result.y;
+          uprightLoupe.x=result.x+1;uprightLoupe.y=result.y+1;
+        }catch(error){uprightLoupe.error=error.message;}
+      });});
+    }
+    function uprightEndpointFocus(id,endpoint,event){
+      if(uprightBusy.value)return;
+      const target=event?.currentTarget||document.querySelector(`[data-upright-guide="${id}"][data-upright-endpoint="${endpoint}"]`),box=target?.getBoundingClientRect();
+      if(box)showUprightLoupe(box.left+box.width/2,box.top+box.height/2,target.closest('.upright-layer'));
+    }
+    watch([currentView,perspectiveOpen,activePhotoId],hideUprightLoupe);
     const uprightSize=computed(()=>sourceImage.value?Core.outputSize(sourceImage.value.naturalWidth,sourceImage.value.naturalHeight,state.value.geometry):{width:1,height:1});
     const uprightFrame=computed(()=>{
       const {width,height}=uprightSize.value;
@@ -512,12 +543,6 @@ createApp({
     const recipeDetail = ref(null), recipeDetailLoading=ref(false), recipeDetailError=ref('');
     let recipeDetailVersion=0;
     const exportDialog = ref(null), recipeDialog = ref(null);
-    const pasteRecipeDialog = ref(null), pasteRecipeOpen = ref(false), pasteRecipeText = ref(''), pasteRecipeError = ref(''), pastingRecipe = ref(false);
-    watch(pasteRecipeOpen, async open => {
-      await nextTick();
-      if (open) { pasteRecipeDialog.value.showModal(); pasteRecipeDialog.value.querySelector('textarea').focus(); }
-      else pasteRecipeDialog.value.close();
-    });
     watch(exportOpen, async open => { await nextTick(); if (open) exportDialog.value.showModal(); else exportDialog.value.close(); });
     watch(recipeDetail, async recipe => { await nextTick(); if (recipe) {if(!recipeDialog.value.open)recipeDialog.value.showModal();} else if(recipeDialog.value.open)recipeDialog.value.close(); });
     watch(shareOpen,async open=>{await nextTick();if(open)shareDialog.value.showModal();else shareDialog.value.close();});
@@ -1064,7 +1089,7 @@ createApp({
     function finishPerspective(apply){
       if(apply&&uprightApplyBlocked.value)return;
       if(apply)state.value.geometry.push(...perspectiveSteps());
-      cancelUprightAnalysis();uprightDrag=null;uprightDrawing.value=false;perspectiveOpen.value=false;dragging=false;if(apply)commit();else schedulePaint();focusGeometryTool('perspective-tool');
+      hideUprightLoupe();cancelUprightAnalysis();uprightDrag=null;uprightDrawing.value=false;perspectiveOpen.value=false;dragging=false;if(apply)commit();else schedulePaint();focusGeometryTool('perspective-tool');
     }
     function perspectiveSteps(){
       const steps=[];
@@ -1073,7 +1098,7 @@ createApp({
       return steps;
     }
     function cancelUprightAnalysis(){uprightVersion++;if(uprightJob){clearTimeout(uprightJob.timer);uprightJob.worker?.terminate();uprightJob.resolve(null);uprightJob=null;}uprightBusy.value=false;}
-    function resetUpright(){cancelUprightAnalysis();uprightDrag=null;uprightDrawing.value=false;uprightMode.value='manual';uprightSolution.value=null;uprightGuides.value=[];uprightSelected.value=null;uprightStatus.value='';uprightInvalid.value=false;Object.assign(perspectiveDraft,{vertical:0,horizontal:0,autoCrop:true});}
+    function resetUpright(){hideUprightLoupe();cancelUprightAnalysis();uprightDrag=null;uprightDrawing.value=false;uprightMode.value='manual';uprightSolution.value=null;uprightGuides.value=[];uprightSelected.value=null;uprightStatus.value='';uprightInvalid.value=false;Object.assign(perspectiveDraft,{vertical:0,horizontal:0,autoCrop:true});}
     function beginUprightGuides(){resetUpright();uprightMode.value='guided';uprightStatus.value='沿同一主体的两条竖直边或两条水平边画线；端点可拖动。';}
     function solveUprightGuides(){
       try{uprightSolution.value=Core.upright.solve(uprightGuides.value,uprightSize.value.width/uprightSize.value.height);uprightInvalid.value=false;uprightStatus.value='已按参考线矫正，继续调整端点或按 Enter 应用。';}
@@ -1086,14 +1111,19 @@ createApp({
       let id=target?.dataset.uprightGuide,endpoint=target?.dataset.uprightEndpoint;
       if(!id){if(uprightGuides.value.filter(g=>g.axis===uprightAxis.value).length>=2){uprightStatus.value='这个方向已有两条参考线，可拖动端点或删除后重画。';return;}id='guide-'+(++uprightSequence);endpoint='b';uprightGuides.value.push({id,axis:uprightAxis.value,a:point,b:point});}
       uprightSelected.value=id;uprightDrawing.value=true;uprightDrag={id,endpoint,pointerId:event.pointerId,inverse,before,solution:Core.clone(uprightSolution.value)};event.currentTarget.setPointerCapture(event.pointerId);
+      showUprightLoupe(event.clientX,event.clientY,event.currentTarget);
     }
-    function uprightPointerMove(event){if(!uprightDrag||event.pointerId!==uprightDrag.pointerId)return;const guide=uprightGuides.value.find(g=>g.id===uprightDrag.id);if(guide)guide[uprightDrag.endpoint]=uprightPoint(event,uprightDrag.inverse);}
-    function uprightPointerUp(event){if(!uprightDrag||event.pointerId!==uprightDrag.pointerId)return;if(event.type==='pointercancel'||event.type==='lostpointercapture'){uprightGuides.value=uprightDrag.before;uprightSolution.value=uprightDrag.solution;}else{uprightPointerMove(event);const g=uprightGuides.value.find(g=>g.id===uprightDrag.id);if(g&&Math.hypot(g.a[0]-g.b[0],g.a[1]-g.b[1])<.025)uprightGuides.value=uprightGuides.value.filter(v=>v.id!==g.id);solveUprightGuides();}uprightDrag=null;uprightDrawing.value=false;}
+    function uprightPointerMove(event){if(!uprightDrag||event.pointerId!==uprightDrag.pointerId)return;const guide=uprightGuides.value.find(g=>g.id===uprightDrag.id);if(guide)guide[uprightDrag.endpoint]=uprightPoint(event,uprightDrag.inverse);showUprightLoupe(event.clientX,event.clientY,event.currentTarget);}
+    function uprightPointerUp(event){if(!uprightDrag||event.pointerId!==uprightDrag.pointerId)return;if(event.type==='pointercancel'||event.type==='lostpointercapture'){uprightGuides.value=uprightDrag.before;uprightSolution.value=uprightDrag.solution;}else{uprightPointerMove(event);const g=uprightGuides.value.find(g=>g.id===uprightDrag.id);if(g&&Math.hypot(g.a[0]-g.b[0],g.a[1]-g.b[1])<.025)uprightGuides.value=uprightGuides.value.filter(v=>v.id!==g.id);solveUprightGuides();}uprightDrag=null;uprightDrawing.value=false;hideUprightLoupe();}
     function deleteUprightGuide(id){uprightGuides.value=uprightGuides.value.filter(g=>g.id!==id);uprightSelected.value=null;solveUprightGuides();}
     function uprightGuideKey(id,endpoint,event){
       if(uprightBusy.value)return;
       if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();event.stopPropagation();deleteUprightGuide(id);return;}
-      if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();event.stopPropagation();const g=uprightGuides.value.find(g=>g.id===id);if(!g)return;const p=g[endpoint],step=event.shiftKey?.01:.002;g[endpoint]=[Core.clamp(p[0]+(event.key==='ArrowRight'?step:event.key==='ArrowLeft'?-step:0),0,1),Core.clamp(p[1]+(event.key==='ArrowDown'?step:event.key==='ArrowUp'?-step:0),0,1)];solveUprightGuides();
+      if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();event.stopPropagation();const g=uprightGuides.value.find(g=>g.id===id);if(!g)return;
+      const {width,height}=uprightSize.value,frame=Core.clone(uprightFrame.value),point=Core.masks.transform(frame,g[endpoint][0]*width,g[endpoint][1]*height),step=event.shiftKey?10:1;
+      const moved=Core.masks.transform(Core.masks.inverse(frame),point[0]+(event.key==='ArrowRight'?step:event.key==='ArrowLeft'?-step:0),point[1]+(event.key==='ArrowDown'?step:event.key==='ArrowUp'?-step:0));
+      g[endpoint]=[Core.clamp(moved[0]/width,0,1),Core.clamp(moved[1]/height,0,1)];solveUprightGuides();
+      nextTick(()=>{uprightEndpointFocus(id,endpoint);loupeTimer=setTimeout(hideUprightLoupe,1400);});
     }
     async function automaticPerspective(){
       if(uprightBusy.value)return;cancelUprightAnalysis();const version=uprightVersion;uprightBusy.value=true;uprightStatus.value='正在本机分析照片中的直线…';
@@ -1515,56 +1545,12 @@ createApp({
       } catch (e) { fail(`导出失败：${e.message}。当前编辑已保留，可以重试。`); }
       finally { exporting.value = false; }
     }
-    async function copyRecipe() {
-      if (locked.value) return;
-      try {
-        const text=JSON.stringify(Core.toRecipe(state.value), null, 2);
-        if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
-        else {
-          // Public-IP HTTP pages do not expose the async Clipboard API.
-          const input=document.createElement('textarea'),previous=document.activeElement;
-          input.value=text;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.append(input);input.select();
-          try { if(!document.execCommand('copy')) throw new Error('Copy unavailable'); }
-          finally { input.remove();previous?.focus(); }
-        }
-        notify('当前配方已复制，可在其他照片上复用。');
-      }
-      catch { fail('剪贴板不可用，可以登录后保存到“常用配方”。'); }
-    }
     RecipeLibrary.configure({
       request:(path,method,body)=>api(path,{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})}),
       login:openLogin, notify, preview:recipe=>{if(photoBusy.value||preview.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value){notify('请先完成当前预览或操作，再使用常用配方。');return;}openCommunityRecipe(recipe);}
     });
     function openSavedRecipes(){RecipeLibrary.open();}
     function saveCurrentRecipe(){if(locked.value)return;commit();RecipeLibrary.saveCurrent(Core.toRecipe(state.value),(filename.value.replace(/\.[^.]+$/,'')+'的配方').slice(0,100));}
-    function closeRecipePaste() {
-      pasteRecipeOpen.value = false;
-      pasteRecipeText.value = ''; pasteRecipeError.value = '';
-    }
-    function readPastedRecipe() {
-      if (locked.value) return false;
-      if (!pasteRecipeText.value.trim()) { pasteRecipeError.value = '请先粘贴配方内容。'; return false; }
-      let recipe;
-      try { recipe = Community.normalize(JSON.parse(pasteRecipeText.value)); }
-      catch { pasteRecipeError.value = '内容不是有效的配方，请重新复制完整配方后重试。'; return false; }
-      pasteRecipeDialog.value.close();
-      closeRecipePaste();
-      openCommunityRecipe(recipe);
-      return true;
-    }
-    async function pasteRecipe() {
-      if (locked.value || pastingRecipe.value) return;
-      const photo = activePhotoId.value;
-      pasteRecipeText.value = ''; pasteRecipeError.value = ''; pastingRecipe.value = true;
-      try {
-        if (navigator.clipboard?.readText) {
-          try { pasteRecipeText.value = await navigator.clipboard.readText(); } catch { /* Manual paste remains available. */ }
-        }
-        if (photo !== activePhotoId.value || locked.value) return;
-        if (pasteRecipeText.value.trim() && readPastedRecipe()) return;
-        pasteRecipeOpen.value = true;
-      } finally { pastingRecipe.value = false; }
-    }
     function keydown(event) {
       if(frameOpen.value || document.querySelector('.saved-recipes-dialog[open]'))return;
       if(currentView.value!=='editor'||exportOpen.value||shareOpen.value||recipeDetail.value||pendingPreset.value)return;
@@ -1580,9 +1566,10 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
+    onMounted(() => { const oneTimeRecipe=RecipeHandoff.take();if(oneTimeRecipe)openCommunityRecipe(oneTimeRecipe);window.addEventListener('resize',hideUprightLoupe);window.addEventListener('scroll',hideUprightLoupe,true);window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); document.addEventListener('click', closeUserMenu); refreshAuthUser(); });
 
     onBeforeUnmount(() => {
+      hideUprightLoupe();window.removeEventListener('resize',hideUprightLoupe);window.removeEventListener('scroll',hideUprightLoupe,true);
       clearTimeout(compareHintTimer);
       cancelUprightAnalysis();
       stopHeroSplitSweep();if(parallaxRaf!==null)cancelAnimationFrame(parallaxRaf);
@@ -1595,7 +1582,7 @@ createApp({
     });
     return {
       displayState, geometryLabel, openSavedRecipes, saveCurrentRecipe,
-      uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
+      uprightLoupe,uprightLoupeCanvas,uprightEndpointFocus,hideUprightLoupe,uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
       openLogin,editorBlank,openEditorWorkspace,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
@@ -1615,7 +1602,7 @@ createApp({
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, copyRecipe, pasteRecipe, pastingRecipe, pasteRecipeDialog, pasteRecipeText, pasteRecipeError, readPastedRecipe, closeRecipePaste, authUser, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout
+      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, authUser, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout
     };
   }
 }).mount('#app');

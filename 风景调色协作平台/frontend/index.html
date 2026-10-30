@@ -102,8 +102,8 @@
         <button v-if="imageLoaded" class="header-share" @click="openShare" :disabled="locked">分享到社区</button>
         <button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button>
         <div class="user-center" v-if="authUser" @click.stop @mouseenter="userMenuOpen=true" @mouseleave="userMenuOpen=false" @focusin="userMenuOpen=true" @focusout="leaveUserMenu" @keydown.esc.stop="userMenuOpen=false">
-          <button class="user-chip" type="button" @click.stop="openOwnProfile" :aria-expanded="userMenuOpen" aria-label="打开个人主页"><span class="user-avatar"><img v-if="authUser.avatar" :src="avatarUrl(authUser.avatar)" alt=""><span v-else>{{ (authUser.display_name || authUser.username || '?').slice(0,1) }}</span></span><span class="user-name">{{ authUser.display_name || authUser.username }}</span><svg class="user-chip-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <div class="user-menu" v-if="userMenuOpen" role="menu">
+          <button class="user-chip avatar-only" type="button" @click.stop="openOwnProfile" :aria-expanded="userMenuOpen" aria-label="打开个人主页"><span class="user-avatar"><img v-if="authUser.avatar" :src="avatarUrl(authUser.avatar)" alt=""><span v-else>{{ (authUser.display_name || authUser.username || '?').slice(0,1) }}</span></span></button>
+          <div class="user-menu" v-if="userMenuOpen" role="menu"><div class="account-menu-identity" role="presentation"><strong>{{ authUser.display_name || authUser.username }}</strong><span>@{{ authUser.username }}</span></div>
             <button role="menuitem" type="button" @click="openUserCenter">用户中心</button>
             <button role="menuitem" type="button" class="user-menu-danger" @click="logout">退出登录</button>
           </div>
@@ -327,7 +327,7 @@
                 <div class="straighten-guides" v-if="(straightenOpen || perspectiveOpen) && showGuides" aria-hidden="true"></div>
                 <div class="upright-layer" v-if="perspectiveOpen && uprightMode === 'guided'" tabindex="0" aria-label="透视参考线画布" @pointerdown.stop="uprightPointerDown" @pointermove.stop="uprightPointerMove" @pointerup.stop="uprightPointerUp" @pointercancel.stop="uprightPointerUp" @lostpointercapture="uprightPointerUp" @keydown.enter.stop.prevent="finishPerspective(true)" @click.stop>
                   <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><line v-for="g in uprightDisplay" :key="g.id" :x1="g.points[0][0]*1000" :y1="g.points[0][1]*1000" :x2="g.points[1][0]*1000" :y2="g.points[1][1]*1000" :class="{selected:g.id === uprightSelected}"></line></svg>
-                  <template v-for="(g,index) in uprightDisplay" :key="g.id"><template v-for="(p,end) in g.points" :key="end"><button v-if="p[0]>=0 && p[0]<=1 && p[1]>=0 && p[1]<=1" class="upright-endpoint" :data-upright-guide="g.id" :data-upright-endpoint="end ? 'b' : 'a'" :style="{left:p[0]*100+'%',top:p[1]*100+'%'}" :aria-label="'参考线'+(index+1)+(end ? '终点' : '起点')" @keydown="uprightGuideKey(g.id,end ? 'b' : 'a',$event)"></button></template></template>
+                  <template v-for="(g,index) in uprightDisplay" :key="g.id"><template v-for="(p,end) in g.points" :key="end"><button v-if="p[0]>=0 && p[0]<=1 && p[1]>=0 && p[1]<=1" class="upright-endpoint" :data-upright-guide="g.id" :data-upright-endpoint="end ? 'b' : 'a'" :style="{left:p[0]*100+'%',top:p[1]*100+'%'}" :aria-label="'参考线'+(index+1)+(end ? '终点' : '起点')" @focus="uprightEndpointFocus(g.id,end ? 'b' : 'a',$event)" @blur="hideUprightLoupe" @keydown="uprightGuideKey(g.id,end ? 'b' : 'a',$event)"></button></template></template>
                 </div>
                 <span class="detail-target" v-if="inspectorOpen" :style="{left:inspectorPosition.x*100+'%',top:inspectorPosition.y*100+'%'}" aria-hidden="true">＋</span>
                 <span v-if="compareGroup || wbPicking || perspectiveOpen || straightenOpen || preview || hoverFilter" class="image-badge">{{ compareGroup ? '按住对比 · 暂时关闭这组调整' : wbPicking ? '点击本应为白色或灰色的区域' : perspectiveOpen ? '透视校正预览 · 尚未应用' : straightenOpen ? '拉直预览 · 尚未应用' : preview ? '方案预览 · 尚未应用' : hoverFilter ? '预设预览 · ' + hoverFilter.label : '' }}</span>
@@ -401,7 +401,7 @@
        <fieldset class="geometry-draft" v-if="perspectiveOpen" :disabled="photoBusy"><p class="small">校正墙柱收拢或横向汇聚。先预览，Enter 应用，Esc 取消。</p>
          <div class="upright-modes"><button @click="automaticPerspective" :disabled="uprightBusy" :aria-pressed="uprightMode === 'auto'">{{uprightBusy ? '正在分析…' : '自动矫正'}}</button><button @click="beginUprightGuides" :disabled="uprightBusy" :aria-pressed="uprightMode === 'guided'">导引式</button><button @click="resetUpright">复位矫正</button></div>
          <p class="small upright-status" role="status" v-if="uprightStatus" :class="{error:uprightInvalid}">{{uprightStatus}}</p>
-         <div v-if="uprightMode === 'guided'" class="upright-guide-controls"><label>画线方向<select v-model="uprightAxis" :disabled="uprightBusy" aria-label="参考线方向"><option value="vertical">竖直边缘</option><option value="horizontal">水平边缘</option></select></label><p class="small">每个方向最多两条。沿同一立面画线，参考线会随矫正预览一起移动。</p><div v-for="(g,index) in uprightGuides" :key="g.id" class="upright-guide-row"><span>参考线 {{index+1}} · {{g.axis === 'vertical' ? '竖直' : '水平'}}</span><button :disabled="uprightBusy" @click="deleteUprightGuide(g.id)" :aria-label="'删除参考线'+(index+1)">删除</button></div><p class="small" v-if="uprightDisplay.some(g=>g.points.some(p=>p.some(v=>v<0 || v>1)))">部分端点在裁边外，可关闭“自动裁去空白”后调整。</p></div>
+         <div v-if="uprightMode === 'guided'" class="upright-guide-controls"><label>画线方向<select v-model="uprightAxis" :disabled="uprightBusy" aria-label="参考线方向"><option value="vertical">竖直边缘</option><option value="horizontal">水平边缘</option></select></label><p class="small">每个方向最多两条。画线或拖动端点时显示原片局部放大；方向键逐像素微调，Shift + 方向键加快。参考线会随矫正预览移动。</p><div v-for="(g,index) in uprightGuides" :key="g.id" class="upright-guide-row"><span>参考线 {{index+1}} · {{g.axis === 'vertical' ? '竖直' : '水平'}}</span><button :disabled="uprightBusy" @click="deleteUprightGuide(g.id)" :aria-label="'删除参考线'+(index+1)">删除</button></div><p class="small" v-if="uprightDisplay.some(g=>g.points.some(p=>p.some(v=>v<0 || v>1)))">部分端点在裁边外，可关闭“自动裁去空白”后调整。</p></div>
          <details id="perspective-manual" class="subgroup"><summary>手动微调</summary>
          <adjustment-control v-for="control in perspectiveControls" :key="control.key" :control="control" :disabled="uprightBusy" :model-value="perspectiveDraft[control.field]" @start="beginAdjustment" @update:model-value="value=>perspectiveDraft[control.field]=value" @commit="commitStraightenPreview" @confirm="finishPerspective(true)" @cancel="finishPerspective(false)" @number-input="inputPerspective" @reset="perspectiveDraft[control.field]=0"></adjustment-control>
          </details>
@@ -443,7 +443,7 @@
  <details class="subgroup ai-privacy"><summary>图片如何用于建议？</summary><p class="small">点击获取建议后，当前照片的压缩参考图、描述、编辑参数及本张照片最近三轮成功交流会发送到本项目后端；云端模式下转交千问分析。原尺寸照片和蒙版笔迹不随此请求发送，本项目后端不落盘保存 AI 参考图或交流内容。普通调色与导出在你的设备上完成。未配置密钥时明确展示固定演示方案。</p></details>
  </section>
  </div>
- <details class="workspace-output" open><summary>配方与作品</summary><div class="recipe-actions"><button @click="copyRecipe" :disabled="locked">复制配方</button><button @click="pasteRecipe" :disabled="locked || pastingRecipe">{{ pastingRecipe ? '正在读取…' : '粘贴配方' }}</button><button @click="openSavedRecipes">常用配方</button><button @click="saveCurrentRecipe" :disabled="locked">保存当前配方</button></div></details>
+ <details class="workspace-output" open><summary>配方与作品</summary><div class="recipe-actions"><button @click="openSavedRecipes">常用配方</button><button @click="saveCurrentRecipe" :disabled="locked">保存当前配方</button></div></details>
 </aside>
       </template>
     </main>
@@ -474,16 +474,7 @@
     </dialog>
     <dialog ref="presetConfirmDialog" @cancel.prevent="cancelPreset" aria-labelledby="preset-confirm-title"><h2 id="preset-confirm-title">应用预设前确认</h2><p>这张照片已有调整。是否应用「{{ pendingPreset?.preset.label }}」？</p><p v-if="pendingPreset?.legacy">将切换经典滤镜；已有原生预设会移除，手动调整按当前规则保留。</p><p v-else>将更新预设涉及的调色参数，保留曝光、白平衡、构图与局部调整。切换预设不会叠加上一套风格。</p><p class="small">应用后可以撤销，取消会保留当前编辑。</p><div class="actions"><button @click="cancelPreset">取消</button><button class="primary" @click="confirmPreset">应用预设</button></div></dialog>
     <dialog ref="shareDialog" @cancel.prevent="!sharing && (shareOpen=false)" aria-labelledby="share-title"><h2 id="share-title">分享到社区</h2><p>将当前完整配方和最长边 1600 像素的预览图交给社区发布表单。前后图使用同一张照片、同一构图；效果相同时按单图分享。</p><p>你可以在社区补充名称、说明和分类。点击发布后才上传图片与配方。</p><p v-if="sharing" role="status">正在准备图片与配方…</p><div class="actions"><button @click="shareOpen=false" :disabled="sharing">取消</button><button class="primary" @click="prepareShare" :disabled="sharing">准备发布</button></div></dialog>
-    <dialog ref="pasteRecipeDialog" class="recipe-paste-dialog" @cancel.prevent="closeRecipePaste" aria-labelledby="paste-recipe-title">
-      <form @submit.prevent="readPastedRecipe">
-        <h2 id="paste-recipe-title">粘贴配方</h2>
-        <p>将复制的配方粘贴到下方，读取后选择复用范围并在当前照片上预览。</p>
-        <label for="paste-recipe-content">配方内容</label>
-        <textarea id="paste-recipe-content" v-model="pasteRecipeText" rows="8" spellcheck="false" placeholder="粘贴完整的配方内容" aria-label="粘贴配方内容"></textarea>
-        <p class="error" v-if="pasteRecipeError" role="alert">{{ pasteRecipeError }}</p>
-        <div class="actions"><button type="button" @click="closeRecipePaste">取消</button><button type="submit" class="primary" :disabled="locked">读取配方</button></div>
-      </form>
-    </dialog>
+    <teleport to="body"><aside v-if="uprightLoupe.visible" class="upright-loupe" :style="{left:uprightLoupe.left+'px',top:uprightLoupe.top+'px'}" aria-label="透视导引局部放大"><div class="loupe-heading"><strong>原片细节 · 4×</strong><span v-if="!uprightLoupe.error">{{uprightLoupe.x}}, {{uprightLoupe.y}} px</span></div><div class="loupe-image"><canvas ref="uprightLoupeCanvas" aria-label="原片像素放大"></canvas><span class="loupe-crosshair" aria-hidden="true"></span></div><p v-if="uprightLoupe.error">{{uprightLoupe.error}}</p></aside></teleport>
     <dialog ref="recipeDialog" @cancel.prevent="closeRecipeDetail" aria-labelledby="recipe-title"><template v-if="recipeDetail"><h2 id="recipe-title">{{ recipeDetail.name }}</h2><p>{{ recipeDetail.description }}</p><p>默认只复用全局调色，保留你当前的构图和局部调整。不同照片上的效果可能不同。</p><fieldset v-if="!recipeDetailLoading && !recipeDetailError" class="reuse-options"><label v-if="reuseScope.geometry"><input type="checkbox" v-model="reuseGeometry">同时复用作者构图（替换当前裁剪、旋转、拉直和透视矫正）</label><label v-if="reuseScope.masks"><input type="checkbox" v-model="reuseMasks">同时复用作者局部选区（替换当前局部调整）</label><p v-if="reuseScope.masks" class="small">局部选区按原图相对位置复用，天空或山体的位置可能对不上，请在预览中检查。</p></fieldset><p class="small" v-if="recipeDetailLoading" role="status">正在读取配方…</p><p class="error" v-if="recipeDetailError" role="alert">{{ recipeDetailError }}</p><div class="actions"><button @click="closeRecipeDetail">关闭</button><button class="primary" @click="previewCommunityRecipe" :disabled="cropOpen || straightenOpen || perspectiveOpen || exporting || imageLoading || recipeDetailLoading || !!recipeDetailError">{{ imageLoaded ? '在我的照片上预览' : '先选择自己的照片' }}</button></div></template></dialog>
   </div>
   <noscript>请启用 JavaScript 后打开照片编辑器。</noscript>
@@ -501,6 +492,8 @@
   <script src="preview-renderer.js"></script>
   <script src="author-route.js"></script>
   <script src="saved-recipes.js"></script>
+  <script src="editor-loupe.js"></script>
+  <script src="recipe-handoff.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

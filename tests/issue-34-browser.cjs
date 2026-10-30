@@ -1,18 +1,19 @@
 /* Synthetic, isolated acceptance checks for the user's Issue 34 review. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs/promises');
 const {start}=require('./isolated-browser-support.cjs');
+const {observe,readRecipe}=require('./editor-test-observer.cjs');
 (async()=>{
  const browser=await chromium.launch(),folder='test-results/issue-34',report=[];await fs.mkdir(folder,{recursive:true});
  try{for(const prefix of ['', '/landscape']){
   const server=await start({prefix}),base=server.url.replace(/\/$/,''),context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage(),errors=[],escaped=[];
   page.setDefaultTimeout(12000);page.on('pageerror',error=>errors.push(error.message));page.on('request',r=>{const u=new URL(r.url());if(prefix&&u.origin===new URL(base).origin&&/^\/(api|uploads)\//.test(u.pathname))escaped.push(u.pathname);});
   const button=name=>page.getByRole('button',{name,exact:true}),ready=()=>page.waitForFunction(()=>document.querySelector('#mainCanvas')?.dataset.previewStatus==='ready');
-  const mainState=async()=>{await button('复制配方').click();return page.evaluate(()=>JSON.parse(window.__clipboard));};
+  const mainState=()=>readRecipe(page);
   const pixels=()=>page.locator('#mainCanvas').evaluate(c=>c.toDataURL());
   try{
    const account=await(await page.request.post(base+'/api/auth/register',{data:{username:'synthetic-review-user',password:'synthetic-only'}})).json(),headers={Authorization:'Bearer '+account.token};
-   await context.addInitScript(({account,compatible})=>{localStorage.setItem('landscape:token',account.token);localStorage.setItem('landscape:user',JSON.stringify(account.user));if(compatible)window.Worker=undefined;Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async s=>window.__clipboard=s,readText:async()=>window.__clipboard||''}});},{account,compatible:!!prefix});
-   await page.goto(base+'/');await button('编辑器').click();
+   await context.addInitScript(({account,compatible})=>{localStorage.setItem('landscape:token',account.token);localStorage.setItem('landscape:user',JSON.stringify(account.user));if(compatible)window.Worker=undefined;},{account,compatible:!!prefix});
+   await observe(page);await page.goto(base+'/');await button('编辑器').click();
    assert.equal(await page.locator('.app-header .upload-button').count(),0);assert.equal(await page.locator('#basic-group').getAttribute('open'),null);
    assert.deepEqual(await page.locator('#panel-edit .tool-group').evaluateAll(els=>els.map(e=>e.id)),['basic-group','composition-group','detail-group','fine-group','masks-group','vignette-group']);
    await page.locator('#composition-group>summary').click();const rotation=page.locator('#rotation-group>summary');assert.equal(await rotation.getAttribute('aria-disabled'),'true');await rotation.click({force:true});assert.equal(await page.locator('#rotation-group').getAttribute('open'),null);
@@ -21,14 +22,14 @@ const {start}=require('./isolated-browser-support.cjs');
    const peer=await page.evaluate(()=>{const s=EditorCore.createState();s.adjustments.exposure=.7;s.hsl.red.hue=14;s.detail.sharpen=30;s.effects.dehaze=12;s.effects.vignette.amount=-15;s.geometry=[{type:'rotate',params:{angle:90}}];const m=EditorCore.masks.create('linear','peer-mask');m.adjustments.exposure=.2;s.masks=[m];return{...EditorCore.toRecipe(s),name:'合成暖调',description:'适合阴天的暖调说明',tags:['暖调']};});
    const upload=await(await page.request.post(base+'/api/upload',{headers,multipart:{file}})).json();
    const published=await(await page.request.post(base+'/api/recipes',{headers,data:{recipe:{...peer,cover_before:upload.url,category:'山景'}}})).json();assert.ok(published.recipe,published.error);
-   await page.evaluate(peer=>window.__clipboard=JSON.stringify(peer),peer);await button('粘贴配方').click();const scope=page.getByRole('dialog',{name:'合成暖调',exact:true});await scope.getByRole('button',{name:'在我的照片上预览',exact:true}).click();
+   await page.evaluate(peer=>window.__editorTest.open(peer),peer);const scope=page.getByRole('dialog',{name:'合成暖调',exact:true});await scope.getByRole('button',{name:'在我的照片上预览',exact:true}).click();
    await page.locator('#basic-group>summary').click();assert.equal(await page.locator('#exposure-value').inputValue(),'0.70');assert.equal(await page.locator('#exposure-value').isDisabled(),true);
    // Read-only preview values are visible; committed state is checked after cancellation.
    await page.locator('#fine-group>summary').click();await page.locator('#hsl-group>summary').click();assert.equal(await page.locator('#hsl-red-value').inputValue(),'14');
    await page.locator('#detail-group>summary').click();assert.equal(await page.locator('#sharpen-value').inputValue(),'30');
    await page.getByRole('tab',{name:'预设',exact:true}).click();assert.equal(await button('取消预览').count(),1);await page.getByRole('tab',{name:'编辑',exact:true}).click();
    await button('取消预览').click();assert.equal(await page.locator('#exposure-value').inputValue(),'0.00');
-   await page.evaluate(peer=>window.__clipboard=JSON.stringify(peer),peer);await button('粘贴配方').click();await scope.getByRole('checkbox',{name:/同时复用作者构图/}).check();await scope.getByRole('button',{name:'在我的照片上预览',exact:true}).click();await button('应用到照片').click();
+   await page.evaluate(peer=>window.__editorTest.open(peer),peer);await scope.getByRole('checkbox',{name:/同时复用作者构图/}).check();await scope.getByRole('button',{name:'在我的照片上预览',exact:true}).click();await button('应用到照片').click();
    await ready();
    const geometryBefore=await mainState();await page.getByLabel('按住对比构图与相框',{exact:true}).focus();await page.keyboard.down('Space');await page.waitForFunction(()=>document.querySelector('#mainCanvas').width>document.querySelector('#mainCanvas').height);await page.keyboard.up('Space');assert.deepEqual(await mainState(),geometryBefore);
    await page.getByLabel('复位构图与相框',{exact:true}).click();assert.equal((await mainState()).steps.some(s=>s.type==='rotate'),false);assert.ok((await mainState()).steps.some(s=>s.type==='exposure'));await button('撤销').click();assert.deepEqual(await mainState(),geometryBefore);
@@ -42,12 +43,12 @@ const {start}=require('./isolated-browser-support.cjs');
    await frame.locator('#savedRecipeUseDescription').click();assert.equal(await frame.locator('#savedRecipeNote').inputValue(),'适合阴天的暖调说明');await frame.locator('#savedRecipeNote').fill('<b>我的备注</b>');await frame.locator('#savedRecipeSubmit').click();await frame.locator('#savedRecipeEditDialog').waitFor({state:'hidden'});await frame.locator('#detailModal [data-close]').click();
    await page.locator('.user-chip').hover();await page.getByRole('menuitem',{name:'用户中心',exact:true}).click();await frame.locator('#ucAccountPanel').waitFor();assert.equal(await frame.locator('#authorPage').isVisible(),false);
    await frame.locator('[data-uc-view="saved"]').click();await frame.locator('#ucSavedRecipesContent .saved-recipe-entry').first().waitFor();assert.equal(await frame.locator('#ucSavedRecipesContent .saved-recipe-entry').count(),2);assert.equal(await frame.locator('#ucSavedRecipesContent .saved-recipe-entry b').count(),0);
-   await frame.locator('#ucSavedRecipesContent [data-saved-action="preview"]').first().click();await scope.waitFor();await scope.getByRole('button',{name:'在我的照片上预览',exact:true}).click();assert.equal(await page.locator('#exposure-value').inputValue(),'0.70');await button('取消预览').click();assert.deepEqual(await mainState(),geometryBefore);
+   await frame.locator('#ucSavedRecipesContent .saved-recipe-entry>summary').first().click();await frame.locator('#ucSavedRecipesContent [data-saved-action="preview"]').first().click();await scope.waitFor();await scope.getByRole('button',{name:'在我的照片上预览',exact:true}).click();assert.equal(await page.locator('#exposure-value').inputValue(),'0.70');await button('取消预览').click();assert.deepEqual(await mainState(),geometryBefore);
    await page.locator('.user-chip').click();await frame.locator('#authorHeading').waitFor();assert.equal(await frame.locator('#authorHeader .editable-avatar').count(),1);
    const choose=page.waitForEvent('filechooser');await frame.locator('#authorHeader .editable-avatar').click();await(await choose).setFiles(file);await child().waitForFunction(()=>state.user.avatar.includes('/uploads/'));await page.waitForFunction(()=>!!document.querySelector('.user-avatar img'));assert.equal(await frame.locator('#authorHeader .public-profile-avatar img').count(),1);
    await frame.locator('#authorBack').click();await frame.locator('#publishBtn').click();assert.equal(await frame.locator('#pTags').count(),0);assert.equal(await frame.locator('#pDesc').count(),1);await frame.locator('#publishModal [data-close]').click();
    await page.setViewportSize({width:390,height:844});await page.locator('.user-chip').hover();await page.getByRole('menuitem',{name:'用户中心',exact:true}).click();await frame.locator('[data-uc-view="saved"]').click();await frame.locator('.saved-recipe-entry').first().waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(await child().evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:folder+'/'+(prefix?'prefix':'root')+'-mobile.png'});
-   page.once('dialog',dialog=>dialog.dismiss());await frame.locator('[data-saved-action="remove"]').first().click();assert.equal(await frame.locator('.saved-recipe-entry').count(),2);
+   if(!await frame.locator('.saved-recipe-entry').first().evaluate(e=>e.open))await frame.locator('.saved-recipe-entry>summary').first().click();page.once('dialog',dialog=>dialog.dismiss());await frame.locator('[data-saved-action="remove"]').first().click();assert.equal(await frame.locator('.saved-recipe-entry').count(),2);
    page.once('dialog',dialog=>dialog.accept());await frame.locator('[data-saved-action="remove"]').first().click();await child().waitForFunction(()=>document.querySelectorAll('.saved-recipe-entry').length===1);
    const standalone=await context.newPage();standalone.on('pageerror',error=>errors.push(error.message));await standalone.goto(base+'/community/');await standalone.locator('#authUserBtn').hover();await standalone.locator('#accountDropdown').getByRole('button',{name:'用户中心',exact:true}).click();await standalone.locator('#ucAccountPanel').waitFor();
    // A response received after logout in another tab must never restore private contents.

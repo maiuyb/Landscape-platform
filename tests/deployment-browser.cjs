@@ -1,6 +1,7 @@
 /* Verify editor + embedded/standalone community behind a shared-site prefix. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict');
 const {start}=require('./isolated-browser-support.cjs');
+const {observe,readRecipe}=require('./editor-test-observer.cjs');
 (async()=>{
  const server=await start({prefix:'/landscape'}),browser=await chromium.launch(),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],escaped=[];
  page.on('pageerror',e=>errors.push(e.message));
@@ -9,12 +10,11 @@ const {start}=require('./isolated-browser-support.cjs');
  const ready=()=>page.waitForFunction(()=>document.querySelector('#mainCanvas')?.dataset.previewStatus==='ready');
  try{
   assert.equal((await(await fetch(server.url+'api/health')).json()).status,'ok');
-  await page.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{value:undefined});document.execCommand=command=>{if(command!=='copy')return false;window.copiedRecipe=document.activeElement.value;return true;};});
+  await observe(page);
   await page.goto(server.url);await page.locator('.hero-edited').waitFor();
   await page.getByRole('button',{name:/先用示例试试看/}).click();await ready();
   await page.locator('#exposure').evaluate(e=>{e.value='.65';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
-  await page.locator('.workspace-output').evaluate(e=>e.open=true);await btn('复制配方').click();
-  assert.equal(await page.evaluate(()=>JSON.parse(window.copiedRecipe).version),6);
+  assert.equal((await readRecipe(page)).version,6);
   await btn('分享到社区').click();await btn('准备发布').click();
   const frame=page.frameLocator('iframe');await frame.locator('#authModal').waitFor({state:'visible'});
   await frame.locator('#authToggle').click();await frame.locator('#authUser').fill('prefix-user');await frame.locator('#authPass').fill('synthetic-only');await frame.locator('#authSubmit').click();await frame.locator('#authModal').waitFor({state:'hidden'});

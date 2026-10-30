@@ -944,14 +944,8 @@ async function previewInEditor(id) {
   if (rec.rendering != null) recipe.rendering = rec.rendering;
   recipe.steps = rec.steps;
 
-  copyText(JSON.stringify(recipe, null, 2)).then(() => {
-    if (EDITOR_URL) {
-      try { window.open(EDITOR_URL, '_blank', 'noopener'); } catch { /* popup policy may require a manual visit */ }
-      toast('已复制配方并请求打开编辑器；若未打开请手动访问。独立部署不自动传递照片/历史，请粘贴配方套用');
-    } else {
-      toast('已复制配方；独立部署无法自动传递照片/历史，请在编辑器粘贴套用');
-    }
-  }, () => toast('复制失败，请展开“调色配方”手动复制'));
+  recipe.name=rec.name;recipe.description=rec.description;
+  try{RecipeHandoff.open(recipe,EDITOR_URL);}catch(error){toast(error.message||'无法打开编辑器，请从平台主站进入社区预览。');}
 }
 
 /* ---------------- 发布 ---------------- */
