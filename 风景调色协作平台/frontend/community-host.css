@@ -34,14 +34,134 @@ html:not(.uc-mode) .grid.gallery-mode {
   .work-management-tabs .tab { flex: 1 1 auto; padding-inline: 10px; }
 }
 
-/* Issue 34: existing theme tokens, functional segmented switch and account menu. */
-.display-mode-toggle { display: inline-flex; gap: 0; border: 1px solid var(--line, #d6d7cd); border-radius: 8px; overflow: hidden; }
-.display-mode-toggle button { border: 0; padding: 8px 13px; color: var(--text, #234d3d); background: transparent; cursor: pointer; font: inherit; }
-.display-mode-toggle button[aria-pressed="true"] { background: var(--primary, #234d3d); color: #fff; }
-.display-mode-toggle button:focus-visible { outline: 2px solid #a7874c; outline-offset: -3px; }
-.account-menu { position: relative; }
-.account-dropdown { position: absolute; top: 100%; right: 0; min-width: 140px; padding: 8px; border: 1px solid var(--line, #d6d7cd); background: var(--paper, #faf9f5); border-radius: 8px; display: none; z-index: 70; }
-.account-dropdown button { width: 100%; text-align: left; }
-.account-menu:not(.menu-dismissed):hover .account-dropdown, .account-menu:not(.menu-dismissed):focus-within .account-dropdown { display: block; }
-.editable-avatar { cursor: pointer; }
-.editable-avatar:focus-visible { outline: 2px solid #a7874c; outline-offset: 4px; }
+/* Issue 34: Fine-Art Print Gallery segmented switch & Bilibili/Apple floating account menu */
+.display-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(23, 24, 23, 0.1);
+  border-radius: 999px;
+  background: #EFECE4;
+  box-shadow: inset 0 1px 2px rgba(20, 22, 20, 0.05);
+}
+
+.display-mode-toggle button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  color: #565A56;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--gallery-sans, sans-serif);
+  font-size: calc(12px * var(--ui-font-scale, 1));
+  font-weight: 500;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.display-mode-toggle button:hover:not([aria-pressed="true"]) {
+  color: var(--gallery-ink, #171817);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.display-mode-toggle button[aria-pressed="true"] {
+  background: var(--gallery-forest, #1D4D3C);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 4px 12px -4px rgba(29, 77, 60, 0.45);
+}
+
+.display-mode-toggle button:focus-visible {
+  outline: 2px solid var(--gallery-bronze, #8C653E);
+  outline-offset: 2px;
+}
+
+.account-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 176px;
+  padding: 7px;
+  border: 1px solid rgba(23, 24, 23, 0.12);
+  border-top: 2px solid var(--gallery-bronze, #8C653E);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
+  box-shadow: 0 24px 48px -12px rgba(20, 22, 20, 0.22), 0 4px 12px rgba(20, 22, 20, 0.06);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 70;
+}
+
+.account-dropdown::before {
+  content: '';
+  position: absolute;
+  inset: -12px 0 auto;
+  height: 14px;
+}
+
+.account-dropdown button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: transparent;
+  color: var(--gallery-ink, #171817);
+  font-family: var(--gallery-sans, sans-serif);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.account-dropdown button:first-child::after {
+  content: '↗';
+  font-size: 11px;
+  color: var(--gallery-bronze, #8C653E);
+  opacity: 0.75;
+}
+
+.account-dropdown button:hover {
+  background: rgba(29, 77, 60, 0.08);
+  color: var(--gallery-forest, #1D4D3C);
+}
+
+.account-dropdown #logoutBtn {
+  margin-top: 3px;
+  border-top: 1px solid rgba(23, 24, 23, 0.07);
+  border-radius: 0 0 8px 8px;
+  padding-top: 10px;
+  color: #7D3B2E;
+}
+
+.account-dropdown #logoutBtn:hover {
+  background: #FDF0ED;
+  color: #B84A39;
+  border-radius: 8px;
+}
+
+.account-menu:not(.menu-dismissed):hover .account-dropdown,
+.account-menu:not(.menu-dismissed):focus-within .account-dropdown {
+  display: flex;
+}
+
+.editable-avatar {
+  cursor: pointer;
+}
+
+.editable-avatar:focus-visible {
+  outline: 2px solid var(--gallery-bronze, #8C653E);
+  outline-offset: 4px;
+}

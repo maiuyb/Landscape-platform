@@ -87,8 +87,8 @@
   color: var(--gallery-bronze);
   font-family: var(--gallery-sans);
 }
-#app.welcome-active .app-header nav button,
-#app.welcome-active .app-header nav .button {
+#app.welcome-active .app-header nav > button,
+#app.welcome-active .app-header nav > .button {
   border-radius: 999px;
   font-family: var(--gallery-sans);
   font-size: 13px;
@@ -101,10 +101,17 @@
   box-shadow: none;
   transition: all 0.2s ease;
 }
-#app.welcome-active .app-header nav button:hover,
-#app.welcome-active .app-header nav .button:hover {
+#app.welcome-active .app-header nav > button:hover,
+#app.welcome-active .app-header nav > .button:hover {
   border-color: var(--gallery-ink);
   background: rgba(23, 24, 23, 0.03);
+}
+#app.welcome-active .app-header nav > button[aria-current=page] {
+  background: var(--gallery-forest);
+  border-color: var(--gallery-forest);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 6px 16px -6px rgba(29, 77, 60, 0.45);
 }
 #app.welcome-active .app-header nav .button.primary {
   background: var(--gallery-forest);

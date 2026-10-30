@@ -1,11 +1,250 @@
-.saved-recipes-dialog{box-sizing:border-box;width:min(620px,calc(100vw - 32px));max-height:85vh;overflow:auto;border:1px solid #c8c9bd;border-radius:12px;padding:24px;background:#faf9f5;color:#263d33;font:15px/1.6 sans-serif}
-.saved-recipes-dialog::backdrop{background:rgba(20,29,24,.45)}
-.saved-recipes-heading{display:flex;justify-content:space-between;align-items:center;gap:16px}
-.saved-recipes-dialog h2{margin:0 0 16px;font-family:serif}.saved-recipes-dialog h3{font-size:16px;margin:0}
-.saved-recipes-dialog input,.saved-recipes-dialog textarea,#savedLibraryContent input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #c8c9bd;border-radius:6px;background:#fff;color:inherit;font:inherit}
-.saved-recipes-dialog label{display:block;margin:12px 0 5px}.saved-recipes-dialog button,#savedLibraryContent button{font:inherit;cursor:pointer;border:1px solid #bcc8bf;border-radius:6px;background:#f3f4ef;color:#234d3d;padding:7px 12px}
-.saved-recipes-dialog button:disabled,#savedLibraryContent button:disabled{opacity:.5;cursor:default}
-.saved-recipes-hint{font-size:13px;color:#686e65;white-space:pre-wrap}.saved-recipe-entry{padding:16px 0;border-bottom:1px solid #d8d9d1;overflow-wrap:anywhere}.saved-recipe-entry p{white-space:pre-wrap}
-.saved-recipes-actions,.saved-recipes-pagination,.saved-recipes-search{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}.saved-recipes-search input{flex:1;min-width:120px}.saved-recipes-pagination{justify-content:center;margin-top:20px}
-#savedRecipeEditStatus{color:#9c392e}#ucSavedRecipesPanel{padding:16px 0}
-.saved-recipes-dialog [hidden],#savedLibraryContent [hidden]{display:none!important}
+/* Private Recipe Library (常用配方) — Fine-Art Print Gallery Theme */
+.saved-recipes-dialog {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 32px));
+  max-height: 86vh;
+  overflow: auto;
+  border: 1px solid rgba(23, 24, 23, 0.14);
+  border-top: 3px solid var(--bronze, var(--gallery-bronze, #8C653E));
+  border-radius: 14px;
+  padding: 26px 28px;
+  background: var(--paper, var(--gallery-bg, #FAF9F6));
+  color: var(--ink, var(--gallery-ink, #171817));
+  font: 14px/1.65 var(--gallery-sans, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif);
+  box-shadow: 0 36px 80px -24px rgba(20, 22, 20, 0.28);
+}
+
+.saved-recipes-dialog::backdrop {
+  background: rgba(23, 24, 23, 0.44);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.saved-recipes-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(23, 24, 23, 0.08);
+}
+
+.saved-recipes-dialog h2 {
+  margin: 0;
+  font-family: var(--gallery-serif, "Songti SC", "Noto Serif SC", Georgia, serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink, var(--gallery-ink, #171817));
+}
+
+.saved-recipes-dialog form > h2 {
+  margin-bottom: 16px;
+}
+
+.saved-recipes-dialog h3,
+#savedLibraryContent h3 {
+  font-family: var(--gallery-serif, "Songti SC", "Noto Serif SC", Georgia, serif);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink, var(--gallery-ink, #171817));
+  margin: 0 0 6px;
+}
+
+.saved-recipes-dialog input,
+.saved-recipes-dialog textarea,
+#savedLibraryContent input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(23, 24, 23, 0.16);
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: inherit;
+  font: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.saved-recipes-dialog input[type="search"],
+#savedLibraryContent input[type="search"] {
+  border-radius: 999px;
+}
+
+.saved-recipes-dialog input:focus,
+.saved-recipes-dialog textarea:focus,
+#savedLibraryContent input:focus {
+  outline: none;
+  border-color: var(--green, var(--gallery-forest, #1D4D3C));
+  box-shadow: 0 0 0 3px rgba(29, 77, 60, 0.12);
+}
+
+.saved-recipes-dialog label,
+#savedLibraryContent label {
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #484C48;
+}
+
+.saved-recipes-dialog button,
+#savedLibraryContent button {
+  font-family: var(--gallery-sans, sans-serif);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(23, 24, 23, 0.15);
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--ink, var(--gallery-ink, #171817));
+  padding: 7px 16px;
+  min-height: 36px;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.saved-recipes-dialog button:hover:not(:disabled),
+#savedLibraryContent button:hover:not(:disabled) {
+  background: #FAF8F3;
+  border-color: var(--bronze, var(--gallery-bronze, #8C653E));
+  color: var(--bronze, var(--gallery-bronze, #8C653E));
+}
+
+.saved-recipes-dialog [data-library-close] {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+}
+
+#savedRecipeSubmit,
+#savedRecipeSearchForm button,
+#savedLibraryContent [data-saved-action="preview"] {
+  background: var(--green, var(--gallery-forest, #1D4D3C));
+  border-color: var(--green, var(--gallery-forest, #1D4D3C));
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 6px 16px -6px rgba(29, 77, 60, 0.45);
+}
+
+#savedRecipeSubmit:hover:not(:disabled),
+#savedRecipeSearchForm button:hover:not(:disabled),
+#savedLibraryContent [data-saved-action="preview"]:hover:not(:disabled) {
+  background: var(--green-hover, var(--gallery-forest-hover, #153B2E));
+  border-color: var(--green-hover, var(--gallery-forest-hover, #153B2E));
+  color: #FFFFFF;
+}
+
+#savedRecipeUseDescription,
+#savedRecipeUseTags {
+  margin-top: 8px;
+  margin-right: 6px;
+  background: linear-gradient(180deg, #FDFBF7 0%, #F4EFE4 100%);
+  border-color: rgba(140, 101, 62, 0.38);
+  color: #6E4D2C;
+  font-weight: 600;
+}
+
+#savedLibraryContent [data-saved-action="remove"]:hover:not(:disabled) {
+  background: #FDF0ED;
+  border-color: rgba(184, 74, 57, 0.4);
+  color: #B84A39;
+}
+
+.saved-recipes-dialog button:disabled,
+#savedLibraryContent button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.saved-recipes-hint {
+  font-size: 13px;
+  color: var(--muted, var(--gallery-caption, #686E65));
+  white-space: pre-wrap;
+  margin: 4px 0 8px;
+}
+
+#savedRecipeStatus {
+  font-size: 13px;
+  color: var(--bronze, var(--gallery-bronze, #8C653E));
+  font-weight: 600;
+  margin: 14px 0 10px;
+}
+
+#savedRecipeList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.saved-recipe-entry {
+  padding: 16px 18px;
+  border: 1px solid rgba(23, 24, 23, 0.1);
+  border-radius: 10px;
+  background: #FFFFFF;
+  box-shadow: 0 12px 28px -18px rgba(20, 22, 20, 0.14);
+  overflow-wrap: anywhere;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.saved-recipe-entry:hover {
+  border-color: rgba(140, 101, 62, 0.38);
+  box-shadow: 0 16px 34px -18px rgba(20, 22, 20, 0.2);
+}
+
+.saved-recipe-entry p {
+  white-space: pre-wrap;
+  margin: 6px 0;
+  color: #464946;
+}
+
+.saved-recipes-actions,
+.saved-recipes-pagination,
+.saved-recipes-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.saved-recipes-search input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.saved-recipes-pagination {
+  justify-content: center;
+  margin-top: 20px;
+}
+
+#savedRecipePage {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: #595C59;
+  padding: 0 8px;
+}
+
+#savedRecipeEditStatus {
+  color: #9C392E;
+  font-size: 13px;
+}
+
+#ucSavedRecipesPanel {
+  padding: 16px 0;
+}
+
+.saved-recipes-dialog [hidden],
+#savedLibraryContent [hidden] {
+  display: none !important;
+}
+
+@media (max-width: 620px) {
+  .saved-recipes-dialog {
+    padding: 18px 16px;
+  }
+  .saved-recipe-entry {
+    padding: 14px;
+  }
+}

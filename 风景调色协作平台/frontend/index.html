@@ -97,17 +97,19 @@
     <header class="app-header">
       <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">{{ currentView === 'community' ? '风景配方社区' : (imageLoaded || editorBlank) ? '馆藏暗房显影台' : '协作工作区' }}</span></span></a>
       <nav aria-label="主导航">
-        <button :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">编辑器</button>
-
-        <button :aria-current="currentView === 'community' ? 'page' : undefined" @click="openCommunityBrowse">浏览社区</button>
-      <div class="user-center" v-if="authUser" @click.stop @mouseenter="userMenuOpen=true" @mouseleave="userMenuOpen=false" @focusin="userMenuOpen=true" @focusout="leaveUserMenu" @keydown.esc.stop="userMenuOpen=false">
-        <button class="user-chip" type="button" @click.stop="openOwnProfile" :aria-expanded="userMenuOpen" aria-label="打开个人主页"><span class="user-avatar"><img v-if="authUser.avatar" :src="avatarUrl(authUser.avatar)" alt=""><span v-else>{{ (authUser.display_name || authUser.username || '?').slice(0,1) }}</span></span><span>{{ authUser.display_name || authUser.username }}</span></button>
-        <div class="user-menu" v-if="userMenuOpen" role="menu">
-          <button role="menuitem" type="button" @click="openUserCenter">用户中心</button>
-          <button role="menuitem" type="button" @click="logout">退出登录</button>
+        <button class="nav-view-btn nav-view-left" :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">编辑器</button>
+        <button class="nav-view-btn nav-view-right" :aria-current="currentView === 'community' ? 'page' : undefined" @click="openCommunityBrowse">浏览社区</button>
+        <button v-if="imageLoaded" class="header-share" @click="openShare" :disabled="locked">分享到社区</button>
+        <button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button>
+        <div class="user-center" v-if="authUser" @click.stop @mouseenter="userMenuOpen=true" @mouseleave="userMenuOpen=false" @focusin="userMenuOpen=true" @focusout="leaveUserMenu" @keydown.esc.stop="userMenuOpen=false">
+          <button class="user-chip" type="button" @click.stop="openOwnProfile" :aria-expanded="userMenuOpen" aria-label="打开个人主页"><span class="user-avatar"><img v-if="authUser.avatar" :src="avatarUrl(authUser.avatar)" alt=""><span v-else>{{ (authUser.display_name || authUser.username || '?').slice(0,1) }}</span></span><span class="user-name">{{ authUser.display_name || authUser.username }}</span><svg class="user-chip-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="user-menu" v-if="userMenuOpen" role="menu">
+            <button role="menuitem" type="button" @click="openUserCenter">用户中心</button>
+            <button role="menuitem" type="button" class="user-menu-danger" @click="logout">退出登录</button>
+          </div>
         </div>
-      </div>
-      <button v-else @click="openLogin">登录 / 注册</button><button v-if="imageLoaded" @click="openShare" :disabled="locked">分享到社区</button><button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button></nav>
+        <button v-else class="header-login" @click="openLogin">登录 / 注册</button>
+      </nav>
     </header>
     <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden :disabled="photoBusy || photos.length >= 6" @change="handleUpload" aria-label="选择照片">
     <div class="notice error" v-if="error" role="alert"><span>{{ error }}</span><button type="button" class="notice-close" aria-label="关闭错误提示" @click="error = ''">×</button></div>
