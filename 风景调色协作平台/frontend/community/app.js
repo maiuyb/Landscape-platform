@@ -388,6 +388,7 @@ function openAuth(mode) {
   $('#authPass').autocomplete = state.authMode === 'login' ? 'current-password' : 'new-password';
   $('#authError').textContent = '';
   $('#authModal').classList.add('open');
+  requestAnimationFrame(() => $('#authUser')?.focus());
 }
 
 async function submitAuth() {
@@ -1363,6 +1364,14 @@ document.addEventListener('DOMContentLoaded', () => {
     $('#publishModal').classList.add('open');
   };
   $('#authSubmit').onclick = submitAuth;
+  for (const id of ['authUser', 'authPass']) {
+    document.getElementById(id)?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        submitAuth();
+      }
+    });
+  }
   $('#authToggle').onclick = () => openAuth(state.authMode === 'login' ? 'register' : 'login');
   $('#publishSubmit').onclick = submitPublish;
   $('#pLoadHandoff').onclick = loadHandoff;
