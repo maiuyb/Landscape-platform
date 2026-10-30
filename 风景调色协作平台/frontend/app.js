@@ -598,7 +598,7 @@ createApp({
       noticeTimer = setTimeout(() => {
         if (message.value === text) message.value = '';
         noticeTimer = null;
-      }, 5000);
+      }, 3000);
     }
     function fail(text) {
       clearTimeout(noticeTimer); noticeTimer = null;

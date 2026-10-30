@@ -1227,6 +1227,41 @@ button[aria-current=page] {
   border-bottom: 1px solid rgba(29, 77, 60, 0.15);
 }
 
+.notice.notice-toast {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  width: min(calc(100vw - 40px), 820px);
+  transform: translateX(-50%);
+  z-index: 1200;
+  padding: 10px 14px 10px 18px;
+  border: 1px solid rgba(29, 77, 60, 0.14);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--green);
+  box-shadow: 0 14px 36px -18px rgba(20, 22, 20, 0.28);
+  animation: notice-toast-in 0.18s ease-out;
+}
+
+.notice.notice-toast.error {
+  background: #FAE8DF;
+  color: #8C3C2B;
+  border-color: rgba(140, 60, 43, 0.18);
+}
+
+@keyframes notice-toast-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 760px) {
+  .notice.notice-toast {
+    top: 60px;
+    width: calc(100vw - 24px);
+    padding: 9px 10px 9px 14px;
+  }
+}
+
 .notice.error,
 .error {
   background: #FAE8DF;
