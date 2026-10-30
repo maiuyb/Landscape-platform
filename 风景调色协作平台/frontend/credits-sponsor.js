@@ -51,18 +51,26 @@
     const token = getToken();
     if (token) headers.Authorization = 'Bearer ' + token;
     if (body !== null) headers['Content-Type'] = 'application/json';
-    const res = await fetch(apiBase + path.replace(/^\//, ''), {
-      method,
-      headers,
-      body: body !== null ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data };
+    try {
+      const res = await fetch(apiBase + path.replace(/^\//, ''), {
+        method, headers, body: body !== null ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (getToken() !== token) return {ok:false,status:409,data:{error:'登录状态已改变，请重新打开积分窗口。'}};
+      return { ok: res.ok, status: res.status, data };
+    } catch {
+      return {ok:false,status:0,data:{error:'网络连接失败，请稍后重试。'}};
+    }
   }
 
   let modalEl = null;
   let activeTab = 'redeem';
-  let busy = false;
+  let busy = false, opener = null, identity = getToken();
+  function sessionChanged(){
+    if(identity===getToken())return;
+    identity=getToken();
+    if(modalEl){modalEl.querySelectorAll('input').forEach(input=>input.value='');close();}
+  }
 
   function ensureModal() {
     if (modalEl) return modalEl;
@@ -167,7 +175,15 @@
     });
     wrap.querySelector('#csCloseBtn').addEventListener('click', close);
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && modalEl && !modalEl.hidden) close();
+      if (!modalEl || modalEl.hidden) return;
+      if (e.key === 'Escape') {e.preventDefault();e.stopPropagation();close();}
+      if (e.key === 'Tab') {
+        const items=[...modalEl.querySelectorAll('button,input,select')].filter(el=>!el.disabled&&el.getClientRects().length);
+        const first=items[0],last=items.at(-1);
+        if(!modalEl.contains(document.activeElement)||(e.shiftKey&&document.activeElement===first)||(!e.shiftKey&&document.activeElement===last)){
+          e.preventDefault();(e.shiftKey?last:first)?.focus();
+        }
+      }
     });
 
     wrap.querySelectorAll('[data-cs-tab]').forEach(btn => {
@@ -272,10 +288,13 @@
   }
 
   function open(tab = 'redeem') {
+    sessionChanged();
+    opener=document.activeElement;
     const el = ensureModal();
     switchTab(tab);
     renderModalState();
     el.hidden = false;
+    el.querySelector('#csCloseBtn').focus();
     refresh();
   }
 
@@ -283,6 +302,7 @@
     if (!modalEl) return;
     modalEl.hidden = true;
     showFeedback('');
+    if(opener?.isConnected&&opener.getClientRects().length)opener.focus();
   }
 
   async function checkin({ silentToast } = {}) {
@@ -430,8 +450,9 @@
     }
   }
 
+  window.addEventListener('storage', sessionChanged);
   window.addEventListener('landscape:user-updated', () => {
-    renderModalState();
+    sessionChanged();renderModalState();
   });
 
   window.CreditSponsor = {
@@ -439,6 +460,6 @@
     close,
     checkin,
     refresh,
-    saveUser,
+    saveUser, sessionChanged,
   };
 })();

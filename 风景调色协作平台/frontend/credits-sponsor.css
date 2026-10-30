@@ -223,7 +223,8 @@
   padding: 20px;
 }
 
-.cs-modal-backdrop[hidden] {
+.cs-modal-backdrop[hidden],
+.cs-modal-backdrop [hidden] {
   display: none !important;
 }
 

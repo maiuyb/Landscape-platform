@@ -13,9 +13,10 @@ with tempfile.TemporaryDirectory(prefix='hmi-community-browser-') as tmp:
     os.environ['LANDSCAPE_DB']=str(Path(tmp)/'recipes.db')
     os.environ['LANDSCAPE_UPLOAD_DIR']=str(Path(tmp)/'uploads')
     os.environ['AI_MODE']='demo'
+    os.environ['SMTP_PASS']=''
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'风景调色协作平台/backend'))
     import ai_service
-    with patch.object(ai_service,'dotenv_values',return_value={}):
+    with patch.object(ai_service,'dotenv_values',return_value={}), patch('dotenv.dotenv_values',return_value={}):
         import app
     prefix = os.environ.get('HMI_TEST_PREFIX', '')
     application = DispatcherMiddleware(Response('Other site', status=404), {prefix: app.app}) if prefix else app.app

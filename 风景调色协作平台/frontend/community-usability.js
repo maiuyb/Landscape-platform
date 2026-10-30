@@ -13,6 +13,7 @@
 
   const originalRenderAuth=renderAuth;
   renderAuth=()=>{
+    window.CreditSponsor?.sessionChanged();
     originalRenderAuth();
     const trigger=$('#authUserBtn'),logout=$('#logoutBtn');if(!trigger||!logout)return;
     const area=$('#authArea');area.classList.add('account-menu');
@@ -135,7 +136,9 @@
     if(!email||!code){$('#authError').textContent='请填写邮箱地址与 6 位验证码';return;}
     if(verifyEmailBtn)verifyEmailBtn.disabled=true;
     try{
+      const identity=readToken();
       const r=await api('/api/auth/email/verify',{method:'POST',body:{email,code}});
+      if(readToken()!==identity)return;
       if(!r.ok){$('#authError').textContent=r.data?.error||'验证码验证失败';return;}
       if(r.data?.token&&r.data?.user){
         state.token=r.data.token;

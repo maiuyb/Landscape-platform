@@ -1335,10 +1335,11 @@ createApp({
       aiMessages.value.push({role:'user',text:intent||'请分析当前照片，给我一些调整建议。'});aiMessages.value=aiMessages.value.slice(-12);
       try {
         const d=diagnosis(512);
+        const creditIdentity=localStorage.getItem('landscape:token')||localStorage.getItem('cd_token')||'';
         const data=await api('/ai/recommend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
           intent,current_state:AI.context(base),history:aiContext.slice(-6),image_base64:d.canvas.toDataURL('image/jpeg',0.75).split(',')[1]
         }),signal:aiAbort.signal});
-        if(Number.isFinite(data.credits)&&authUser.value){
+        if(Number.isFinite(data.credits)&&authUser.value&&creditIdentity===(localStorage.getItem('landscape:token')||localStorage.getItem('cd_token')||'')){
           authUser.value={...authUser.value,credits:Number(data.credits)};
           if(window.CreditSponsor)window.CreditSponsor.saveUser(authUser.value);
         }
@@ -1381,7 +1382,7 @@ createApp({
     const userMenuOpen = ref(false);
     const creditBusy = ref(false);
     function readAuthUser(){ try { const raw=localStorage.getItem('landscape:user')||localStorage.getItem('cd_user'); return raw?JSON.parse(raw):null; } catch { return null; } }
-    function refreshAuthUser(){ authUser.value=readAuthUser(); RecipeLibrary.sessionChanged(); }
+    function refreshAuthUser(){ authUser.value=readAuthUser(); RecipeLibrary.sessionChanged(); window.CreditSponsor?.sessionChanged(); }
     function authStorageChanged(event){ if(!event.key||['landscape:token','landscape:user','cd_token','cd_user'].includes(event.key)) refreshAuthUser(); }
     function onUserUpdated(){ authUser.value=readAuthUser(); }
     async function dailyCheckin(){
