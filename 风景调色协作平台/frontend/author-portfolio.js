@@ -22,6 +22,7 @@
     el('authorShareFallback').hidden = true;
     document.title = '风景调色 · 社区';
     address(null, false, notify);
+    window.syncCommunitySearchContext?.();
   }
 
   function refreshActions() {
@@ -50,7 +51,7 @@
           <div class="public-profile-meta">${user.location ? `<span>${esc(user.location)}</span>` : ''}<span>加入于 ${esc(formatJoined(user.created_at))}</span></div>
         </div>
       </div>
-      <div class="author-aside"><div class="author-stats"><span><b>${Number(user.works_count) || 0}</b>公开作品</span><span><b>${Number(user.favorites_received) || 0}</b>获收藏</span></div>
+      <div class="author-aside"><div class="author-stats"><span><b>${user.stats_hidden ? '—' : (Number(user.works_count) || 0)}</b>公开作品</span><span><b>${user.stats_hidden ? '—' : (Number(user.favorites_received) || 0)}</b>获收藏</span></div>
         <div class="author-actions"><button type="button" id="authorEdit" class="btn primary" hidden>编辑资料</button><button type="button" id="authorManage" class="btn ghost" hidden>管理作品</button><button type="button" id="authorShare" class="btn ghost">分享主页</button></div>
       </div>`;
     refreshActions();
@@ -102,11 +103,13 @@
     }
     const changedAuthor = route?.author !== next.author;
     route = next;
+    window.syncCommunitySearchContext?.();
     const request = ++generation;
     state.listRequest = (state.listRequest || 0) + 1;
     state.loading = false;
     document.documentElement.classList.remove('uc-mode');
     document.documentElement.classList.add('author-mode');
+    window.syncCommunitySearchContext?.();
     document.querySelector('.topbar')?.classList.remove('search-hidden');
     el('authorPage').hidden = false;
     el('ucAccountPanel').hidden = true;
@@ -129,9 +132,14 @@
     }
     let errorMessage = '暂时无法打开这位作者的主页，请检查链接或重新加载。';
     try {
+      const workParams = new URLSearchParams({
+        author_id: String(next.author), sort: next.sort,
+        page: String(next.page), page_size: String(PAGE_SIZE),
+      });
+      if (next.search) workParams.set('search', next.search);
       const [profile, works] = await Promise.all([
         api('/api/users/' + next.author),
-        api(`/api/recipes?author_id=${next.author}&sort=${next.sort}&page=${next.page}&page_size=${PAGE_SIZE}`),
+        api('/api/recipes?' + workParams.toString()),
       ]);
       if (request !== generation || !active()) return;
       if (!profile.ok) {
@@ -156,8 +164,8 @@
           <div class="author-work-caption"><strong>${esc(rec.name)}</strong><span>☆ ${Number(rec.favorite_count) || 0}</span></div></button>`;
       }).join('');
       el('authorToolbar').hidden = false;
-      el('authorWorkCount').textContent = `${total} 件公开作品`;
-      el('authorStatus').textContent = total ? '' : '这里还没有公开作品，期待下一次光影相遇。';
+      el('authorWorkCount').textContent = route.search ? `找到 ${total} 件作品` : `${total} 件公开作品`;
+      el('authorStatus').textContent = total ? '' : (route.search ? `没有找到匹配“${route.search}”的作品。` : '这里还没有公开作品，期待下一次光影相遇。');
       pagination();
       if (focus) {
         const target = el(changedAuthor ? 'authorHeading' : 'authorWorksHeading');
@@ -182,7 +190,10 @@
 
   window.AuthorPortfolio = {
     active, leave, refreshActions, publishTitle,
-    open: id => navigate({ author: id, sort: 'latest', page: 1 }),
+    authorId: () => route?.author ?? null,
+    query: () => route?.search || '',
+    search: value => route ? navigate({ ...route, search: String(value || '').trim(), page: 1 }) : Promise.resolve(),
+    open: (id, options = {}) => navigate({ author: id, sort: 'latest', page: 1, search: options.search || '' }),
     reload: () => route ? render(route) : Promise.resolve(),
     restore: value => {
       const next = AuthorRoute.normalize(value);

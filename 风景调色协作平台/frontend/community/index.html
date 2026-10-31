@@ -17,10 +17,10 @@
   <div class="uc-brand">用户中心</div>
   <nav class="uc-nav">
     <button type="button" data-uc-view="profile">个人主页</button>
+    <button type="button" data-uc-view="account">账号管理</button>
     <button type="button" data-uc-view="mine">我的作品</button>
     <button type="button" data-uc-view="favorites">我的收藏</button>
     <button type="button" data-uc-view="saved">常用配方</button>
-    <button type="button" data-uc-view="account">账号管理</button>
     <button type="button" data-uc-view="settings">个性化设置</button>
   </nav>
   <button type="button" id="ucBack" class="uc-back">返回社区</button>
@@ -109,24 +109,6 @@
       <div id="ucProfileError" class="error"></div>
     </div>
 
-    <div class="uc-account-card uc-credits-card" id="ucCreditsCard">
-      <div class="uc-credits-header">
-        <div>
-          <h2>显影积分与开发者赞助</h2>
-          <span class="hint">云端 AI 建议消耗 1 积分/次 · 每日签到 +3 积分 · 首次验证邮箱 +5 积分</span>
-        </div>
-        <div class="uc-credits-badge-big">当前余额 <strong id="ucCreditBalance">10</strong> 积分</div>
-      </div>
-      <div class="uc-field"><span>今日签到</span><strong id="ucCheckinStatus">今日尚未签到 (+3 积分)</strong></div>
-      <div class="uc-field"><span>绑定邮箱</span><strong id="ucEmailStatus">未绑定（首次验证赠送 +5 积分）</strong></div>
-      <div class="uc-credits-actions">
-        <button type="button" class="btn ghost" id="ucCheckinBtn">📅 每日签到 (+3)</button>
-        <button type="button" class="btn ghost" id="ucRedeemBtn">🎁 兑换码核销</button>
-        <button type="button" class="btn ghost" id="ucBindEmailBtn">✉️ 绑定/验证邮箱</button>
-        <button type="button" class="btn btn-sponsor-gold" id="ucSponsorBtn">✦ 赞助开发者 / 获取积分</button>
-      </div>
-    </div>
-
     <div class="uc-account-card uc-password-card">
       <div class="uc-section-head">
         <h2>修改密码</h2>
@@ -150,6 +132,24 @@
       <div id="ucPasswordError" class="error"></div>
     </div>
 
+    <div class="uc-account-card uc-credits-card" id="ucCreditsCard">
+      <div class="uc-credits-header">
+        <div>
+          <h2>显影积分与开发者赞助</h2>
+          <span class="hint">云端 AI 建议消耗 1 积分/次 · 每日签到 +3 积分 · 首次验证邮箱 +5 积分</span>
+        </div>
+        <div class="uc-credits-badge-big">当前余额 <strong id="ucCreditBalance">10</strong> 积分</div>
+      </div>
+      <div class="uc-field"><span>今日签到</span><strong id="ucCheckinStatus">今日尚未签到 (+3 积分)</strong></div>
+      <div class="uc-field"><span>绑定邮箱</span><strong id="ucEmailStatus">未绑定（首次验证赠送 +5 积分）</strong></div>
+      <div class="uc-credits-actions">
+        <button type="button" class="btn ghost" id="ucCheckinBtn">📅 每日签到 (+3)</button>
+        <button type="button" class="btn ghost" id="ucRedeemBtn">🎁 兑换码核销</button>
+        <button type="button" class="btn ghost" id="ucBindEmailBtn">✉️ 绑定/验证邮箱</button>
+        <button type="button" class="btn btn-sponsor-gold" id="ucSponsorBtn">✦ 赞助开发者 / 获取积分</button>
+      </div>
+    </div>
+
     <div class="uc-account-card">
       <div class="uc-field"><span>登录账号</span><strong id="ucAccountName">—</strong></div>
       <div class="uc-field"><span>加入时间</span><strong id="ucJoinedAt">—</strong></div>
@@ -162,12 +162,91 @@
 
   <section id="ucSettingsPanel" class="uc-account-panel" hidden>
     <h1>个性化设置</h1>
-    <div class="uc-setting-group">
-      <div class="uc-setting-label">字号</div>
+    <div class="uc-account-card uc-setting-card">
+      <div class="uc-section-head">
+        <h2>字号</h2>
+        <span class="hint">调整社区界面的文字大小，不影响作品图片。</span>
+      </div>
       <div class="uc-options">
         <button type="button" data-font-scale="0.9">小</button>
         <button type="button" data-font-scale="1" class="active">标准</button>
         <button type="button" data-font-scale="1.1">大</button>
+      </div>
+    </div>
+    <div class="uc-account-card uc-setting-card">
+      <div class="uc-section-head">
+        <h2>动效</h2>
+        <span class="hint">减少开屏、视差和过渡动画，适合低性能设备或需要减少动态效果时使用。</span>
+      </div>
+      <div class="uc-options">
+        <button type="button" data-motion="full" class="active">完整</button>
+        <button type="button" data-motion="reduced">简洁</button>
+        <button type="button" data-motion="off">关闭</button>
+      </div>
+    </div>
+    <div class="uc-account-card uc-setting-card">
+      <div class="uc-section-head">
+        <h2>作品列数</h2>
+        <span class="hint">同时作用于卡片和画廊模式；窄屏会自动减少列数。</span>
+      </div>
+      <div class="uc-options">
+        <button type="button" data-gallery-columns="auto" class="active">自适应</button>
+        <button type="button" data-gallery-columns="3">3 列</button>
+        <button type="button" data-gallery-columns="4">4 列</button>
+        <button type="button" data-gallery-columns="5">5 列</button>
+      </div>
+    </div>
+    <div class="uc-account-card uc-setting-card">
+      <div class="uc-section-head">
+        <h2>默认排序</h2>
+        <span class="hint">进入社区时自动应用的排序方式，也可以随时在顶部切换。</span>
+      </div>
+      <div class="uc-options">
+        <button type="button" data-default-sort="latest">最新</button>
+        <button type="button" data-default-sort="favorites" class="active">收藏最多</button>
+      </div>
+    </div>
+    <div class="uc-account-card uc-setting-card">
+      <div class="uc-section-head">
+        <h2>公开主页隐私</h2>
+        <span class="hint">关闭后公开主页不展示对应内容，自己仍可在账号管理看到。</span>
+      </div>
+      <div class="uc-options">
+        <button type="button" data-privacy-field="show_bio" class="active" aria-pressed="true">公开简介</button>
+        <button type="button" data-privacy-field="show_location" class="active" aria-pressed="true">公开所在地</button>
+        <button type="button" data-privacy-field="show_stats" class="active" aria-pressed="true">公开统计</button>
+      </div>
+    </div>
+    <div class="uc-account-card uc-setting-card">
+      <div class="uc-section-head">
+        <h2>导出默认值</h2>
+        <span class="hint">新建编辑时使用的默认导出格式、尺寸与 JPG 质量。</span>
+      </div>
+      <div class="uc-setting-row">
+        <span>格式</span>
+        <div class="uc-options">
+          <button type="button" data-export-format="jpg" class="active">JPG</button>
+          <button type="button" data-export-format="png">PNG</button>
+        </div>
+      </div>
+      <div class="uc-setting-row">
+        <span>尺寸</span>
+        <div class="uc-options">
+          <button type="button" data-export-scale="1" class="active">完整尺寸</button>
+          <button type="button" data-export-scale="0.5">50%</button>
+          <button type="button" data-export-scale="0.25">25%</button>
+        </div>
+      </div>
+      <div class="uc-setting-row">
+        <span>JPG 质量</span>
+        <select id="prefExportQuality" class="select" aria-label="JPG 质量">
+          <option value="80">80</option>
+          <option value="85">85</option>
+          <option value="90">90</option>
+          <option value="92" selected>92</option>
+          <option value="95">95</option>
+          <option value="100">100</option>
+        </select>
       </div>
     </div>
   </section>
@@ -182,9 +261,9 @@
 
   <section class="section" id="communityListSection">
     <div id="workManagement" class="work-management" hidden>
-      <h1>我的作品</h1>
+      <h1 id="workManagementTitle">我的作品</h1>
       <p id="workManagementHint" class="muted">管理已发布的作品，查看发布记录或找回删除的作品。</p>
-      <nav class="work-management-tabs" aria-label="作品管理">
+      <nav id="workManagementTabs" class="work-management-tabs" aria-label="作品管理">
         <button type="button" class="tab" data-work-view="mine">已发布作品</button>
         <button type="button" class="tab" data-work-view="records" data-uc-view="records">发布记录</button>
         <button type="button" class="tab" data-work-view="deleted">删除找回</button>
@@ -195,6 +274,15 @@
       <div class="tabs">
         <button class="tab active" data-view="community">全部作品</button>
         <button class="tab" data-view="favorites">我的收藏</button>
+      </div>
+      <div id="workFilter" class="work-filter" hidden>
+        <label class="work-filter-search" for="workSearch">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>
+          <input id="workSearch" type="search" maxlength="100" autocomplete="off" placeholder="搜索我的作品" aria-label="搜索我的作品">
+        </label>
+        <select id="workCategory" class="select" aria-label="按作品分类筛选">
+          <option value="">全部分类</option>
+        </select>
       </div>
       <div class="tools">
         <select id="category" class="select"><option value="">全部分类</option></select>

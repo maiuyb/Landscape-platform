@@ -71,6 +71,15 @@ def update_user_profile(conn, user_id, display_name, bio, location, avatar):
     conn.commit()
 
 
+def update_user_privacy(conn, user_id, show_bio, show_location, show_stats):
+    conn.execute(
+        '''UPDATE users
+           SET show_bio = ?, show_location = ?, show_stats = ?
+           WHERE id = ?''',
+        (int(show_bio), int(show_location), int(show_stats), user_id))
+    conn.commit()
+
+
 def user_stats(conn, user_id):
     works = conn.execute(
         'SELECT COUNT(*) AS c FROM recipes WHERE author_id = ? AND deleted_at IS NULL',
@@ -96,20 +105,27 @@ def serialize_user(conn, user, self_view=False):
     if not user:
         return None
     stats = user_stats(conn, user['id'])
+    keys = set(user.keys())
+    show_bio = bool(user['show_bio']) if 'show_bio' in keys else True
+    show_location = bool(user['show_location']) if 'show_location' in keys else True
+    show_stats = bool(user['show_stats']) if 'show_stats' in keys else True
     data = {
         'id': user['id'],
         'username': user['username'],
         'display_name': user['display_name'] or user['username'],
-        'bio': user['bio'] or '',
-        'location': user['location'] or '',
+        'bio': (user['bio'] or '') if self_view or show_bio else '',
+        'location': (user['location'] or '') if self_view or show_location else '',
         'avatar': user['avatar'] or '',
         'created_at': user['created_at'],
-        'works_count': stats['works_count'],
-        'favorites_received': stats['favorites_received'],
+        'works_count': stats['works_count'] if self_view or show_stats else 0,
+        'favorites_received': stats['favorites_received'] if self_view or show_stats else 0,
+        'stats_hidden': bool(self_view is False and not show_stats),
     }
     if self_view:
         data['favorites_given'] = stats['favorites_given']
-        keys = set(user.keys())
+        data['show_bio'] = show_bio
+        data['show_location'] = show_location
+        data['show_stats'] = show_stats
         today_str = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime('%Y-%m-%d')
         data['credits'] = int(user['credits']) if 'credits' in keys and user['credits'] is not None else 10
         data['checked_in_today'] = (user['last_checkin_date'] == today_str) if 'last_checkin_date' in keys else False
@@ -257,6 +273,21 @@ def list_categories(conn):
         "SELECT category, COUNT(*) AS count FROM recipes "
         "WHERE category != '' AND deleted_at IS NULL "
         "GROUP BY category ORDER BY count DESC, category ASC").fetchall()
+
+
+def list_user_categories(conn, user_id, *, favorites=False):
+    if favorites:
+        return conn.execute(
+            "SELECT r.category, COUNT(*) AS count FROM recipes r "
+            "JOIN favorites f ON f.recipe_id = r.id "
+            "WHERE f.user_id = ? AND r.deleted_at IS NULL AND r.category != '' "
+            "GROUP BY r.category ORDER BY count DESC, r.category ASC",
+            (user_id,)).fetchall()
+    return conn.execute(
+        "SELECT category, COUNT(*) AS count FROM recipes "
+        "WHERE author_id = ? AND deleted_at IS NULL AND category != '' "
+        "GROUP BY category ORDER BY count DESC, category ASC",
+        (user_id,)).fetchall()
 
 
 def count_recipes(conn):

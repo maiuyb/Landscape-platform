@@ -40,6 +40,9 @@ def init_db():
             display_name TEXT DEFAULT '',
             bio TEXT DEFAULT '',
             location TEXT DEFAULT '',
+            show_bio INTEGER DEFAULT 1,
+            show_location INTEGER DEFAULT 1,
+            show_stats INTEGER DEFAULT 1,
             avatar TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
@@ -100,6 +103,9 @@ def init_db():
         _add_column_if_missing(conn, 'users', 'display_name', "TEXT DEFAULT ''")
         _add_column_if_missing(conn, 'users', 'bio', "TEXT DEFAULT ''")
         _add_column_if_missing(conn, 'users', 'location', "TEXT DEFAULT ''")
+        _add_column_if_missing(conn, 'users', 'show_bio', 'INTEGER DEFAULT 1')
+        _add_column_if_missing(conn, 'users', 'show_location', 'INTEGER DEFAULT 1')
+        _add_column_if_missing(conn, 'users', 'show_stats', 'INTEGER DEFAULT 1')
         _add_column_if_missing(conn, 'users', 'credits', 'INTEGER DEFAULT 10')
         _add_column_if_missing(conn, 'users', 'last_checkin_date', "TEXT DEFAULT ''")
         _add_column_if_missing(conn, 'users', 'email', "TEXT DEFAULT ''")

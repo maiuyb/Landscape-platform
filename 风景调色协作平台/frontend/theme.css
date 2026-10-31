@@ -1764,3 +1764,28 @@ dialog::backdrop {
   color: #1D4D3C;
   box-shadow: none;
 }
+
+/* Motion preferences: reduce decorative movement or disable motion entirely. */
+html[data-motion="reduced"] .exhibition-intro *,
+html[data-motion="reduced"] [data-reveal],
+html[data-motion="reduced"] .passepartout-frame,
+html[data-motion="reduced"] .panorama-exhibit,
+html[data-motion="reduced"] .diptych-frame,
+html[data-motion="reduced"] .sample-image-frame img {
+  animation: none !important;
+  transform: none !important;
+  transition-duration: 0.15s !important;
+}
+
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+html[data-motion="off"] .passepartout-frame,
+html[data-motion="off"] .panorama-exhibit,
+html[data-motion="off"] .diptych-frame {
+  transform: none !important;
+}

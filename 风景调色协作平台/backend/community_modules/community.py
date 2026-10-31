@@ -15,6 +15,7 @@
     POST   /api/recipes/<id>/favorite       收藏（需登录，幂等）
     DELETE /api/recipes/<id>/favorite       取消收藏（需登录，幂等）
     GET    /api/me/recipes                  我发布的配方（分页）
+    GET    /api/me/categories               我的作品 / 收藏分类及数量
     GET    /api/me/uploads                  上传记录（含已删除，7 天找回）
     GET    /api/me/favorites                我收藏的配方（分页）
 """
@@ -317,10 +318,13 @@ def unfavorite_recipe(recipe_id):
 @login_required
 def my_recipes():
     page, page_size = _paginate_params()
+    search = request.args.get('search', '').strip()[:100]
+    category = request.args.get('category', '').strip()[:MAX_CATEGORY_LEN]
     conn = get_db()
     try:
         payload = _paged_payload(conn, page, page_size, g.current_user['id'],
-                                 author_id=g.current_user['id'], sort='latest')
+                                 author_id=g.current_user['id'], search=search,
+                                 category=category, sort='latest')
     finally:
         conn.close()
     return jsonify(payload)
@@ -330,13 +334,30 @@ def my_recipes():
 @login_required
 def my_favorites():
     page, page_size = _paginate_params()
+    search = request.args.get('search', '').strip()[:100]
+    category = request.args.get('category', '').strip()[:MAX_CATEGORY_LEN]
     conn = get_db()
     try:
         payload = _paged_payload(conn, page, page_size, g.current_user['id'],
-                                 favorited_by=g.current_user['id'], sort='favorites')
+                                 favorited_by=g.current_user['id'], search=search,
+                                 category=category, sort='favorites')
     finally:
         conn.close()
     return jsonify(payload)
+
+
+@community_bp.route('/api/me/categories', methods=['GET'])
+@login_required
+def my_categories():
+    scope = request.args.get('scope', 'mine')
+    if scope not in ('mine', 'favorites'):
+        return jsonify({'error': '分类范围不正确'}), 400
+    conn = get_db()
+    try:
+        rows = repo.list_user_categories(conn, g.current_user['id'], favorites=(scope == 'favorites'))
+    finally:
+        conn.close()
+    return jsonify({'categories': [{'name': r['category'], 'count': r['count']} for r in rows]})
 
 
 @community_bp.route('/api/me/uploads', methods=['GET'])

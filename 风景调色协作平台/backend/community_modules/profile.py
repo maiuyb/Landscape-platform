@@ -97,9 +97,25 @@ def update_my_profile():
     except ValueError as error:
         return jsonify({'error': str(error)}), 400
 
+    privacy = {}
+    for key in ('show_bio', 'show_location', 'show_stats'):
+        if key in data:
+            if not isinstance(data[key], bool):
+                return jsonify({'error': '隐私设置格式不正确'}), 400
+            privacy[key] = data[key]
+
     conn = get_db()
     try:
         repo.update_user_profile(conn, user['id'], display_name, bio, location, avatar)
+        if privacy:
+            current = {
+                'show_bio': bool(user['show_bio']) if 'show_bio' in user.keys() else True,
+                'show_location': bool(user['show_location']) if 'show_location' in user.keys() else True,
+                'show_stats': bool(user['show_stats']) if 'show_stats' in user.keys() else True,
+            }
+            current.update(privacy)
+            repo.update_user_privacy(conn, user['id'], current['show_bio'],
+                                     current['show_location'], current['show_stats'])
         payload = repo.serialize_user(conn, repo.get_user_by_id(conn, user['id']), self_view=True)
     finally:
         conn.close()

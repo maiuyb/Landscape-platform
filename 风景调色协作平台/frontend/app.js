@@ -158,6 +158,10 @@ createApp({
       });
     }
     function runCurtainSequence(opts={},forceManual=false){
+      try {
+        const motion = JSON.parse(localStorage.getItem('landscape:prefs') || '{}').motion;
+        if (motion === 'off') return;
+      } catch { /* ignore */ }
       if(typeof navigator!=='undefined'&&navigator.webdriver&&!location.search.includes('intro=1')&&!location.search.includes('curtain=1')&&!forceManual)return;
       clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);
       curtain.code=opts.code||'EXHIBITION ARCHIVE // 2026 EDITION';
@@ -532,6 +536,31 @@ createApp({
     let cropDrag = null;
     const rotationAngle = ref(0), exportOpen = ref(false), exporting = ref(false);
     const exportOptions = reactive({ format: 'jpg', quality: 92, scale: 1 });
+    const PREFS_STORAGE_KEY = 'landscape:prefs';
+    function storedExportDefaults() {
+      const defaults = { format: 'jpg', quality: 92, scale: 1 };
+      try {
+        const stored = JSON.parse(localStorage.getItem(PREFS_STORAGE_KEY) || '{}');
+        if (['jpg', 'png'].includes(stored.exportFormat)) defaults.format = stored.exportFormat;
+        const quality = Number(stored.exportQuality);
+        if (Number.isFinite(quality) && quality >= 10 && quality <= 100) defaults.quality = quality;
+        const scale = Number(stored.exportScale);
+        if ([1, 0.5, 0.25].includes(scale)) defaults.scale = scale;
+      } catch { /* ignore */ }
+      return defaults;
+    }
+    function applyStoredPreferences() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(PREFS_STORAGE_KEY) || '{}');
+        const motion = ['full', 'reduced', 'off'].includes(stored.motion) ? stored.motion : 'full';
+        document.documentElement.dataset.motion = motion;
+        Object.assign(exportOptions, storedExportDefaults());
+      } catch { /* ignore */ }
+    }
+    function storedPreferencesChanged(event) {
+      if (event.key === PREFS_STORAGE_KEY) applyStoredPreferences();
+    }
+    applyStoredPreferences();
     const communityInitialUrl=AuthorRoute.url(new URL('community/',document.baseURI),initialAuthorRoute).href;
     const communityFrame=ref(null), communityMounted=ref(!!initialAuthorRoute), communityReady=ref(false);
     const communitySearch=ref('');
@@ -768,7 +797,7 @@ createApp({
       const saved=entry.snapshot;
       state.value=saved?Core.clone(saved.state):Core.createState();history=entry.history||Core.createHistory(state.value);historyVersion.value++;
       for(const [target,key,initial]of[[aiDraft,'aiDraft',''],[aiMessages,'aiMessages',[]],[aiStatus,'aiStatus',''],[aiResults,'aiResults',[]],[aiDemo,'aiDemo',false],[aiAppliedName,'aiAppliedName',''],[aiUnread,'aiUnread',false],[panelTab,'panelTab','edit'],[presetCategory,'presetCategory','all'],[presetSearch,'presetSearch',''],[maskId,'maskId',null],[vignetteDirection,'vignetteDirection','dark'],[inspectorOpen,'inspectorOpen',false],[inspectorBefore,'inspectorBefore',false],[hslMode,'hslMode','hue'],[curveChannel,'curveChannel','master'],[selectedCurvePoint,'selectedCurvePoint',0],[zoom,'zoom',100],[compareMode,'compareMode','edited'],[sliderPos,'sliderPos',50],[frameOptions,'frameOptions',Frames.defaults()],[frameScale,'frameScale',1]])target.value=Core.clone(saved?.[key]??initial);
-      Object.assign(exportOptions,saved?.exportOptions||{format:'jpg',quality:92,scale:1});aiContext=Core.clone(saved?.aiContext||[]);Object.assign(panelScroll,saved?.panelScroll||{edit:0,presets:0,ai:0});Object.assign(inspectorPosition,saved?.inspectorPosition||{x:.5,y:.5});
+      Object.assign(exportOptions,saved?.exportOptions||storedExportDefaults());aiContext=Core.clone(saved?.aiContext||[]);Object.assign(panelScroll,saved?.panelScroll||{edit:0,presets:0,ai:0});Object.assign(inspectorPosition,saved?.inspectorPosition||{x:.5,y:.5});
       aiLoading.value=false;
     }
     function canChangePhoto(){
@@ -1620,7 +1649,7 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { const oneTimeRecipe=RecipeHandoff.take();if(oneTimeRecipe)openCommunityRecipe(oneTimeRecipe);window.addEventListener('resize',hideUprightLoupe);window.addEventListener('scroll',hideUprightLoupe,true);window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); window.addEventListener('landscape:user-updated', onUserUpdated); document.addEventListener('click', closeUserMenu); refreshAuthUser(); if(window.CreditSponsor)window.CreditSponsor.refresh(); });
+    onMounted(() => { const oneTimeRecipe=RecipeHandoff.take();if(oneTimeRecipe)openCommunityRecipe(oneTimeRecipe);window.addEventListener('resize',hideUprightLoupe);window.addEventListener('scroll',hideUprightLoupe,true);window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); window.addEventListener('storage', storedPreferencesChanged); window.addEventListener('landscape:user-updated', onUserUpdated); document.addEventListener('click', closeUserMenu); refreshAuthUser(); if(window.CreditSponsor)window.CreditSponsor.refresh(); });
 
     onBeforeUnmount(() => {
       hideUprightLoupe();window.removeEventListener('resize',hideUprightLoupe);window.removeEventListener('scroll',hideUprightLoupe,true);
@@ -1631,7 +1660,7 @@ createApp({
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); window.removeEventListener('landscape:user-updated', onUserUpdated); document.removeEventListener('click', closeUserMenu);
+      window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); window.removeEventListener('storage', storedPreferencesChanged); window.removeEventListener('landscape:user-updated', onUserUpdated); document.removeEventListener('click', closeUserMenu);
 
     });
     return {

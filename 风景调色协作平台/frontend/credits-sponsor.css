@@ -113,6 +113,7 @@
 .uc-credits-card {
   border: 1px solid rgba(154, 116, 66, 0.32);
   background: linear-gradient(135deg, rgba(246, 242, 233, 0.92), rgba(238, 231, 217, 0.72));
+  margin-bottom: 16px;
 }
 
 .uc-credits-header {

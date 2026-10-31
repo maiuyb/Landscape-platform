@@ -12,6 +12,10 @@ const APP_PREFIX = new URL('../', location.href).pathname.replace(/\/$/, '');
 const state = {
   view: 'community',
   search: '',
+  personalSearch: '',
+  favoriteSearch: '',
+  mineCategory: '',
+  favoriteCategory: '',
   category: '',
   sort: 'favorites',
   page: 1,
@@ -30,9 +34,65 @@ const state = {
 const $ = (s) => document.querySelector(s);
 const workActions = new Set();
 
+function isOwnAuthorProfile() {
+  return !!(state.user && window.AuthorPortfolio?.active() && window.AuthorPortfolio.authorId() === state.user.id);
+}
+
+function isPersonalSearchContext() {
+  return !!(state.user && (document.documentElement.classList.contains('uc-mode') || isOwnAuthorProfile()));
+}
+
+function syncSearchContext() {
+  const input = $('#search');
+  if (!input) return;
+  const personal = isPersonalSearchContext();
+  input.placeholder = personal ? '搜索我的作品 / 标签，回车确认' : '搜索配方 / 标签 / 作者，回车确认';
+  input.setAttribute('aria-label', personal ? '搜索我的作品' : '搜索社区配方');
+  const submit = $('#searchSubmit');
+  if (submit) submit.setAttribute('aria-label', personal ? '搜索我的作品' : '搜索配方');
+  input.value = personal
+    ? (isOwnAuthorProfile() ? (window.AuthorPortfolio?.query() || '') : state.personalSearch)
+    : state.search;
+}
+
+function submitSearch() {
+  const input = $('#search');
+  if (!input) return;
+  const value = input.value.trim();
+  if (isOwnAuthorProfile()) {
+    state.personalSearch = value;
+    window.AuthorPortfolio.search(value);
+    return;
+  }
+  if (state.user && document.documentElement.classList.contains('uc-mode')) {
+    state.personalSearch = value;
+    if (state.view === 'mine') {
+      updateWorkFilter();
+      loadRecipes(true);
+    } else {
+      setUserCenterView('mine');
+    }
+    return;
+  }
+  state.search = value;
+  if (state.view !== 'community' || window.AuthorPortfolio?.active()) switchView('community');
+  else loadRecipes(true);
+}
+
+window.syncCommunitySearchContext = syncSearchContext;
+
 /* ---------------- 个性化设置 ---------------- */
 const PREF_KEY = 'landscape:prefs';
-const prefs = { fontScale: 1, displayMode: 'card' };
+const prefs = {
+  fontScale: 1,
+  displayMode: 'card',
+  motion: 'full',
+  galleryColumns: 'auto',
+  defaultSort: 'favorites',
+  exportFormat: 'jpg',
+  exportQuality: 92,
+  exportScale: 1,
+};
 
 function loadPrefs() {
   try {
@@ -40,7 +100,16 @@ function loadPrefs() {
     const scale = Number(raw.fontScale);
     if ([0.9, 1, 1.1].includes(scale)) prefs.fontScale = scale;
     if (['card', 'gallery'].includes(raw.displayMode)) prefs.displayMode = raw.displayMode;
+    if (['full', 'reduced', 'off'].includes(raw.motion)) prefs.motion = raw.motion;
+    if (['auto', '3', '4', '5'].includes(String(raw.galleryColumns))) prefs.galleryColumns = String(raw.galleryColumns);
+    if (['latest', 'favorites'].includes(raw.defaultSort)) prefs.defaultSort = raw.defaultSort;
+    if (['jpg', 'png'].includes(raw.exportFormat)) prefs.exportFormat = raw.exportFormat;
+    const quality = Number(raw.exportQuality);
+    if (Number.isFinite(quality) && quality >= 10 && quality <= 100) prefs.exportQuality = quality;
+    const exportScale = Number(raw.exportScale);
+    if ([1, 0.5, 0.25].includes(exportScale)) prefs.exportScale = exportScale;
   } catch { /* ignore */ }
+  state.sort = prefs.defaultSort;
 }
 
 function savePrefs() {
@@ -49,11 +118,27 @@ function savePrefs() {
 
 function applyPrefs() {
   document.documentElement.style.setProperty('--ui-font-scale', prefs.fontScale);
+  document.documentElement.dataset.motion = prefs.motion;
+  if (prefs.galleryColumns === 'auto') document.documentElement.removeAttribute('data-gallery-columns');
+  else document.documentElement.dataset.galleryColumns = prefs.galleryColumns;
   const grid = document.getElementById('grid');
   if (grid) grid.classList.toggle('gallery-mode', prefs.displayMode === 'gallery');
   document.querySelectorAll('[data-font-scale]').forEach((b) => b.classList.toggle('active', Number(b.dataset.fontScale) === prefs.fontScale));
+  document.querySelectorAll('[data-motion]').forEach((b) => b.classList.toggle('active', b.dataset.motion === prefs.motion));
+  document.querySelectorAll('[data-gallery-columns]').forEach((b) => b.classList.toggle('active', b.dataset.galleryColumns === prefs.galleryColumns));
+  document.querySelectorAll('[data-default-sort]').forEach((b) => b.classList.toggle('active', b.dataset.defaultSort === prefs.defaultSort));
+  document.querySelectorAll('[data-export-format]').forEach((b) => b.classList.toggle('active', b.dataset.exportFormat === prefs.exportFormat));
+  document.querySelectorAll('[data-export-scale]').forEach((b) => b.classList.toggle('active', Number(b.dataset.exportScale) === prefs.exportScale));
+  const quality = document.getElementById('prefExportQuality');
+  if (quality) quality.value = String(prefs.exportQuality);
   const displayMode = document.getElementById('displayMode');
   if (displayMode) displayMode.querySelectorAll('[data-display-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.displayMode===prefs.displayMode)));
+}
+
+function applyDefaultSort() {
+  state.sort = prefs.defaultSort;
+  const sort = document.getElementById('sort');
+  if (sort) sort.value = state.sort;
 }
 
 function setFontScale(scale) {
@@ -67,6 +152,44 @@ function setDisplayMode(mode) {
   savePrefs();
   applyPrefs();
   if (['community', 'favorites', 'mine'].includes(state.view)) loadRecipes(false);
+}
+
+function setMotion(mode) {
+  prefs.motion = mode;
+  savePrefs();
+  applyPrefs();
+}
+
+function setGalleryColumns(columns) {
+  prefs.galleryColumns = String(columns);
+  savePrefs();
+  applyPrefs();
+}
+
+function setDefaultSort(sort) {
+  prefs.defaultSort = sort;
+  savePrefs();
+  applyDefaultSort();
+  applyPrefs();
+  if (state.view === 'community') loadRecipes(true);
+}
+
+function setExportFormat(format) {
+  prefs.exportFormat = format;
+  savePrefs();
+  applyPrefs();
+}
+
+function setExportQuality(quality) {
+  prefs.exportQuality = Number(quality);
+  savePrefs();
+  applyPrefs();
+}
+
+function setExportScale(scale) {
+  prefs.exportScale = Number(scale);
+  savePrefs();
+  applyPrefs();
 }
 
 function readToken() { return localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY) || ''; }
@@ -218,6 +341,7 @@ async function refreshMe() {
     state.user = r.data.user;
     writeSession(state.token, state.user);
     renderAuth();
+    syncSearchContext();
     if (document.documentElement.classList.contains('uc-mode')) renderAccountPanel();
   } else if (r.status === 401) {
     state.token = '';
@@ -307,6 +431,33 @@ async function loadMyProfile() {
   writeSession(state.token, state.user);
   renderAuth();
   renderAccountPanel();
+  applyPrivacyButtons();
+}
+
+function applyPrivacyButtons() {
+  document.querySelectorAll('[data-privacy-field]').forEach((button) => {
+    const field = button.dataset.privacyField;
+    const enabled = state.user ? state.user[field] !== false : true;
+    button.classList.toggle('active', enabled);
+    button.setAttribute('aria-pressed', String(enabled));
+  });
+}
+
+async function setPrivacy(field) {
+  if (!state.user) return;
+  const enabled = state.user[field] !== false;
+  const token = state.token;
+  const r = await api('/api/users/me', {
+    method: 'PUT',
+    auth: true,
+    body: { [field]: !enabled },
+  });
+  if (state.token !== token) return;
+  if (!r.ok) { toast(r.data.error || '隐私设置更新失败'); return; }
+  state.user = r.data.user;
+  writeSession(state.token, state.user);
+  applyPrivacyButtons();
+  toast(enabled ? '已设为不公开' : '已设为公开');
 }
 
 async function pickProfileAvatar(file) {
@@ -426,8 +577,8 @@ async function changePassword() {
   toast('密码已更新');
 }
 
-async function openPublicProfile(userId) {
-  return window.AuthorPortfolio.open(userId);
+async function openPublicProfile(userId, options = {}) {
+  return window.AuthorPortfolio.open(userId, options);
 }
 
 function openAuth(mode) {
@@ -499,14 +650,88 @@ async function loadCategories() {
   sel.value = cur;
 }
 
+function workScope() {
+  return state.view === 'mine' || state.view === 'favorites' ? state.view : '';
+}
+
+function workFilterActive(scope = workScope()) {
+  if (scope === 'mine') return !!(state.personalSearch || state.mineCategory);
+  if (scope === 'favorites') return !!(state.favoriteSearch || state.favoriteCategory);
+  return false;
+}
+
 function listEndpoint() {
   const p = new URLSearchParams({ page: state.page, page_size: state.pageSize });
-  if (state.view === 'mine') return '/api/me/recipes?' + p.toString();
-  if (state.view === 'favorites') return '/api/me/favorites?' + p.toString();
+  if (state.view === 'mine') {
+    if (state.personalSearch) p.set('search', state.personalSearch);
+    if (state.mineCategory) p.set('category', state.mineCategory);
+    return '/api/me/recipes?' + p.toString();
+  }
+  if (state.view === 'favorites') {
+    if (state.favoriteSearch) p.set('search', state.favoriteSearch);
+    if (state.favoriteCategory) p.set('category', state.favoriteCategory);
+    return '/api/me/favorites?' + p.toString();
+  }
   p.set('sort', state.sort);
   if (state.search) p.set('search', state.search);
   if (state.category) p.set('category', state.category);
   return '/api/recipes?' + p.toString();
+}
+
+let workCategoryRequest = 0;
+let workSearchTimer = null;
+
+function updateWorkFilter() {
+  const scope = workScope();
+  const box = $('#workFilter');
+  if (!box) return;
+  box.hidden = !scope;
+  if (!scope) return;
+  const input = $('#workSearch');
+  const select = $('#workCategory');
+  const favorites = scope === 'favorites';
+  if (input) {
+    input.placeholder = favorites ? '搜索我的收藏' : '搜索我的作品';
+    input.setAttribute('aria-label', favorites ? '搜索我的收藏' : '搜索我的作品');
+    input.value = favorites ? state.favoriteSearch : state.personalSearch;
+  }
+  if (select) select.value = favorites ? state.favoriteCategory : state.mineCategory;
+  loadWorkCategories(scope);
+}
+
+async function loadWorkCategories(scope) {
+  const request = ++workCategoryRequest;
+  const r = await api('/api/me/categories?scope=' + scope, { auth: true });
+  if (request !== workCategoryRequest || workScope() !== scope) return;
+  const select = $('#workCategory');
+  if (!select) return;
+  const cats = r.ok ? (r.data.categories || []) : [];
+  select.innerHTML = '<option value="">全部分类</option>' + cats
+    .map(c => `<option value="${esc(c.name)}">${esc(c.name)} (${Number(c.count) || 0})</option>`).join('');
+  const categoryKey = scope === 'favorites' ? 'favoriteCategory' : 'mineCategory';
+  if (state[categoryKey] && !cats.some(c => c.name === state[categoryKey])) {
+    state[categoryKey] = '';
+    loadRecipes(true);
+  }
+  select.value = state[categoryKey];
+}
+
+function setWorkSearch(value, immediate = false) {
+  const scope = workScope();
+  if (!scope) return;
+  const key = scope === 'favorites' ? 'favoriteSearch' : 'personalSearch';
+  state[key] = String(value || '').trim();
+  clearTimeout(workSearchTimer);
+  if (immediate) loadRecipes(true);
+  else workSearchTimer = setTimeout(() => { if (scope === workScope()) loadRecipes(true); }, 250);
+}
+
+function setWorkCategory(value) {
+  const scope = workScope();
+  if (!scope) return;
+  const key = scope === 'favorites' ? 'favoriteCategory' : 'mineCategory';
+  state[key] = String(value || '');
+  loadRecipes(true);
 }
 
 async function loadRecipes(reset) {
@@ -536,8 +761,11 @@ async function loadRecipes(reset) {
   state.hasMore = !!r.data.has_more;
   (r.data.recipes || []).forEach(appendCard);
   $('#empty').style.display = (state.total === 0) ? 'block' : 'none';
-  $('#empty').textContent = state.view === 'mine' ? '还没有已发布的作品，点击“发布作品”分享你的创作。'
-    : state.view === 'favorites' ? '还没有收藏作品' : '没有更多内容了';
+  $('#empty').textContent = state.view === 'mine'
+    ? (workFilterActive('mine') ? '没有找到匹配的作品。' : '还没有已发布的作品，点击“发布作品”分享你的创作。')
+    : state.view === 'favorites'
+      ? (workFilterActive('favorites') ? '没有找到匹配的收藏作品。' : '还没有收藏作品')
+      : '没有更多内容了';
   renderPagination();
   renderWorkManagement();
   if (reset && state.view === 'community' && state.search) {
@@ -1151,20 +1379,34 @@ function resetPublishForm() {
 
 /* ---------------- 作品记录与删除找回 ---------------- */
 function renderWorkManagement(message, failed = false) {
-  const visible = document.documentElement.classList.contains('uc-mode') && ['mine', 'records'].includes(state.view);
+  const visible = document.documentElement.classList.contains('uc-mode') && ['mine', 'records', 'favorites'].includes(state.view);
   $('#workManagement').hidden = !visible;
   if (!visible) return;
-  const view = state.view === 'mine' ? 'mine' : state.recordFilter === 'deleted' ? 'deleted' : 'records';
+  const isFavorites = state.view === 'favorites';
+  const view = isFavorites ? 'favorites'
+    : state.view === 'mine' ? 'mine'
+    : state.recordFilter === 'deleted' ? 'deleted' : 'records';
   document.querySelectorAll('[data-work-view]').forEach(button => {
     const selected = button.dataset.workView === view;
     button.classList.toggle('active', selected);
     if (selected) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  $('#workManagementHint').textContent = view === 'mine' ? '管理已发布的作品；删除后可在“删除找回”中恢复。'
+  const title = $('#workManagementTitle');
+  const tabs = $('#workManagementTabs');
+  const hint = $('#workManagementHint');
+  if (title) title.textContent = isFavorites ? '我的收藏' : '我的作品';
+  if (tabs) tabs.hidden = isFavorites;
+  if (hint) hint.textContent = isFavorites
+    ? '收藏的配方作品会保存在这里，方便随时回看和套用。'
+    : view === 'mine' ? '管理已发布的作品；删除后可在“删除找回”中恢复。'
     : view === 'deleted' ? '删除的作品在 7 天内可找回；已过期记录仅保留状态。'
     : '查看作品的发布时间、发布状态和删除记录。';
-  const count = state.view === 'mine' ? state.total : state.recTotal || 0;
-  $('#workManagementStatus').textContent = message ?? `${count} ${view === 'mine' ? '件已发布作品' : view === 'deleted' ? '条删除记录' : '条发布记录'}`;
+  const matched = workFilterActive();
+  const count = (state.view === 'mine' || isFavorites) ? state.total : state.recTotal || 0;
+  const countText = isFavorites ? '件收藏作品'
+    : view === 'mine' ? '件已发布作品'
+    : view === 'deleted' ? '条删除记录' : '条发布记录';
+  $('#workManagementStatus').textContent = message ?? (matched ? `找到 ${count} 件作品` : `${count} ${countText}`);
   $('#workManagementRetry').hidden = !failed;
 }
 
@@ -1265,14 +1507,16 @@ function switchView(view) {
   const pagination = $('#pagination');
   if (pagination) pagination.style.display = 'none';
   $('#empty').style.display = 'none';
+  updateWorkFilter();
   if (isRecords) loadRecords(true);
   else loadRecipes(true);
+  syncSearchContext();
 }
 
 /* ---------------- 用户中心 ---------------- */
 function setUserCenterView(view) {
   if (!state.user) { toast('请先登录'); openAuth('login'); return; }
-  if (view === 'profile') { if (state.user) openPublicProfile(state.user.id); return; }
+  if (view === 'profile') { if (state.user) openPublicProfile(state.user.id, { search: state.personalSearch }); return; }
   RecipeLibrary.closePanel();
   $('#ucSavedRecipesPanel').hidden=true;
   window.AuthorPortfolio?.leave();
@@ -1280,9 +1524,10 @@ function setUserCenterView(view) {
   state.loading = false;
   $('#empty').style.display = 'none';
   const workView = ['mine', 'records', 'deleted'].includes(view);
+  const isFavorites = view === 'favorites';
   if (view === 'records' || view === 'deleted') state.recordFilter = view === 'deleted' ? 'deleted' : 'all';
-  $('#workManagement').hidden = !workView;
-  document.querySelectorAll('.uc-nav button').forEach((b) => b.classList.toggle('active', b.dataset.ucView === view || workView && b.dataset.ucView === 'mine'));
+  $('#workManagement').hidden = !(workView || isFavorites);
+  document.querySelectorAll('.uc-nav button').forEach((b) => b.classList.toggle('active', b.dataset.ucView === view || (workView && b.dataset.ucView === 'mine')));
   const account = document.getElementById('ucAccountPanel');
   const settings = document.getElementById('ucSettingsPanel');
   const toolbar = document.querySelector('.toolbar');
@@ -1311,6 +1556,8 @@ function setUserCenterView(view) {
     const empty = document.getElementById('empty');
     const pagination = $('#pagination');
     if (pagination) pagination.style.display = 'none';
+    applyPrivacyButtons();
+    loadMyProfile();
   } else {
     if (account) account.hidden = true;
     if (settings) settings.hidden = true;
@@ -1318,6 +1565,7 @@ function setUserCenterView(view) {
     if (view === 'records' || view === 'deleted') switchView('records');
     else switchView(view);
   }
+  syncSearchContext();
 }
 
 function enterUserCenter() {
@@ -1351,24 +1599,24 @@ function exitUserCenter(force = false) {
 /* ---------------- 事件 ---------------- */
 document.addEventListener('DOMContentLoaded', () => {
   loadPrefs();
+  applyDefaultSort();
   applyPrefs();
   renderAuth();
   refreshMe();
   loadStats(); loadCategories(); loadRecommend();
   if (!AuthorRoute.parse(location.search)) loadRecipes(true);
   updateRecipeStatus();
+  syncSearchContext();
 
   document.querySelectorAll('.toolbar .tabs [data-view]').forEach((t) => { t.onclick = () => switchView(t.dataset.view); });
   $('#sort').onchange = (e) => { state.sort = e.target.value; loadRecipes(true); };
   $('#displayMode').querySelectorAll('[data-display-mode]').forEach(button=>button.onclick=()=>setDisplayMode(button.dataset.displayMode));
   $('#category').onchange = (e) => { state.category = e.target.value; loadRecipes(true); };
   $('#search').onkeydown = (e) => {
-    if (e.key === 'Enter') { state.search = $('#search').value.trim(); if (state.view !== 'community' || window.AuthorPortfolio?.active()) switchView('community'); else loadRecipes(true); }
+    if (e.key === 'Enter') submitSearch();
   };
-  $('#searchSubmit').onclick = () => {
-    state.search = $('#search').value.trim();
-    if (state.view !== 'community' || window.AuthorPortfolio?.active()) switchView('community'); else loadRecipes(true);
-  };
+  $('#searchSubmit').onclick = submitSearch;
+  window.addEventListener('landscape:author-route-change', syncSearchContext);
   document.querySelectorAll('.uc-nav button').forEach((btn) => {
     btn.onclick = () => setUserCenterView(btn.dataset.ucView);
   });
@@ -1376,6 +1624,15 @@ document.addEventListener('DOMContentLoaded', () => {
     button.onclick = () => setUserCenterView(button.dataset.workView);
   });
   $('#workManagementRetry').onclick = () => state.view === 'records' ? loadRecords(false) : loadRecipes(false);
+  const workSearch = $('#workSearch');
+  if (workSearch) {
+    workSearch.oninput = (e) => setWorkSearch(e.target.value);
+    workSearch.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); setWorkSearch(e.target.value, true); }
+    };
+  }
+  const workCategory = $('#workCategory');
+  if (workCategory) workCategory.onchange = (e) => setWorkCategory(e.target.value);
   const ucBack = $('#ucBack');
   if (ucBack) ucBack.onclick = exitUserCenter;
   const ucSaveProfile = $('#ucSaveProfile');
@@ -1408,6 +1665,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-font-scale]').forEach((btn) => {
     btn.onclick = () => setFontScale(btn.dataset.fontScale);
   });
+  document.querySelectorAll('[data-motion]').forEach((btn) => {
+    btn.onclick = () => setMotion(btn.dataset.motion);
+  });
+  document.querySelectorAll('[data-gallery-columns]').forEach((btn) => {
+    btn.onclick = () => setGalleryColumns(btn.dataset.galleryColumns);
+  });
+  document.querySelectorAll('[data-default-sort]').forEach((btn) => {
+    btn.onclick = () => setDefaultSort(btn.dataset.defaultSort);
+  });
+  document.querySelectorAll('[data-export-format]').forEach((btn) => {
+    btn.onclick = () => setExportFormat(btn.dataset.exportFormat);
+  });
+  document.querySelectorAll('[data-export-scale]').forEach((btn) => {
+    btn.onclick = () => setExportScale(btn.dataset.exportScale);
+  });
+  const prefExportQuality = $('#prefExportQuality');
+  if (prefExportQuality) prefExportQuality.onchange = (e) => setExportQuality(e.target.value);
+  document.querySelectorAll('[data-privacy-field]').forEach((btn) => {
+    btn.onclick = () => setPrivacy(btn.dataset.privacyField);
+  });
+  applyPrivacyButtons();
   const pageNumbers = $('#pageNumbers');
   if (pageNumbers) pageNumbers.onclick = (e) => {
     const b = e.target.closest('[data-page]');
