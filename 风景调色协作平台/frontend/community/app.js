@@ -124,8 +124,8 @@ function applyPrefs() {
   const grid = document.getElementById('grid');
   if (grid) grid.classList.toggle('gallery-mode', prefs.displayMode === 'gallery');
   document.querySelectorAll('[data-font-scale]').forEach((b) => b.classList.toggle('active', Number(b.dataset.fontScale) === prefs.fontScale));
-  document.querySelectorAll('[data-motion]').forEach((b) => b.classList.toggle('active', b.dataset.motion === prefs.motion));
-  document.querySelectorAll('[data-gallery-columns]').forEach((b) => b.classList.toggle('active', b.dataset.galleryColumns === prefs.galleryColumns));
+  document.querySelectorAll('#ucSettingsPanel button[data-motion]').forEach((b) => b.classList.toggle('active', b.dataset.motion === prefs.motion));
+  document.querySelectorAll('#ucSettingsPanel button[data-gallery-columns]').forEach((b) => b.classList.toggle('active', b.dataset.galleryColumns === prefs.galleryColumns));
   document.querySelectorAll('[data-default-sort]').forEach((b) => b.classList.toggle('active', b.dataset.defaultSort === prefs.defaultSort));
   document.querySelectorAll('[data-export-format]').forEach((b) => b.classList.toggle('active', b.dataset.exportFormat === prefs.exportFormat));
   document.querySelectorAll('[data-export-scale]').forEach((b) => b.classList.toggle('active', Number(b.dataset.exportScale) === prefs.exportScale));
@@ -332,11 +332,13 @@ function renderAuth() {
   }
 }
 
+let profileRevision = 0;
 async function refreshMe() {
   if (!state.token) return;
   const token = state.token;
+  const revision = profileRevision;
   const r = await api('/api/auth/me', { auth: true });
-  if (state.token !== token) return;
+  if (state.token !== token || profileRevision !== revision) return;
   if (r.ok && r.data.user) {
     state.user = r.data.user;
     writeSession(state.token, state.user);
@@ -413,8 +415,9 @@ function renderAccountPanel() {
 async function loadMyProfile() {
   if (!state.token) return;
   const token = state.token;
+  const revision = profileRevision;
   const r = await api('/api/users/me', { auth: true });
-  if (state.token !== token) return;
+  if (state.token !== token || profileRevision !== revision) return;
   if (!r.ok) {
     if (r.status === 401) {
       state.token = '';
@@ -441,21 +444,30 @@ function applyPrivacyButtons() {
   });
 }
 
-async function setPrivacy(field) {
-  if (!state.user) return;
-  const enabled = state.user[field] !== false;
+let privacyQueue = { token: '', tail: Promise.resolve() };
+function setPrivacy(field) {
+  if (!state.user) return Promise.resolve();
   const token = state.token;
-  const r = await api('/api/users/me', {
-    method: 'PUT',
-    auth: true,
-    body: { [field]: !enabled },
-  });
-  if (state.token !== token) return;
-  if (!r.ok) { toast(r.data.error || '隐私设置更新失败'); return; }
-  state.user = r.data.user;
-  writeSession(state.token, state.user);
-  applyPrivacyButtons();
-  toast(enabled ? '已设为不公开' : '已设为公开');
+  if (privacyQueue.token !== token) privacyQueue = { token, tail: Promise.resolve() };
+  const update = async () => {
+    if (!state.user || state.token !== token) return;
+    const enabled = state.user[field] !== false;
+    profileRevision++;
+    const r = await api('/api/users/me', {
+      method: 'PUT',
+      auth: true,
+      body: { [field]: !enabled },
+    });
+    if (state.token !== token) return;
+    profileRevision++;
+    if (!r.ok) { toast(r.data.error || '隐私设置更新失败'); return; }
+    state.user = { ...state.user, [field]: r.data.user[field] };
+    writeSession(state.token, state.user);
+    applyPrivacyButtons();
+    toast(enabled ? '已设为不公开' : '已设为公开');
+  };
+  privacyQueue.tail = privacyQueue.tail.then(update, update);
+  return privacyQueue.tail;
 }
 
 async function pickProfileAvatar(file) {
@@ -503,17 +515,21 @@ async function saveProfile() {
   if (location.length > 40) { setProfileError('所在地最多 40 个字符'); return; }
   const avatar = state.profileAvatarDraft !== null ? state.profileAvatarDraft : (state.user.avatar || '');
   const token = state.token;
+  profileRevision++;
   const r = await api('/api/users/me', {
     method: 'PUT',
     auth: true,
     body: { display_name: displayName, bio, location, avatar },
   });
   if (state.token !== token) return;
+  profileRevision++;
   if (!r.ok) {
     setProfileError(r.data.error || '保存失败');
     return;
   }
-  state.user = r.data.user;
+  const updated = r.data.user;
+  state.user = { ...state.user, display_name: updated.display_name, bio: updated.bio,
+    location: updated.location, avatar: updated.avatar };
   state.profileAvatarDraft = null;
   clearProfileDraftMarks();
   writeSession(state.token, state.user);
@@ -1721,10 +1737,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-font-scale]').forEach((btn) => {
     btn.onclick = () => setFontScale(btn.dataset.fontScale);
   });
-  document.querySelectorAll('[data-motion]').forEach((btn) => {
+  document.querySelectorAll('#ucSettingsPanel button[data-motion]').forEach((btn) => {
     btn.onclick = () => setMotion(btn.dataset.motion);
   });
-  document.querySelectorAll('[data-gallery-columns]').forEach((btn) => {
+  document.querySelectorAll('#ucSettingsPanel button[data-gallery-columns]').forEach((btn) => {
     btn.onclick = () => setGalleryColumns(btn.dataset.galleryColumns);
   });
   document.querySelectorAll('[data-default-sort]').forEach((btn) => {

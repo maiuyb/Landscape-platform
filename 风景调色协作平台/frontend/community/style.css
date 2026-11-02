@@ -397,8 +397,9 @@ html.modal-open, body.modal-open { overflow: hidden; }
 .modal-card.small { width: 380px; }
 html.auth-only,
 html.auth-only body { background: transparent !important; }
-html.auth-only body > :not(#authModal) { display: none !important; }
+html.auth-only body > :not(#authModal):not(#toast) { display: none !important; }
 html.auth-only #authModal { z-index: 220; background: rgba(23, 24, 23, 0.38); }
+html.auth-only #toast { z-index: 230; }
 
 /* 详情图片点击查看大图（一次一张；滚轮缩放 + 放大后拖拽） */
 .image-lightbox {

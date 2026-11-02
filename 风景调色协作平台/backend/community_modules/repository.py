@@ -71,13 +71,17 @@ def update_user_profile(conn, user_id, display_name, bio, location, avatar):
     conn.commit()
 
 
-def update_user_privacy(conn, user_id, show_bio, show_location, show_stats):
-    conn.execute(
-        '''UPDATE users
-           SET show_bio = ?, show_location = ?, show_stats = ?
-           WHERE id = ?''',
-        (int(show_bio), int(show_location), int(show_stats), user_id))
-    conn.commit()
+def update_user_fields(conn, user_id, fields):
+    """Partial updates preserve unrelated fields from concurrent requests."""
+    allowed = {'display_name', 'bio', 'location', 'avatar',
+               'show_bio', 'show_location', 'show_stats'}
+    if not set(fields).issubset(allowed):
+        raise ValueError('Unsupported profile field')
+    if fields:
+        columns = sorted(fields)
+        conn.execute('UPDATE users SET ' + ', '.join(column + '=?' for column in columns) + ' WHERE id=?',
+                     [fields[column] for column in columns] + [user_id])
+        conn.commit()
 
 
 def user_stats(conn, user_id):
