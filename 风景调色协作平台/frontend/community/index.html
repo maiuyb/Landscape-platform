@@ -4,9 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>风景调色 · 社区</title>
-<script>if (window.parent !== window) document.documentElement.classList.add('embedded');</script>
+<script>if (window.parent !== window) document.documentElement.classList.add('embedded');if(new URLSearchParams(location.search).get('auth')==='1')document.documentElement.classList.add('auth-only');</script>
 <link rel="stylesheet" href="assets/style.css">
 <link rel="stylesheet" href="../community-host.css">
+<link rel="stylesheet" href="../gallery-curtain.css">
 <link rel="stylesheet" href="../author-portfolio.css">
 <link rel="stylesheet" href="../saved-recipes.css">
 <link rel="stylesheet" href="../credits-sponsor.css">
@@ -72,7 +73,6 @@
       </div>
       <div class="uc-profile-head">
         <h1 id="ucDisplayName">—</h1>
-        <div class="uc-profile-handle" id="ucProfileHandle">@—</div>
         <p class="uc-profile-bio" id="ucProfileBio">还没有填写简介。</p>
         <div class="uc-profile-meta" id="ucProfileMeta"></div>
       </div>
@@ -263,6 +263,7 @@
     <div id="workManagement" class="work-management" hidden>
       <h1 id="workManagementTitle">我的作品</h1>
       <p id="workManagementHint" class="muted">管理已发布的作品，查看发布记录或找回删除的作品。</p>
+      <div id="workIntroDivider" class="work-divider" hidden aria-hidden="true"></div>
       <nav id="workManagementTabs" class="work-management-tabs" aria-label="作品管理">
         <button type="button" class="tab" data-work-view="mine">已发布作品</button>
         <button type="button" class="tab" data-work-view="records" data-uc-view="records">发布记录</button>
@@ -295,6 +296,7 @@
       </div>
     </div>
 
+    <div id="workContentDivider" class="work-divider work-divider-content" hidden aria-hidden="true"></div>
     <div id="grid" class="grid"></div>
     <div id="records" class="records" style="display:none"></div>
     <div id="empty" class="empty" style="display:none">没有更多内容了</div>
@@ -335,7 +337,10 @@
     <label class="field-label" for="authUser">用户名</label>
     <input id="authUser" name="username" class="input" placeholder="用户名" autocomplete="username">
     <label class="field-label" for="authPass">密码</label>
-    <input id="authPass" name="password" class="input" type="password" placeholder="密码" autocomplete="current-password">
+    <div class="password-field">
+      <input id="authPass" name="password" class="input" type="password" placeholder="密码" autocomplete="current-password">
+      <button type="button" class="password-visibility" id="authPassToggle" aria-label="显示密码" aria-pressed="false" aria-controls="authPass"><svg class="eye-open" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg><svg class="eye-closed" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.4 16.4 0 0 1-3.1 3.7M6.2 6.6C3.8 8.4 2.5 12 2.5 12s3.5 6 9.5 6a10.9 10.9 0 0 0 4.2-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button>
+    </div>
     <div id="authLoginCaptcha" class="auth-captcha" hidden>
       <label class="field-label" for="authLoginCaptchaAnswer">图形验证码</label>
       <div class="auth-captcha-row"><input id="authLoginCaptchaAnswer" class="input" maxlength="5" autocomplete="off" autocapitalize="characters"><button type="button" id="authLoginCaptchaRefresh" class="btn ghost" aria-label="更换登录图形验证码"><img id="authLoginCaptchaImage" alt="图形验证码，点击可更换" width="180" height="56"></button></div>
@@ -345,6 +350,7 @@
       <span>支持邮箱验证码免密登录</span>
       <button type="button" id="authEmailModeToggle" class="auth-email-toggle-btn">✉️ 邮箱验证码登录</button>
     </div>
+    <div class="auth-forgot-row" id="authForgotRow"><button type="button" id="authForgotToggle" class="auth-text-link">找回密码</button></div>
     <div id="authEmailBox" class="auth-email-box" hidden>
       <label class="field-label" for="authEmailInput">邮箱地址（首次验证赠送 +5 积分）</label>
       <input id="authEmailInput" type="email" class="input" placeholder="输入邮箱，例如 name@163.com" autocomplete="email">
@@ -360,7 +366,27 @@
         <button type="button" id="authEmailVerifyBtn" class="btn primary">验证并登录</button>
       </div>
     </div>
-    <div class="modal-actions">
+    <div id="authResetBox" class="auth-reset-box" hidden>
+      <p class="hint auth-reset-note">验证绑定邮箱后设置新密码，完成后返回登录。</p>
+      <label class="field-label" for="authResetEmail">邮箱地址</label>
+      <input id="authResetEmail" type="email" class="input" placeholder="输入绑定邮箱" autocomplete="email">
+      <div class="auth-captcha">
+        <label class="field-label" for="authResetCaptchaAnswer">图形验证码（获取邮件前填写）</label>
+        <div class="auth-captcha-row"><input id="authResetCaptchaAnswer" class="input" maxlength="5" autocomplete="off" autocapitalize="characters"><button type="button" id="authResetCaptchaRefresh" class="btn ghost" aria-label="更换找回密码图形验证码"><img id="authResetCaptchaImage" alt="图形验证码，点击可更换" width="180" height="56"></button></div>
+      </div>
+      <div class="auth-email-code-row">
+        <input id="authResetCode" type="text" class="input" maxlength="6" inputmode="numeric" placeholder="6 位数字验证码">
+        <button type="button" id="authResetSendCode" class="btn ghost">获取验证码</button>
+      </div>
+      <label class="field-label" for="authResetPassword">新密码</label>
+      <input id="authResetPassword" type="password" class="input" maxlength="128" autocomplete="new-password" placeholder="8–128 位新密码">
+      <div class="modal-actions">
+        <button type="button" id="authResetCancel" class="btn ghost">返回登录</button>
+        <button type="button" id="authResetSubmit" class="btn primary">重置密码</button>
+      </div>
+      <div id="authResetError" class="error" role="alert"></div>
+    </div>
+    <div class="modal-actions" id="authActions">
       <button id="authSubmit" class="btn primary">登录</button>
       <button id="authToggle" class="btn ghost">没有账号？去注册</button>
     </div>
@@ -425,6 +451,54 @@
 </div>
 
 <div id="toast" class="toast"></div>
+<div id="galleryCurtain" class="hg-curtain-stage" hidden aria-hidden="true">
+  <div class="hg-shutter-leaf hg-shutter-top">
+    <div class="hg-shutter-grid"></div>
+    <svg class="hg-topo-waves" viewBox="0 0 1440 500" preserveAspectRatio="none">
+      <path d="M-100 180 C 260 60, 620 290, 980 140 C 1220 40, 1380 190, 1560 110" />
+      <path d="M-100 260 C 310 130, 680 350, 1040 200 C 1260 100, 1410 240, 1560 170" />
+      <path d="M-100 340 C 360 210, 740 410, 1100 260 C 1300 170, 1440 290, 1560 230" />
+    </svg>
+    <div class="hg-kinetic-marquee top"><span>EXHIBITION ARCHIVE // 46°37'N 12°17'E // FINE-ART SILVER HALIDE PRINT LAB // PASSEPARTOUT N° 01–04</span></div>
+  </div>
+  <div class="hg-shutter-leaf hg-shutter-bottom">
+    <div class="hg-shutter-grid"></div>
+    <div class="hg-scan-beam"></div>
+    <div class="hg-kinetic-marquee bottom"><span>OPTICAL CALIBRATION // LUMIÈRE &amp; HORIZON // CURATORIAL DARKROOM PROTOCOL // 100% LOCAL RAW ENGINE</span></div>
+  </div>
+  <svg class="hg-backdrop-astrolabe" viewBox="0 0 500 500">
+    <circle class="bd-ring-outer" cx="250" cy="250" r="228"></circle>
+    <circle class="bd-ring-mid" cx="250" cy="250" r="184"></circle>
+    <circle class="bd-ring-inner" cx="250" cy="250" r="138"></circle>
+    <line class="bd-axis" x1="20" y1="250" x2="480" y2="250"></line>
+    <line class="bd-axis" x1="250" y1="20" x2="250" y2="480"></line>
+  </svg>
+  <div class="hg-shutter-seam"><span class="hg-iris-flare"></span></div>
+  <div class="hg-curtain-core">
+    <i class="hg-corner tl"></i><i class="hg-corner tr"></i><i class="hg-corner bl"></i><i class="hg-corner br"></i>
+    <div class="hg-telemetry-row">
+      <span>GALLERY // 46°37'N · 12°17'E</span>
+      <span class="hg-telemetry-live"><i class="hg-live-dot"></i>OPTICALSYNC // <span id="galleryCurtainProgress">12</span>%</span>
+    </div>
+    <div class="hg-astrolabe-wrap">
+      <svg class="hg-astrolabe-svg" viewBox="0 0 100 100">
+        <circle class="ring-outer" cx="50" cy="50" r="46"></circle>
+        <circle class="ring-compass" cx="50" cy="50" r="40"></circle>
+        <circle class="ring-inner" cx="50" cy="50" r="33"></circle>
+        <line class="crosshair" x1="4" y1="50" x2="96" y2="50"></line>
+        <line class="crosshair" x1="50" y1="4" x2="50" y2="96"></line>
+        <circle class="sun-disc" cx="62" cy="34" r="4.2"></circle>
+        <path class="mountain-path" d="M22 60 L40 36 L53 51 L65 39 L78 60 Z"></path>
+        <path class="water-lines" d="M28 67 H72 M35 73 H65"></path>
+      </svg>
+    </div>
+    <span class="hg-chapter-code">EXHIBITION ARCHIVE // 2026 EDITION</span>
+    <h2 class="hg-chapter-title" aria-label="山川显影"><span class="hg-char" style="--char-idx:0">山</span><span class="hg-char" style="--char-idx:1">川</span><span class="hg-char" style="--char-idx:2">显</span><span class="hg-char" style="--char-idx:3">影</span></h2>
+    <p class="hg-chapter-sub">Fine-Art Landscape Print &amp; Color Darkroom</p>
+    <div class="hg-spectrum-bars"><span style="--bar-idx:1"></span><span style="--bar-idx:2"></span><span style="--bar-idx:3"></span><span style="--bar-idx:4"></span><span style="--bar-idx:5"></span><span style="--bar-idx:6"></span><span style="--bar-idx:7"></span><span style="--bar-idx:8"></span><span style="--bar-idx:9"></span><span style="--bar-idx:10"></span><span style="--bar-idx:11"></span><span style="--bar-idx:12"></span><span style="--bar-idx:13"></span><span style="--bar-idx:14"></span><span style="--bar-idx:15"></span><span style="--bar-idx:16"></span></div>
+    <div class="hg-progress-track"><div class="hg-progress-fill"></div></div>
+  </div>
+</div>
 <script src="../author-route.js"></script>
 <script src="../recipe-handoff.js"></script>
 <script src="assets/app.js"></script>

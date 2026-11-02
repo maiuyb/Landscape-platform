@@ -373,8 +373,6 @@ function renderAccountPanel() {
 
   const display = $('#ucDisplayName');
   if (display) display.textContent = name;
-  const handle = $('#ucProfileHandle');
-  if (handle) handle.textContent = '@' + user.username;
   const bio = $('#ucProfileBio');
   if (bio) bio.textContent = user.bio || '还没有填写简介。';
   const meta = $('#ucProfileMeta');
@@ -680,6 +678,14 @@ function listEndpoint() {
 
 let workCategoryRequest = 0;
 let workSearchTimer = null;
+
+function updateWorkDividers(view = state.view) {
+  const show = view === 'mine' || view === 'favorites';
+  for (const id of ['workIntroDivider', 'workContentDivider']) {
+    const divider = document.getElementById(id);
+    if (divider) divider.hidden = !show;
+  }
+}
 
 function updateWorkFilter() {
   const scope = workScope();
@@ -1495,6 +1501,7 @@ function switchView(view) {
   window.AuthorPortfolio?.leave();
   if (view === 'records' && !state.user) { toast('请先登录'); openAuth('login'); view = 'community'; }
   state.view = view;
+  updateWorkDividers(view);
   document.querySelectorAll('.toolbar .tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
   renderWorkManagement();
   const comm = view === 'community';
@@ -1516,6 +1523,7 @@ function switchView(view) {
 /* ---------------- 用户中心 ---------------- */
 function setUserCenterView(view) {
   if (!state.user) { toast('请先登录'); openAuth('login'); return; }
+  updateWorkDividers(view);
   if (view === 'profile') { if (state.user) openPublicProfile(state.user.id, { search: state.personalSearch }); return; }
   RecipeLibrary.closePanel();
   $('#ucSavedRecipesPanel').hidden=true;
@@ -1596,6 +1604,54 @@ function exitUserCenter(force = false) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+let galleryCurtainTimers = [];
+let galleryCurtainTick = null;
+function returnToCommunityWithTransition() {
+  const curtain = document.getElementById('galleryCurtain');
+  const reduced = document.documentElement.dataset.motion === 'off'
+    || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const inUserCenter = document.documentElement.classList.contains('uc-mode');
+  if (!curtain || reduced || (!inUserCenter && !window.AuthorPortfolio?.active())) {
+    exitUserCenter(true);
+    return;
+  }
+  if (curtain.dataset.running === '1') return;
+  galleryCurtainTimers.forEach(clearTimeout);
+  clearInterval(galleryCurtainTick);
+  galleryCurtainTimers = [];
+  curtain.dataset.running = '1';
+  curtain.hidden = false;
+  curtain.classList.remove('is-entering', 'is-active', 'is-parting', 'is-peak');
+  curtain.style.setProperty('--hg-progress', '12%');
+  const progressText = document.getElementById('galleryCurtainProgress');
+  if (progressText) progressText.textContent = '12';
+  void curtain.offsetWidth;
+  curtain.classList.add('is-entering', 'is-active');
+  const holdMs = 780;
+  const started = performance.now();
+  galleryCurtainTick = setInterval(() => {
+    const progress = Math.min(100, 12 + Math.round((performance.now() - started) / holdMs * 88));
+    curtain.style.setProperty('--hg-progress', progress + '%');
+    if (progressText) progressText.textContent = String(progress);
+    curtain.classList.toggle('is-peak', progress >= 92);
+    if (progress >= 100) clearInterval(galleryCurtainTick);
+  }, 40);
+  galleryCurtainTimers.push(setTimeout(() => exitUserCenter(true), 340));
+  galleryCurtainTimers.push(setTimeout(() => {
+    curtain.style.setProperty('--hg-progress', '100%');
+    if (progressText) progressText.textContent = '100';
+    curtain.classList.remove('is-entering', 'is-active');
+    curtain.classList.add('is-parting');
+  }, holdMs));
+  galleryCurtainTimers.push(setTimeout(() => {
+    clearInterval(galleryCurtainTick);
+    curtain.hidden = true;
+    curtain.classList.remove('is-parting', 'is-peak');
+    curtain.dataset.running = '0';
+  }, holdMs + 700));
+}
+window.returnToCommunityWithTransition = returnToCommunityWithTransition;
+
 /* ---------------- 事件 ---------------- */
 document.addEventListener('DOMContentLoaded', () => {
   loadPrefs();
@@ -1634,7 +1690,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const workCategory = $('#workCategory');
   if (workCategory) workCategory.onchange = (e) => setWorkCategory(e.target.value);
   const ucBack = $('#ucBack');
-  if (ucBack) ucBack.onclick = exitUserCenter;
+  if (ucBack) ucBack.onclick = returnToCommunityWithTransition;
   const ucSaveProfile = $('#ucSaveProfile');
   if (ucSaveProfile) ucSaveProfile.onclick = saveProfile;
   const ucChangePassword = $('#ucChangePassword');
@@ -1771,6 +1827,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: false });
   });
   syncModalScrollLock();
+  if (document.documentElement.classList.contains('auth-only')) {
+    openAuth('login');
+    const modal = $('#authModal');
+    let notified = false;
+    new MutationObserver(() => {
+      if (!modal.classList.contains('open') && !notified) {
+        notified = true;
+        window.parent.postMessage({ type: 'landscape:auth-close' }, location.origin);
+      }
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+  }
 });
 
 /* 嵌入式顶栏：下滑隐藏，上滑显示；上滑越多，搜索框向两边展开 */

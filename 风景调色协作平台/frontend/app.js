@@ -130,6 +130,7 @@ createApp({
       sub:'Fine-Art Landscape Print & Color Darkroom',
       coord:"GALLERY // 46°37'N · 12°17'E"
     });
+    const CURTAIN_HOLD_MS=780,CURTAIN_REVEAL_MS=700;
     let curtainTimerA=null,curtainTimerB=null,curtainTick=null,splitSweepRaf=null,parallaxRaf=null;
     function stopHeroSplitSweep(){
       if(splitSweepRaf!==null){cancelAnimationFrame(splitSweepRaf);splitSweepRaf=null;}
@@ -168,7 +169,7 @@ createApp({
       curtain.title=opts.title||'山 川 显 影';
       curtain.sub=opts.sub||'Fine-Art Landscape Print & Color Darkroom';
       curtain.coord=opts.coord||"GALLERY // 46°37'N · 12°17'E";
-      const holdMs=opts.holdMs||680;
+      const holdMs=opts.holdMs||CURTAIN_HOLD_MS;
       curtain.progress=12;
       curtain.entering=!opts.startClosed;
       curtain.phase='active';
@@ -191,7 +192,7 @@ createApp({
         curtain.visible=false;
         curtain.entering=false;
         curtain.phase='idle';
-      },holdMs+640);
+      },holdMs+CURTAIN_REVEAL_MS);
     }
     function playIntroCurtain(){
       runCurtainSequence({
@@ -199,7 +200,7 @@ createApp({
         title:'山 川 显 影',
         sub:'在静谧留白之中，重现山川与暮海的呼吸 · Fine-Art Print Lab',
         coord:"GALLERY // 46°37'N · 12°17'E",
-        holdMs:920,
+        holdMs:CURTAIN_HOLD_MS,
         startClosed:true
       },true);
     }
@@ -397,6 +398,11 @@ createApp({
     }
     const compareMode = ref('edited'), sliderPos = ref(50), zoom = ref(100);
     const compareHandleVisible = ref(false), compareDragging = ref(false);
+    const viewToolsCollapsed = ref(false);
+    function collapseViewTools(){viewToolsCollapsed.value=true;}
+    function expandViewTools(){viewToolsCollapsed.value=false;}
+    const quickPresetsCollapsed = ref(false);
+    function toggleQuickPresets(){quickPresetsCollapsed.value=!quickPresetsCollapsed.value;}
     let compareHintTimer;
     watch(compareMode, mode => {
       clearTimeout(compareHintTimer);
@@ -562,6 +568,7 @@ createApp({
     }
     applyStoredPreferences();
     const communityInitialUrl=AuthorRoute.url(new URL('community/',document.baseURI),initialAuthorRoute).href;
+    const authFrameUrl=new URL('community/',document.baseURI);authFrameUrl.searchParams.set('auth','1');const authFrameUrlHref=authFrameUrl.href;
     const communityFrame=ref(null), communityMounted=ref(!!initialAuthorRoute), communityReady=ref(false);
     const communitySearch=ref('');
     let pendingCommunitySearch=null;
@@ -886,7 +893,7 @@ createApp({
           title:'走 入 暗 房 显 影',
           sub:`正在装入馆藏印相《${sample.name}》与无损阶调参数`,
           coord:"DARKROOM // 46°37'N · 12°17'E",
-          holdMs:520
+          holdMs:CURTAIN_HOLD_MS
         });
       }
       const existing=photos.value.find(p=>p.sampleId===sample.id);if(existing)return activatePhoto(existing);
@@ -1408,12 +1415,14 @@ createApp({
     }
     // ---- 登录态 / 用户中心 / 显影积分 ----
     const authUser = ref(readAuthUser());
+    const authOverlayOpen = ref(false);
     const userMenuOpen = ref(false);
     const creditBusy = ref(false);
     function readAuthUser(){ try { const raw=localStorage.getItem('landscape:user')||localStorage.getItem('cd_user'); return raw?JSON.parse(raw):null; } catch { return null; } }
     function refreshAuthUser(){ authUser.value=readAuthUser(); RecipeLibrary.sessionChanged(); window.CreditSponsor?.sessionChanged(); }
-    function authStorageChanged(event){ if(!event.key||['landscape:token','landscape:user','cd_token','cd_user'].includes(event.key)) refreshAuthUser(); }
+    function authStorageChanged(event){ if(!event.key||['landscape:token','landscape:user','cd_token','cd_user'].includes(event.key)){refreshAuthUser();if(authUser.value)authOverlayOpen.value=false;} }
     function onUserUpdated(){ authUser.value=readAuthUser(); }
+    function authOverlayMessage(event){ if(event.origin!==location.origin)return; if(event.data?.type==='landscape:auth-close')authOverlayOpen.value=false; }
     async function dailyCheckin(){
       if(creditBusy.value)return;
       if(!authUser.value){openLogin();return;}
@@ -1438,7 +1447,7 @@ createApp({
       for(const k of ['landscape:token','landscape:user','cd_token','cd_user']) localStorage.removeItem(k);
       refreshAuthUser(); userMenuOpen.value=false; notify('已退出登录');
     }
-    function openLogin(){loginRequested=true;openCommunity();sendLogin();}
+    function openLogin(){authOverlayOpen.value=true;userMenuOpen.value=false;}
     function sendLogin(){if(!loginRequested||!communityReady.value)return;loginRequested=false;communityFrame.value.contentWindow.postMessage({type:'landscape:auth',channel:communityChannel,id:handoffId(),sentAt:Date.now()},location.origin);}
     function postCommunitySearch(query){
       if(!communityFrame.value||!communityReady.value)return false;
@@ -1465,7 +1474,7 @@ createApp({
           title:'漫 步 社 区 展 厅',
           sub:'探索风光摄影师公开的调色配方与前后对比印相',
           coord:"ARCHIVE // 46°37'N · 12°17'E",
-          holdMs:520
+          holdMs:CURTAIN_HOLD_MS
         });
       }
     }
@@ -1490,7 +1499,7 @@ createApp({
         title:imageLoaded.value||editorBlank.value?'返 回 暗 房 工 作 区':'返 回 画 廊 主 展 厅',
         sub:'本地无损阶调显影 · 留白卡纸装裱',
         coord:"DARKROOM // 35°41'N · 139°41'E",
-        holdMs:520
+        holdMs:CURTAIN_HOLD_MS
       });
     }
     function playHomeCurtain() {
@@ -1499,7 +1508,7 @@ createApp({
         title:'返 回 画 廊 主 展 厅',
         sub:'在静谧留白之中，重现山川与暮海的呼吸',
         coord:"GALLERY // 46°37'N · 12°17'E",
-        holdMs:520
+        holdMs:CURTAIN_HOLD_MS
       });
     }
     function switchToEditor() {
@@ -1510,7 +1519,7 @@ createApp({
     function openEditorWorkspace(){
       const wasWelcome=!imageLoaded.value&&!editorBlank.value;
       if(!imageLoaded.value){editorBlank.value=true;photoStripCollapsed.value=false;}
-      if(wasWelcome){playEditorCurtain();return;}
+      if(wasWelcome){currentView.value='editor';playEditorCurtain();return;}
       switchToEditor();
     }
     function returnToHome(){
@@ -1649,7 +1658,7 @@ createApp({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); restore('redo'); }
     }
     function beforeUnload(event) { if ((imageLoaded.value && dirty.value)||photos.value.some(p=>p.edited)) { event.preventDefault(); event.returnValue = ''; } }
-    onMounted(() => { const oneTimeRecipe=RecipeHandoff.take();if(oneTimeRecipe)openCommunityRecipe(oneTimeRecipe);window.addEventListener('resize',hideUprightLoupe);window.addEventListener('scroll',hideUprightLoupe,true);window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); window.addEventListener('storage', storedPreferencesChanged); window.addEventListener('landscape:user-updated', onUserUpdated); document.addEventListener('click', closeUserMenu); refreshAuthUser(); if(window.CreditSponsor)window.CreditSponsor.refresh(); });
+    onMounted(() => { const oneTimeRecipe=RecipeHandoff.take();if(oneTimeRecipe)openCommunityRecipe(oneTimeRecipe);window.addEventListener('resize',hideUprightLoupe);window.addEventListener('scroll',hideUprightLoupe,true);window.addEventListener('popstate',authorHistoryChanged);window.addEventListener('message',communityMessage);window.addEventListener('message',authOverlayMessage);window.addEventListener('keydown', keydown); window.addEventListener('beforeunload', beforeUnload); window.addEventListener('scroll', onWindowScroll, { passive: true }); window.addEventListener('storage', authStorageChanged); window.addEventListener('storage', storedPreferencesChanged); window.addEventListener('landscape:user-updated', onUserUpdated); document.addEventListener('click', closeUserMenu); refreshAuthUser(); if(window.CreditSponsor)window.CreditSponsor.refresh(); });
 
     onBeforeUnmount(() => {
       hideUprightLoupe();window.removeEventListener('resize',hideUprightLoupe);window.removeEventListener('scroll',hideUprightLoupe,true);
@@ -1660,11 +1669,11 @@ createApp({
       importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
-      window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); window.removeEventListener('storage', storedPreferencesChanged); window.removeEventListener('landscape:user-updated', onUserUpdated); document.removeEventListener('click', closeUserMenu);
+      window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('message',authOverlayMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); window.removeEventListener('storage', storedPreferencesChanged); window.removeEventListener('landscape:user-updated', onUserUpdated); document.removeEventListener('click', closeUserMenu);
 
     });
     return {
-      displayState, geometryLabel, openSavedRecipes, saveCurrentRecipe,
+      displayState, geometryLabel, openSavedRecipes, saveCurrentRecipe, quickPresetsCollapsed, toggleQuickPresets,
       uprightLoupe,uprightLoupeCanvas,uprightEndpointFocus,hideUprightLoupe,uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
@@ -1676,7 +1685,7 @@ createApp({
       perspectiveOpen,perspectiveDraft,perspectiveControls,beginPerspective,inputPerspective,finishPerspective,
       mainCanvas, compareCanvas, canvasContainer, communityContainer, currentView, imageLoaded, imageLoading, originalImageUrl, filename, message, error,
       state, preview, hoverFilter, wbPicking, histogram, histogramPath, canUndo, canRedo, activeState, controls: Core.controls, colorControls, adjustmentValue, filters: Core.filters, locked, dirty,
-      compareMode, sliderPos, compareHandleVisible, compareDragging, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,startPan,movePan,endPan,zoom, stageStyle, previewSize, outputDimensions, exportDimensions,
+      compareMode, sliderPos, compareHandleVisible, compareDragging, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,startPan,movePan,endPan,zoom, viewToolsCollapsed, collapseViewTools, expandViewTools, stageStyle, previewSize, outputDimensions, exportDimensions,
       straightenControl:{key:'straighten-angle',label:'拉直角度',min:-45,max:45,step:.1,precision:1,unit:'°',hint:'微调倾斜地平线；应用保存一次构图，取消保持原样。'},detailControls,setDetail,inputDetail,resetDetail,resetDetails,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
       confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
@@ -1685,7 +1694,7 @@ createApp({
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
       beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
-      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, authUser, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout,
+      openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, authUser, authOverlayOpen, authFrameUrlHref, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout,
       creditBusy, dailyCheckin, openCreditSponsor
     };
   }

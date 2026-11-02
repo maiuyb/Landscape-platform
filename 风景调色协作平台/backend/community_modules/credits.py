@@ -217,7 +217,7 @@ def send_email_code():
     data, user = _data(), current_user()
     email = _email(data.get('email'))
     purpose = 'bind' if user else data.get('purpose', 'login')
-    if not email or purpose not in (('bind',) if user else ('login', 'register')) or data.get('purpose', purpose) != purpose:
+    if not email or purpose not in (('bind',) if user else ('login', 'register', 'reset')) or data.get('purpose', purpose) != purpose:
         return jsonify(error='邮箱地址或验证用途不正确，请重新打开登录／绑定入口。'), 400
     if not _smtp_config()['configured']:
         return jsonify(error='邮箱服务暂不可用，请使用账号密码登录或稍后重试。'), 503

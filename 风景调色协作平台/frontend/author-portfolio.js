@@ -46,7 +46,6 @@
       <div class="author-identity"><div class="public-profile-avatar">${avatar}</div>
         <div class="author-intro"><div class="kicker">PHOTOGRAPHER’S PORTFOLIO</div>
           <h1 id="authorHeading" tabindex="-1">${esc(name)}</h1>
-          <div class="public-profile-handle">@${esc(user.username)}</div>
           <p class="public-profile-bio">${esc(user.bio || '这位作者还没有填写简介。')}</p>
           <div class="public-profile-meta">${user.location ? `<span>${esc(user.location)}</span>` : ''}<span>加入于 ${esc(formatJoined(user.created_at))}</span></div>
         </div>
@@ -203,7 +202,10 @@
     },
   };
   document.addEventListener('DOMContentLoaded', () => {
-    el('authorBack').onclick = () => exitUserCenter(true);
+    el('authorBack').onclick = () => {
+      if (typeof window.returnToCommunityWithTransition === 'function') window.returnToCommunityWithTransition();
+      else exitUserCenter(true);
+    };
     el('authorSort').onchange = e => navigate({ ...route, sort: e.target.value, page: 1 });
     el('authorRetry').onclick = () => render(route);
     el('authorWorks').onclick = e => { const work = e.target.closest('[data-work-id]'); if (work) openDetail(Number(work.dataset.workId)); };

@@ -212,6 +212,66 @@
   flex: 1;
 }
 
+.auth-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -2px 0 10px;
+}
+.auth-text-link {
+  border: 0;
+  background: none;
+  color: #8c6536;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.auth-text-link:hover { color: #5f4224; }
+
+.password-field {
+  position: relative;
+  margin: 6px 0 14px;
+}
+.password-field .input {
+  margin: 0;
+  padding-right: 44px;
+}
+.password-visibility {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gallery-caption, #858984);
+  cursor: pointer;
+}
+.password-visibility:hover { background: rgba(23, 24, 23, 0.06); color: var(--gallery-forest, #1d4d3c); }
+.password-visibility .eye-closed { display: none; }
+.password-visibility[aria-pressed="true"] .eye-open { display: none; }
+.password-visibility[aria-pressed="true"] .eye-closed { display: block; }
+.password-visibility:focus-visible { outline: 2px solid var(--gallery-bronze, #8c653e); outline-offset: 2px; }
+
+.auth-reset-box {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(154, 116, 66, 0.07);
+  border: 1px solid rgba(154, 116, 66, 0.24);
+}
+.auth-reset-note { margin: 0 0 10px; }
+.auth-reset-box .auth-captcha { margin: 10px 0; }
+.auth-reset-box .modal-actions { margin-top: 12px; }
+
 /* Shared Redemption & Alipay Sponsorship Modal (#creditSponsorModal) */
 .cs-modal-backdrop {
   position: fixed;

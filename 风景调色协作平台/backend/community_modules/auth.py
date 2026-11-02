@@ -111,6 +111,44 @@ def login():
     return jsonify(token=create_token(user['id']), user=payload)
 
 
+@auth_bp.route('/api/auth/password/reset', methods=['POST'])
+def reset_password():
+    from .credits import _email, consume_email_code, Limited, _limited
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    email, code = _email(data.get('email')), data.get('code')
+    password = data.get('password')
+    password = password.strip() if isinstance(password, str) else ''
+    if not email or not isinstance(code, str) or not re.fullmatch(r'[0-9]{6}', code):
+        return jsonify(error='请填写正确邮箱和 6 位验证码。'), 400
+    if not 8 <= len(password) <= 128:
+        return jsonify(error='新密码需为 8–128 位。'), 400
+    from .security import limits
+    try:
+        limits(('password-reset-ip', request.remote_addr, 20, 600))
+    except Limited as error:
+        return _limited(error)
+    conn = get_db()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        error = consume_email_code(conn, email, code, 'reset', None)
+        if error:
+            return error
+        user = conn.execute(
+            "SELECT * FROM users WHERE lower(trim(email))=? AND email_verified=1",
+            (email,)).fetchone()
+        if not user:
+            conn.commit()
+            return jsonify(error='该邮箱未绑定已验证账号。'), 404
+        conn.execute('UPDATE users SET password_hash=? WHERE id=?',
+                     (hash_password(password), user['id']))
+        conn.execute('DELETE FROM sessions WHERE user_id=?', (user['id'],))
+        conn.commit()
+        return jsonify(ok=True, username=user['username'], message='密码已重置，请返回登录。')
+    finally:
+        conn.close()
+
+
 def create_token(user_id):
     token = secrets.token_urlsafe(32)
     conn = get_db()

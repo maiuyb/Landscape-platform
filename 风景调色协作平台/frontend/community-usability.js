@@ -22,12 +22,11 @@
     trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-controls','accountDropdown');
     const menu=document.createElement('div');menu.id='accountDropdown';menu.className='account-dropdown';
     const identity=document.createElement('div');identity.className='account-menu-identity';
-    const name=document.createElement('strong'),handle=document.createElement('span'),creditTag=document.createElement('span');
+    const name=document.createElement('strong'),creditTag=document.createElement('span');
     name.textContent=state.user.display_name||state.user.username;
-    handle.textContent='@'+state.user.username;
     creditTag.className='account-menu-credit-tag';
     creditTag.textContent=`✦ ${state.user.credits ?? 10} 显影积分`;
-    identity.append(name,handle,creditTag);
+    identity.append(name,creditTag);
 
     const checkinBtn=document.createElement('button');
     checkinBtn.type='button';
@@ -162,6 +161,71 @@
   }
   verifyEmailBtn?.addEventListener('click',submitEmailAuth);
   emailCode?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();state.authMode==='register'?submitAuth():submitEmailAuth();}});
+
+  // Password recovery reuses the existing email-code delivery and captcha service.
+  const forgotToggle=$('#authForgotToggle'),resetBox=$('#authResetBox'),resetEmail=$('#authResetEmail'),resetCode=$('#authResetCode'),resetPassword=$('#authResetPassword'),resetSend=$('#authResetSendCode'),resetSubmit=$('#authResetSubmit'),resetCancel=$('#authResetCancel'),resetError=$('#authResetError');
+  function setResetMode(open){
+    if(!resetBox)return;
+    resetBox.hidden=!open;
+    $('#authPasswordFields').hidden=open;
+    $('#authEmailDivider').hidden=open;
+    $('#authEmailBox').hidden=true;
+    $('#authForgotRow').hidden=open;
+    $('#authActions').hidden=open;
+    $('#authTitle').textContent=open?'找回密码':'登录';
+    $('#authError').textContent='';
+    if(open){
+      $('#authEmailModeToggle').textContent='✉️ 邮箱验证码登录';
+      resetError.textContent='';
+      window.AuthGuard?.refresh('reset','email');
+      resetEmail?.focus();
+    }else{
+      $('#authSubmit').hidden=false;
+      $('#authEmailModeToggle').textContent='✉️ 邮箱验证码登录';
+      $('#authPass').type='password';
+      $('#authPassToggle')?.setAttribute('aria-pressed','false');
+      $('#authPassToggle')?.setAttribute('aria-label','显示密码');
+    }
+  }
+  function finishReset(username,password){
+    setResetMode(false);
+    state.authMode='login';
+    $('#authSubmit').textContent='登录';
+    $('#authToggle').textContent='没有账号？去注册';
+    $('#authUser').value=username||'';
+    $('#authPass').value=password||'';
+    $('#authError').textContent='';
+    resetError.textContent='';
+    toast('密码已重置，登录账号和新密码已填入');
+    $('#authSubmit').focus();
+  }
+  forgotToggle?.addEventListener('click',()=>setResetMode(true));
+  resetCancel?.addEventListener('click',()=>{setResetMode(false);$('#authUser')?.focus();});
+  resetSend?.addEventListener('click',async()=>{
+    const email=(resetEmail?.value||'').trim();
+    resetError.textContent='';
+    if(!email){resetError.textContent='请输入绑定邮箱';return;}
+    resetSend.disabled=true;
+    try{
+      const r=await api('/api/auth/email/send-code',{method:'POST',body:{email,purpose:'reset',...window.AuthGuard?.body('reset')}});
+      if(!r.ok){resetError.textContent=r.data?.error||'验证码发送失败';return;}
+      toast(r.data?.message||'验证码已发送，请查收邮件');
+      resetCode?.focus();
+    }finally{resetSend.disabled=false;window.AuthGuard?.refresh('reset','email');}
+  });
+  resetSubmit?.addEventListener('click',async()=>{
+    const email=(resetEmail?.value||'').trim(),code=(resetCode?.value||'').trim(),password=resetPassword?.value||'';
+    resetError.textContent='';
+    if(!email||!code||!password){resetError.textContent='请填写邮箱、验证码和新密码';return;}
+    resetSubmit.disabled=true;
+    try{
+      const r=await api('/api/auth/password/reset',{method:'POST',body:{email,code,password,...window.AuthGuard?.body('reset')}});
+      if(!r.ok){resetError.textContent=r.data?.error||'密码重置失败';return;}
+      finishReset(r.data?.username,password);
+    }finally{resetSubmit.disabled=false;}
+  });
+  resetCode?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();resetSubmit?.click();}});
+  resetPassword?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();resetSubmit?.click();}});
 
   syncCreditsUI();
 
