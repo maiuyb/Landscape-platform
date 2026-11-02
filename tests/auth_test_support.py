@@ -2,15 +2,17 @@
 from flask import jsonify, request
 
 
-def seed_user(app, username, password='synthetic-only'):
+def seed_user(app, username, password='synthetic-only', *, email=''):
+    if email and not email.endswith('@example.test'):
+        raise ValueError('Fixtures accept synthetic email addresses only')
     from community_modules.auth import hash_password, create_token
     from community_modules.db import get_db
     from community_modules import repository as repo
     with app.app_context():
         conn = get_db()
         try:
-            cur = conn.execute('INSERT INTO users(username,password_hash,display_name) VALUES(?,?,?)',
-                (username, hash_password(password), username))
+            cur = conn.execute('INSERT INTO users(username,password_hash,display_name,email,email_verified) VALUES(?,?,?,?,?)',
+                (username, hash_password(password), username, email, int(bool(email))))
             conn.commit()
             user = repo.serialize_user(conn, repo.get_user_by_id(conn, cur.lastrowid), self_view=True)
         finally:
@@ -25,4 +27,4 @@ def install_fixture(app):
     @app.post('/__test/register')
     def fixture_register():
         data = request.get_json()
-        return jsonify(seed_user(app, data['username'], data.get('password','synthetic-only')))
+        return jsonify(seed_user(app, data['username'], data.get('password','synthetic-only'), email=data.get('email','')))

@@ -24,6 +24,8 @@
     if(pass&&passToggle){pass.type='password';passToggle.setAttribute('aria-pressed','false');passToggle.setAttribute('aria-label','显示密码');}
     $('#authLoginCaptcha').hidden=true;$('#authPasswordFields').hidden=false;$('#authSubmit').hidden=false;
     $('#authEmailInput').value='';$('#authEmailCode').value='';$('#authEmailBox').hidden=!register;
+    for(const id of ['authResetEmail','authResetCode','authResetPassword']){const input=$('#'+id);if(input)input.value='';}
+    if($('#authResetError'))$('#authResetError').textContent='';
     $('#authEmailDivider').hidden=register;$('#authEmailVerifyBtn').hidden=register;
     $('#authForgotRow').hidden=register;$('#authResetBox').hidden=true;$('#authActions').hidden=false;
     $('#authPass').placeholder=register?'8–128 位密码':'密码';

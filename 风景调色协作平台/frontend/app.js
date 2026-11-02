@@ -560,12 +560,14 @@ createApp({
         const stored = JSON.parse(localStorage.getItem(PREFS_STORAGE_KEY) || '{}');
         const motion = ['full', 'reduced', 'off'].includes(stored.motion) ? stored.motion : 'full';
         document.documentElement.dataset.motion = motion;
-        Object.assign(exportOptions, storedExportDefaults());
       } catch { /* ignore */ }
     }
     function storedPreferencesChanged(event) {
       if (event.key === PREFS_STORAGE_KEY) applyStoredPreferences();
     }
+    // Defaults seed a fresh workspace/photo; later preference events must not
+    // replace output choices already made for the current photograph.
+    Object.assign(exportOptions, storedExportDefaults());
     applyStoredPreferences();
     const communityInitialUrl=AuthorRoute.url(new URL('community/',document.baseURI),initialAuthorRoute).href;
     const authFrameUrl=new URL('community/',document.baseURI);authFrameUrl.searchParams.set('auth','1');const authFrameUrlHref=authFrameUrl.href;

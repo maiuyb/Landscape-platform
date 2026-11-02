@@ -180,6 +180,8 @@
       window.AuthGuard?.refresh('reset','email');
       resetEmail?.focus();
     }else{
+      for(const input of [resetEmail,resetCode,resetPassword])if(input)input.value='';
+      resetError.textContent='';
       $('#authSubmit').hidden=false;
       $('#authEmailModeToggle').textContent='✉️ 邮箱验证码登录';
       $('#authPass').type='password';

@@ -106,16 +106,10 @@ def update_my_profile():
 
     conn = get_db()
     try:
-        repo.update_user_profile(conn, user['id'], display_name, bio, location, avatar)
-        if privacy:
-            current = {
-                'show_bio': bool(user['show_bio']) if 'show_bio' in user.keys() else True,
-                'show_location': bool(user['show_location']) if 'show_location' in user.keys() else True,
-                'show_stats': bool(user['show_stats']) if 'show_stats' in user.keys() else True,
-            }
-            current.update(privacy)
-            repo.update_user_privacy(conn, user['id'], current['show_bio'],
-                                     current['show_location'], current['show_stats'])
+        profile = {'display_name': display_name, 'bio': bio, 'location': location, 'avatar': avatar}
+        fields = {key: value for key, value in profile.items() if key in data}
+        fields.update({key: int(value) for key, value in privacy.items()})
+        repo.update_user_fields(conn, user['id'], fields)
         payload = repo.serialize_user(conn, repo.get_user_by_id(conn, user['id']), self_view=True)
     finally:
         conn.close()

@@ -8,7 +8,7 @@ const {start}=require('./isolated-browser-support.cjs');
   try{
    await page.goto(base+(prefix?'/':'/community/'));
    let ui=page;
-   if(prefix){await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();ui=page.frameLocator('iframe');}else await page.locator('#loginBtn').click();
+   if(prefix){await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();ui=page.frameLocator('.auth-frame-overlay iframe');}else await page.locator('#loginBtn').click();
    await ui.locator('#authToggle').click();await ui.locator('#authEmailBox').waitFor({state:'visible'});
    await ui.locator('#authUser').fill('synthetic-new');await ui.locator('#authPass').fill('synthetic-password');await ui.locator('#authEmailInput').fill('new@example.test');
    await ui.locator('#authEmailCaptchaRefresh').waitFor({state:'visible'});await ui.locator('#authEmailCaptchaImage').evaluate(img=>new Promise((resolve,reject)=>{if(img.complete&&img.naturalWidth)return resolve();img.onload=resolve;img.onerror=reject;}));
@@ -19,7 +19,7 @@ const {start}=require('./isolated-browser-support.cjs');
    assert.ok(await ui.locator('html').evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    const waitSignedIn=()=>prefix?page.locator('.user-chip').waitFor():ui.locator('#authUserBtn').waitFor();
    await ui.locator('#authSubmit').click();await waitSignedIn();
-   assert.equal(await ui.locator('body').evaluate(()=>JSON.parse(localStorage.getItem('landscape:user')).email_verified),true);
+   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('landscape:user')).email_verified),true);
    if(prefix){await page.locator('.user-chip').hover();await page.getByRole('menuitem',{name:'退出登录',exact:true}).click();await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();}
    else {await ui.locator('#authUserBtn').hover();await ui.locator('#logoutBtn').click();await ui.locator('#loginBtn').click();}
    await ui.locator('#authUser').fill('synthetic-new');await ui.locator('#authPass').fill('wrong');
