@@ -11,7 +11,7 @@ import tempfile
 import types
 import unittest
 import subprocess
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 FILE = Path(__file__).resolve().parents[1] / 'deploy/landscape-update.py'
 

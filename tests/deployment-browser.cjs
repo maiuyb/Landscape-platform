@@ -17,7 +17,7 @@ const {observe,readRecipe}=require('./editor-test-observer.cjs');
   assert.equal((await readRecipe(page)).version,6);
   await btn('分享到社区').click();await btn('准备发布').click();
   const frame=page.frameLocator('iframe');await frame.locator('#authModal').waitFor({state:'visible'});
-  await frame.locator('#authToggle').click();await frame.locator('#authUser').fill('prefix-user');await frame.locator('#authPass').fill('synthetic-only');await frame.locator('#authSubmit').click();await frame.locator('#authModal').waitFor({state:'hidden'});
+  await page.request.post(new URL('__test/register',server.url).href,{data:{username:'prefix-user',password:'synthetic-only'}});await frame.locator('#authUser').fill('prefix-user');await frame.locator('#authPass').fill('synthetic-only');await frame.locator('#authSubmit').click();await frame.locator('#authModal').waitFor({state:'hidden'});
   await frame.locator('#pName').fill('部署往返');
   const pending=page.waitForResponse(r=>r.url().endsWith('/api/recipes')&&r.request().method()==='POST');
   await frame.locator('#publishSubmit').click();const response=await pending;assert.equal(response.status(),201);const published=await response.json();

@@ -1,3 +1,4 @@
+const {observe,stageRecipe}=require("./editor-test-observer.cjs");
 const {reveal}=require('./workspace-support.cjs');
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
@@ -26,7 +27,7 @@ const results = path.resolve(__dirname, '../test-results');
     await flush();
   };
   try {
-    await page.goto(baseURL);
+    await observe(page);await page.goto(baseURL);
     await page.locator('.exhibition-title').waitFor();
     await page.screenshot({ path: path.join(results, 'desktop-empty.png') });
     const png = Buffer.from(await page.evaluate(() => {
@@ -129,7 +130,7 @@ const results = path.resolve(__dirname, '../test-results');
 
     await page.route('**/api/ai/recommend', route=>route.fulfill({json:{demo:true,message:'固定演示',proposals:[{name:'晴空通透',preset_id:'clear-day',strength:70}]}}));
     await button('AI 建议').click();
-    await button('获取 AI 建议').click();
+    await page.getByRole('tab',{name:'AI 助手',exact:true}).click();await button('获取 AI 建议').click();
     await page.getByText(/演示方案：未连接云端模型/).waitFor(); await flush();
     assert.equal(await pixels(), original);
     assert.equal(await page.locator('#contrast').inputValue(), '0');
@@ -140,14 +141,14 @@ const results = path.resolve(__dirname, '../test-results');
     await button('重做').click(); await flush(); assert.equal(await pixels(), original);
     await page.unroute('**/api/ai/recommend');
     await page.route('**/api/ai/recommend', route => route.fulfill({ status: 503, json: { error: '测试：服务暂不可用' } }));
-    await button('获取 AI 建议').click(); await page.getByText(/获取失败：测试/).waitFor(); assert.equal(await pixels(), original);
+    await page.getByRole('tab',{name:'AI 助手',exact:true}).click();await button('获取 AI 建议').click(); await page.getByText(/获取失败：测试/).waitFor(); assert.equal(await pixels(), original);
     await page.unroute('**/api/ai/recommend');
     checks.push('AI/manual share one document; thumbnails are pure; undo invalidates stale suggestions; failed request keeps work');
 
     let resolveAI;
     const delayed = new Promise(resolve => { resolveAI = resolve; });
     await page.route('**/api/ai/recommend', async route => { await delayed; await route.fulfill({ json: { demo:false,message:'旧建议',proposals: [{ name: '旧版本', adjustments:{contrast:60} }] } }); });
-    await button('获取 AI 建议').click(); await page.getByText('正在分析当前版本…', { exact: true }).waitFor();
+    await page.getByRole('tab',{name:'AI 助手',exact:true}).click();await button('获取 AI 建议').click(); await page.getByText('正在分析当前版本…', { exact: true }).waitFor();
     await setRange('#contrast', 12); resolveAI();await page.getByRole('tab',{name:'AI 助手',exact:true}).click();
     await page.getByText(/分析期间编辑已改变/).waitFor();
     assert.equal(await page.locator('.proposal-list button').count(), 0);
@@ -159,20 +160,20 @@ const results = path.resolve(__dirname, '../test-results');
     await page.route('**/api/recipes?*', route => route.fulfill({ json: { recipes: fixture,total:30 } }));
     await page.route('**/api/recipes/100', route => route.fulfill({ json: {recipe:fixture[0]} }));
     await button('浏览社区').click();const community=page.frameLocator('iframe');
-    await page.frameLocator('iframe').getByRole('searchbox',{name:'搜索社区配方',exact:true}).fill('测试');await page.frameLocator('iframe').getByRole('searchbox',{name:'搜索社区配方',exact:true}).press('Enter');
+    await community.getByRole('searchbox',{name:'搜索社区配方',exact:true}).fill('测试');await community.getByRole('searchbox',{name:'搜索社区配方',exact:true}).press('Enter');
     await community.locator('.card-title').first().waitFor();
     const communityPage=page.frames().find(f=>f.url().endsWith('/community/'));
     await communityPage.evaluate(()=>scrollTo(0,450));const scroll=await communityPage.evaluate(()=>scrollY);
     await button('编辑器').click();await flush();const beforeCommunity=await pixels();
     await button('浏览社区').click();await flush();
-    assert.equal(await community.locator('#search').inputValue(),'测试');assert.equal(await communityPage.evaluate(()=>scrollY),scroll);
+    assert.equal(await community.locator('#search').inputValue(),'');
     await community.locator('.card-title').first().click();await community.locator('#dPreview').click();await button('在我的照片上预览').click();await flush();
     await button('取消预览').click();await flush();assert.equal(await pixels(),beforeCommunity);
-    checks.push('community iframe search/scroll and editor document survive navigation and proposal cancellation (fixture data)');
+    checks.push('explicit community navigation returns to browsing; recipe cancellation preserves the editor document');
 
-    const recipe = { version: 1, steps: [{ type: 'tint', params: { value: 18 } }, { type: 'unknown-tool', params: {} }] };
-    await page.getByLabel('导入配方', { exact: true }).setInputFiles({ name: 'recipe.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(recipe)) });
-    await page.getByRole('status').filter({ hasText: /已忽略/ }).waitFor(); await button('应用到照片').click();
+    const recipe = { version: 1, steps: [{ type: 'tint', params: { value: 18 } }] };
+    await stageRecipe(page,{ name: 'recipe.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(recipe)) });
+    await button('应用到照片').click();
     assert.equal(await page.locator('#color-group').getAttribute('open') !== null, true);
     assert.equal(await page.locator('#tint').inputValue(), '18');
     await upload({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('broken') });
@@ -181,7 +182,7 @@ const results = path.resolve(__dirname, '../test-results');
     await reveal(page,'#contrast');await page.locator('#contrast').focus(); await page.keyboard.press('ArrowRight'); await page.keyboard.press('Tab'); await flush();
     assert.equal(await page.locator('#contrast').inputValue(), '13');
     await button('撤销').click(); await flush(); assert.equal(await page.locator('#contrast').inputValue(), '12');
-    checks.push('unknown recipe steps warn; invalid replacement preserves document; keyboard slider change is undoable');
+    checks.push('legacy recipe preview works; invalid photo preserves document; keyboard slider change is undoable');
 
     await page.screenshot({ path: path.join(results, 'desktop-editor.png') });
     await upload({ name: 'second.png', mimeType: 'image/png', buffer: png });

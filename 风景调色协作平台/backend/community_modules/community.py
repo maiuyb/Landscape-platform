@@ -21,7 +21,6 @@
 """
 
 import hashlib
-import os
 
 from flask import Blueprint, request, jsonify, g, has_request_context
 from thumbnails import upload_path

@@ -1,7 +1,6 @@
 """Loopback-only credits browser fixture: synthetic storage and an in-memory mailbox."""
 from pathlib import Path
 import os
-import re
 import sys
 import tempfile
 import threading
@@ -25,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='hmi-credits-browser-') as tmp:
     def messages():return jsonify(mailbox)
     @app.app.get('/__test/codes')
     def code_count():
-        conn=app.get_db()
+        conn=app.community_db.get_db()
         try:return jsonify(count=conn.execute('SELECT count(*) n FROM redemption_codes').fetchone()['n'])
         finally:conn.close()
     cfg=dict(configured=True,host='unused',port=465,user='synthetic@example.test',password='synthetic-only',admin_email='admin@example.test',public_origin='')

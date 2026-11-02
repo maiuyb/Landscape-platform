@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 import os
-import json
-import sqlite3
-import hashlib
-import base64
 import uuid
 from thumbnails import build_thumbnail, upload_name, width_bucket, ThumbnailBusy
 from ai_service import AIService, AIError, MAX_BODY, validate_request
-from datetime import datetime
 from flask import Flask, Request, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -62,8 +57,8 @@ def frontend_file(filename):
 # Community source is composed here; no demo seed, database or uploads are copied.
 app.config['COMMUNITY_DB_PATH'] = os.environ.get('LANDSCAPE_DB', DB_PATH)
 with app.app_context():
-    from community_modules import db as community_db, repository as repo
-    from community_modules.auth import auth_bp, create_token, current_user
+    from community_modules import db as community_db
+    from community_modules.auth import auth_bp, current_user
     from community_modules.community import community_bp
     from community_modules.profile import profile_bp
     from community_modules.saved_recipes import saved_recipes_bp
@@ -74,7 +69,6 @@ app.register_blueprint(community_bp)
 app.register_blueprint(profile_bp)
 app.register_blueprint(saved_recipes_bp)
 app.register_blueprint(credits_bp)
-get_db = community_db.get_db
 from community_modules.security import install as install_auth_security
 install_auth_security(app)
 
@@ -214,37 +208,6 @@ def ai_recommend():
         return jsonify({'error': str(error), 'code': error.code}), error.status
     except RequestEntityTooLarge:
         return json_error('AI 请求过大，请重新载入照片后重试。', 413)
-
-# ---------- 图库匹配 ----------
-@app.route('/api/gallery/match', methods=['POST'])
-def gallery_match():
-    data = request.json
-    features = data.get('features', {})
-    conn = get_db()
-    rows = conn.execute('SELECT * FROM recipes WHERE deleted_at IS NULL ORDER BY likes DESC LIMIT 50').fetchall()
-    conn.close()
-
-    if not features:
-        return json_ok({'results': [dict(r) for r in rows[:5]]})
-
-    # 余弦相似度匹配
-    scored = []
-    target = [features.get('avgV', 0), features.get('avgS', 0), features.get('avgH', 0)]
-    for row in rows:
-        try:
-            row_features = json.loads(row['features'] or '{}')
-            vec = [row_features.get('avgV', 0), row_features.get('avgS', 0), row_features.get('avgH', 0)]
-            dot = sum(a * b for a, b in zip(target, vec))
-            n1 = sum(a * a for a in target) ** 0.5
-            n2 = sum(b * b for b in vec) ** 0.5
-            sim = dot / (n1 * n2) if n1 * n2 > 0 else 0
-            scored.append((sim, dict(row)))
-        except:
-            continue
-
-    scored.sort(key=lambda x: -x[0])
-    results = [r for _, r in scored[:10]]
-    return json_ok({'results': results})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', '5000'))

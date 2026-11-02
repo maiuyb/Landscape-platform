@@ -270,7 +270,6 @@ createApp({
     const frameDimensions=computed(()=>Frames.layout(Math.max(1,Math.round(outputDimensions.value.width*frameScale.value)),Math.max(1,Math.round(outputDimensions.value.height*frameScale.value)),frameOptions.value));
     let history = Core.createHistory(), importVersion = 0, frame = null, observer = null;
     let renderer = null, sourcePreview = null, paintRevision = 0, requestedAt = 0, dragging = false;
-    const thumbnailCache = new WeakMap();
     const hoverFilter = ref(null), wbPicking = ref(false), histogram = shallowRef(null);
     const hslMode = ref('hue'), curveChannel = ref('master'), selectedCurvePoint = ref(0);
     const curveDraft = reactive({});
@@ -361,7 +360,6 @@ createApp({
       if(window.innerWidth<=760&&focus)document.querySelector('.workspace-tabs')?.scrollIntoView({block:'start',behavior:'smooth'});
     }
     function tabKey(event,index){let next;if(event.key==='ArrowRight')next=(index+1)%3;else if(event.key==='ArrowLeft')next=(index+2)%3;else if(event.key==='Home')next=0;else if(event.key==='End')next=2;else return;event.preventDefault();switchPanel(panelTabs[next].key);nextTick(()=>document.getElementById('tab-'+panelTabs[next].key)?.focus());}
-    function openMasks(){switchPanel('edit');nextTick(()=>{const el=document.getElementById('masks-group');if(el){el.open=true;el.scrollIntoView({block:'start',behavior:'smooth'});}});}
     const groupAdjusted=computed(()=>{const s=displayState.value,z=Core.createState();return{composition:!!s.geometry.length,basic:JSON.stringify([s.adjustments,s.whiteBalance])!==JSON.stringify([z.adjustments,z.whiteBalance]),fine:JSON.stringify([s.hsl,s.curves,s.effects.calibration])!==JSON.stringify([z.hsl,z.curves,z.effects.calibration]),detail:JSON.stringify(s.detail)!==JSON.stringify(z.detail)||!!(s.effects.clarity||s.effects.dehaze),vignette:!!s.effects.vignette.amount,masks:s.masks.some(Core.masks.active)};});
     function withoutGroup(base,key){const s=Core.clone(base),z=Core.createState();if(key==='composition')s.geometry=[];if(key==='basic'){s.adjustments=z.adjustments;s.whiteBalance=z.whiteBalance;s.legacyTone=z.legacyTone;}if(key==='fine'){s.hsl=z.hsl;s.curves=z.curves;s.effects.calibration=z.effects.calibration;}if(key==='detail'){s.detail=z.detail;s.effects.clarity=0;s.effects.dehaze=0;}if(key==='vignette')s.effects.vignette=z.effects.vignette;if(key==='masks')s.masks=[];return s;}
     function holdGroup(key,event){if(locked.value||!groupAdjusted.value[key])return;hoverFilter.value=null;compareMode.value='edited';compareGroup.value=key;if(event?.pointerId!==undefined)event.currentTarget.setPointerCapture(event.pointerId);}
@@ -572,13 +570,11 @@ createApp({
     const communityInitialUrl=AuthorRoute.url(new URL('community/',document.baseURI),initialAuthorRoute).href;
     const authFrameUrl=new URL('community/',document.baseURI);authFrameUrl.searchParams.set('auth','1');const authFrameUrlHref=authFrameUrl.href;
     const communityFrame=ref(null), communityMounted=ref(!!initialAuthorRoute), communityReady=ref(false);
-    const communitySearch=ref('');
-    let pendingCommunitySearch=null;
     const shareOpen=ref(false),shareDialog=ref(null),sharing=ref(false),shareSingle=ref(false);
     const returnHomeDialog=ref(null);
     const waitingRecipe=ref(null),reuseGeometry=ref(false),reuseMasks=ref(false),reuseScope=ref({geometry:false,masks:false});
     const handoffId=()=>Array.from(crypto.getRandomValues(new Uint32Array(4)),v=>v.toString(16).padStart(8,'0')).join('');
-    const communityChannel=handoffId(),seenHandoffs=new Set();let sharePackage=null,loginRequested=false,pendingCommunityMode=null;
+    const communityChannel=handoffId(),seenHandoffs=new Set();let sharePackage=null,pendingCommunityMode=null;
     const recipeDetail = ref(null), recipeDetailLoading=ref(false), recipeDetailError=ref('');
     let recipeDetailVersion=0;
     const exportDialog = ref(null), recipeDialog = ref(null);
@@ -1062,7 +1058,6 @@ createApp({
       setDetail(control.key,control.key==='radius'?Math.round(value*10)/10:value);commit();
     }
     function resetDetail(key) {setDetail(key,detailControls.find(c=>c.key===key).default);commit();}
-    function resetDetails() {state.value.detail=Core.detail.defaults();state.value.effects.clarity=0;state.value.effects.dehaze=0;commit();notify('已复位细节，可撤销。');}
     function advancedTarget(control){return control.kind==='effect'?state.value.effects:control.kind==='vignette'?state.value.effects.vignette:control.kind==='calibration'?state.value.effects.calibration[control.band]:selectedMask.value?.adjustments;}
     function advancedValue(control){const shown=displayState.value;const target=control.kind==='effect'?shown.effects:control.kind==='vignette'?shown.effects.vignette:control.kind==='calibration'?shown.effects.calibration[control.band]:selectedMask.value?.adjustments;const value=target?.[control.field]??control.default;return control.kind==='vignette'&&control.field==='amount'?Math.abs(value):value;}
     function setAdvanced(control,value){const target=advancedTarget(control);if(target){if(control.kind==='vignette'){target.profile='corner';if(control.field==='amount'){vignetteDirection.value=vignetteMode.value;value=Math.abs(value)*(vignetteMode.value==='dark'?-1:1);}}target[control.field]=value;}error.value='';}
@@ -1313,16 +1308,6 @@ createApp({
     }
     function cancelPreview() { preview.value = null; schedulePaint(); notify('已取消预览，保留之前的编辑。'); }
     function removeFilter() { state.value.filter = null; state.value.filterStrength = 100; commit(); }
-    function renderThumbnail(canvas, recipe) {
-      if (!canvas || !sourceImage.value || dragging) return;
-      const key = JSON.stringify([importVersion, state.value, recipe]);
-      if (thumbnailCache.get(canvas) === key) return;
-      try {
-        draw(canvas, Core.render(sourcePreview, Core.recipeState(state.value, recipe).state, { maxSide: 240,sourceScale:sourcePreview.width/sourceImage.value.naturalWidth,sourceSize:{width:sourceImage.value.naturalWidth,height:sourceImage.value.naturalHeight} }));
-        thumbnailCache.set(canvas, key);
-      }
-      catch { canvas.width = 1; canvas.height = 1; }
-    }
     function diagnosis(maxSide = 224) {
       const canvas = Core.render(sourceImage.value, state.value, { maxSide });
       const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
@@ -1450,23 +1435,6 @@ createApp({
       refreshAuthUser(); userMenuOpen.value=false; notify('已退出登录');
     }
     function openLogin(){authOverlayOpen.value=true;userMenuOpen.value=false;}
-    function sendLogin(){if(!loginRequested||!communityReady.value)return;loginRequested=false;communityFrame.value.contentWindow.postMessage({type:'landscape:auth',channel:communityChannel,id:handoffId(),sentAt:Date.now()},location.origin);}
-    function postCommunitySearch(query){
-      if(!communityFrame.value||!communityReady.value)return false;
-      communityFrame.value.contentWindow.postMessage({type:'landscape:search',channel:communityChannel,id:handoffId(),sentAt:Date.now(),query},location.origin);
-      return true;
-    }
-    function sendCommunitySearch(){
-      const query=communitySearch.value.trim();
-      if(!communityReady.value){pendingCommunitySearch=query;openCommunity();return;}
-      pendingCommunitySearch=null;
-      postCommunitySearch(query);
-    }
-    function clearCommunitySearch(){
-      communitySearch.value='';
-      pendingCommunitySearch=null;
-      sendCommunitySearch();
-    }
     function openCommunity() {
       const wasCommunity=currentView.value==='community';
       communityMounted.value=true;currentView.value='community';
@@ -1567,7 +1535,7 @@ createApp({
       const d=event.data;
       if(!d||d.channel!==communityChannel||typeof d.id!=='string'||!Number.isFinite(d.sentAt)||Math.abs(Date.now()-d.sentAt)>300000||seenHandoffs.has(d.id))return;
       seenHandoffs.add(d.id);if(seenHandoffs.size>100)seenHandoffs.delete(seenHandoffs.values().next().value);
-      if(d.type==='landscape:ready'){communityReady.value=true;postAuthorRoute(AuthorRoute.parse(location.search));sendShare();sendLogin();if(pendingCommunitySearch!==null){const q=pendingCommunitySearch;pendingCommunitySearch=null;postCommunitySearch(q);}if(pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}}
+      if(d.type==='landscape:ready'){communityReady.value=true;postAuthorRoute(AuthorRoute.parse(location.search));sendShare();if(pendingCommunityMode){postCommunityMode(pendingCommunityMode);pendingCommunityMode=null;}}
       else if(d.type==='landscape:author-route-change'&&currentView.value==='community'){
         const route=AuthorRoute.normalize(d.route),url=AuthorRoute.url(location.href,route);
         if(url.href!==location.href){window.history.replaceState({...window.history.state,landscapeView:currentView.value},'',location.href);window.history[d.replace?'replaceState':'pushState']({landscapeView:'community'},'',url);}
@@ -1681,20 +1649,20 @@ createApp({
       curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
       openLogin,editorBlank,openEditorWorkspace,returnToHome,confirmReturnHome,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
 
-      legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,openMasks,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
+      legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
       maskId,maskEditing,showMask,maskErase,brushSize,brushFeather,maskCanvas,selectedMask,maskHandles,maskGuide,selectMask,addMask,editMask,deleteMask,clearBrush,maskPointerDown,maskPointerMove,maskPointerUp,maskHandleKey,
       perspectiveOpen,perspectiveDraft,perspectiveControls,beginPerspective,inputPerspective,finishPerspective,
       mainCanvas, compareCanvas, canvasContainer, communityContainer, currentView, imageLoaded, imageLoading, originalImageUrl, filename, message, error,
       state, preview, hoverFilter, wbPicking, histogram, histogramPath, canUndo, canRedo, activeState, controls: Core.controls, colorControls, adjustmentValue, filters: Core.filters, locked, dirty,
       compareMode, sliderPos, compareHandleVisible, compareDragging, startComparison,moveComparison,stopComparison,comparisonKey,wheelZoom,startPan,movePan,endPan,zoom, viewToolsCollapsed, collapseViewTools, expandViewTools, stageStyle, previewSize, outputDimensions, exportDimensions,
-      straightenControl:{key:'straighten-angle',label:'拉直角度',min:-45,max:45,step:.1,precision:1,unit:'°',hint:'微调倾斜地平线；应用保存一次构图，取消保持原样。'},detailControls,setDetail,inputDetail,resetDetail,resetDetails,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
+      straightenControl:{key:'straighten-angle',label:'拉直角度',min:-45,max:45,step:.1,precision:1,unit:'°',hint:'微调倾斜地平线；应用保存一次构图，取消保持原样。'},detailControls,setDetail,inputDetail,resetDetail,inspectorBusy,inspectorOpen,inspectorBefore,inspectorCanvas,inspectorOriginal,inspectorPosition,toggleInspector,nudgeInspector,stageClick,showGuides,straightenOpen,straightenAngle,straightenAutoCrop,beginStraighten,inputStraighten,finishStraighten,commitStraightenPreview:()=>{dragging=false;schedulePaint();},
       confirmCropNumber,keepGeometryVisible,cancelCrop,cropOpen, cropRatio, crop, cropStyle, cropPixels, cropDraft, cropHandles, cropPixelInput, cropHandleKey, rotationAngle, cropPointerDown, cropPointerMove, cropPointerUp: () => { cropDrag = null; },
       hslMode,hslControls,setHSL,hslNumber,resetHSLControl,resetHSL,curveChannel,curvePoints,curvePath,selectedCurvePoint,selectedPoint,curveDraft,selectCurve,curvePointerDown,curvePointerMove,curvePointerUp,curveNumber,deleteCurvePoint,resetCurve,curveKey,
       exportOpen, exporting, exportOptions, aiLoading, aiResults, aiStatus,
-      communityInitialUrl,communityFrame,communityMounted,communityReady,connectCommunity,communitySearch,sendCommunitySearch,clearCommunitySearch,shareOpen,shareDialog,returnHomeDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
+      communityInitialUrl,communityFrame,communityMounted,communityReady,connectCommunity,shareOpen,shareDialog,returnHomeDialog,sharing,shareSingle,openShare,prepareShare,waitingRecipe,reuseGeometry,reuseMasks,reuseScope,previewCommunityRecipe, recipeDetail, recipeDetailLoading, recipeDetailError, openCommunityRecipe, closeRecipeDetail, exportDialog, recipeDialog,
       handleUpload, handleDrop, beginAdjustment, commit, setAdjustment, resetAdjustment, resetGroup, inputAdjustment, resetImage, restore, transform, rotateFree, beginCrop, constrainCrop, applyCrop,
-      beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, renderThumbnail, requestAI,
+      beginPreview, hoverStyle, leaveStyle, applyFilter, applyPreview, cancelPreview, removeFilter, requestAI,
       autoExposure,autoWhiteBalance,whiteBalanceChoice,toggleWBSampling,pickWhiteBalance,
       openCommunity, openUserCenter, openCommunityBrowse, openExport, exportImage, authUser, authOverlayOpen, authFrameUrlHref, userMenuOpen, leaveUserMenu, avatarUrl, openOwnProfile, logout,
       creditBusy, dailyCheckin, openCreditSponsor

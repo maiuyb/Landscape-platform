@@ -1,5 +1,8 @@
 /* Test-only observation/fixtures for isolated editors; never injected into a public site. */
+const observed = new WeakSet();
 async function observe(page){
+ if(observed.has(page))return;
+ observed.add(page);
  await page.route('**/app.js',async route=>{
   const url=new URL(route.request().url());
   if(!['127.0.0.1','localhost'].includes(url.hostname)||url.pathname.endsWith('/community/assets/app.js')||url.pathname.endsWith('/community/app.js'))return route.continue();
@@ -16,4 +19,10 @@ async function previewRecipe(page,recipe){
  for(const name of [/同时复用作者构图/,/同时复用作者局部选区/]){const box=dialog.getByRole('checkbox',{name});if(await box.count())await box.check();}
  await dialog.getByRole('button',{name:'在我的照片上预览',exact:true}).click();
 }
-module.exports={observe,readRecipe,previewRecipe};
+// Stage a fixture through the current recipe preview flow. File import UI was removed.
+async function stageRecipe(page,input){
+ const fs=require('node:fs/promises');
+ const raw=typeof input==='string'?await fs.readFile(input):input.buffer;
+ await previewRecipe(page,JSON.parse(raw.toString()));
+}
+module.exports={observe,readRecipe,previewRecipe,stageRecipe};
