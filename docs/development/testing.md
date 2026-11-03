@@ -36,7 +36,7 @@ npm.cmd run test:browser -- auth-security-browser.cjs account-preferences-browse
 | 历史、预设与会话 | `editor-feedback`、`editor-history-gesture`、`editor-geometry-history`、`editor-presets`、`editor-workspace`、`editor-welcome` |
 | AI 与配方复用 | `editor-ai`、`editor-recipe-reuse`、`editor-share-cancel`、`editor-account-workflow` |
 | 构图 | `editor-upright`、`editor-upright-loupe` |
-| 社区与部署路径 | `editor-community`、`community-main-compatibility`、`community-images`、`deployment` |
+| 社区与部署路径 | `editor-community`、`community-main-compatibility`、`community-images`、`community-recommendation-images`、`deployment` |
 | 用户管理 | `auth-security`、`account-preferences`、`author-portfolio`、`user-center`、`credits`、`work-management` |
 
 表中名称均补上 `-browser.cjs`。界面已移除的配方文件下载/导入不再作为操作入口；底层配方/像素回归通过仅限本地测试的 observer 读取状态，并经当前配方预览流程注入合成样例。账号保存与社区发布仍通过实际界面/API 检查。

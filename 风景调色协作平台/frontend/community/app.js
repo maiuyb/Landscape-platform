@@ -644,10 +644,12 @@ async function loadRecommend() {
   const r = await api('/api/recipes/recommend', { auth: true });   // 摘要不含 steps
   const box = $('#recommend');
   const list = r.data.recipes || [];
+  // Portrait covers enlarge landscape photos to fill their height. Width-only
+  // srcset sizing picks undersized images here; use the bounded 1200px thumbnail.
   box.innerHTML = list.map((rec, i) => `
     <div class="mini" data-id="${rec.id}">
       ${i < 3 ? `<div class="rank">TOP${i + 1}</div>` : ''}
-      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 400))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 16vw" width="400" height="533" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 1200))}" width="400" height="533" alt="${esc(rec.name)}" loading="lazy" decoding="async">
       <div class="cap">${esc(rec.name)}<br><span class="muted">★ ${rec.favorite_count}</span></div>
     </div>`).join('') || '<div class="muted">暂无推荐</div>';
   box.querySelectorAll('.mini').forEach((m) => { m.onclick = () => openDetail(+m.dataset.id); });
