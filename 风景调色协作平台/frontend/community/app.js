@@ -1341,6 +1341,10 @@ function loadHandoff() {
     if (!$('#pName').value && (meta.name || recipe.name)) $('#pName').value = meta.name || recipe.name;
     if (!$('#pDesc').value && (meta.description || recipe.description)) $('#pDesc').value = meta.description || recipe.description;
     if (!$('#pCategory').value && (meta.category || recipe.category)) $('#pCategory').value = meta.category || recipe.category;
+    const handoffTags = meta.tags || recipe.tags;
+    if (!$('#pTags').value && handoffTags) {
+      $('#pTags').value = Array.isArray(handoffTags) ? handoffTags.join(', ') : String(handoffTags);
+    }
 
   } catch (e) { /* ignore */ }
   updateRecipeStatus();
@@ -1380,7 +1384,7 @@ async function submitPublish() {
       name,
       description: $('#pDesc').value.trim(),
       category: $('#pCategory').value.trim(),
-      tags: [],
+      tags: $('#pTags').value.split(/[,，]/).map(t => t.trim()).filter(Boolean).slice(0, 10),
       cover_before, cover_after,
       pairing,
     });
@@ -1401,7 +1405,7 @@ async function submitPublish() {
 }
 
 function resetPublishForm() {
-  ['#pName', '#pDesc', '#pCategory', '#pRecipeJson', '#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
+  ['#pName', '#pDesc', '#pCategory', '#pTags', '#pRecipeJson', '#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) el.value = ''; });
   ['#pBefore', '#pAfter'].forEach((s) => { const el = $(s); if (el) delete el.dataset.fromEditor; });
   document.querySelectorAll('.file-note').forEach((n) => { n.textContent = '默认使用编辑器内图片'; });
   const toggle = $('#pRecipeToggle');
