@@ -33,13 +33,15 @@ npm.cmd run test:browser -- auth-security-browser.cjs account-preferences-browse
 | 主题 | 浏览器专项 |
 | --- | --- |
 | 编辑与渲染 | `editor-browser`、`editor-color`、`editor-detail`、`editor-local-adjustments`、`editor-preview`、`editor-comparison-grip` |
-| 历史、预设与会话 | `editor-feedback`、`editor-history-gesture`、`editor-geometry-history`、`editor-presets`、`editor-workspace`、`editor-welcome` |
+| 历史、预设与会话 | `editor-feedback`、`editor-history-gesture`、`editor-geometry-history`、`editor-presets`、`editor-workspace`、`editor-welcome`、`welcome-images` |
 | AI 与配方复用 | `editor-ai`、`editor-recipe-reuse`、`editor-share-cancel`、`editor-account-workflow` |
 | 构图 | `editor-upright`、`editor-upright-loupe` |
 | 社区与部署路径 | `editor-community`、`community-main-compatibility`、`community-images`、`community-recommendation-images`、`deployment` |
 | 用户管理 | `auth-security`、`account-preferences`、`author-portfolio`、`user-center`、`credits`、`work-management` |
 
 表中名称均补上 `-browser.cjs`。界面已移除的配方文件下载/导入不再作为操作入口；底层配方/像素回归通过仅限本地测试的 observer 读取状态，并经当前配方预览流程注入合成样例。账号保存与社区发布仍通过实际界面/API 检查。
+
+`welcome-images` 检查固定前后图、滑杆和保留动画、零编辑渲染调用、重复切换不新增图片请求、迟到加载不覆盖最新选择、失败重试，以及根路径/子路径和手机布局。
 
 ## 夹具与结果
 

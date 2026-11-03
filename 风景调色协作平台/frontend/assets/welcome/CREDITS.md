@@ -11,4 +11,4 @@
 | `devils-tower.jpg` / `devils-tower-after.jpg` | [Silvanica1 — Devils Tower at sunset, Wyoming USA.jpg](https://commons.wikimedia.org/wiki/File:Devils_Tower_at_sunset,_Wyoming_USA.jpg) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
 | `gulmarg-snow.jpg` / `gulmarg-snow-after.jpg` | [Gayatri Priyadarshini — Snow covered gulmarg landscape 3.jpg](https://commons.wikimedia.org/wiki/File:Snow_covered_gulmarg_landscape_3.jpg) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
 
-首屏对比与馆藏展墙右侧效果均由本项目 `EditorCore` 对同源原图实际渲染，左侧为下载的原始示例，不宣称是未经摄影师处理的相机原片。源图不以素材图库形式提供批量下载，不将作者作品宣称为项目原创。相框使用独立的 CC0 木纹贴图并由程序生成框形，来源另见 [相框素材说明](../frames/CREDITS.md)。
+首屏对比与馆藏展墙右侧使用预先生成的效果图；欢迎页直接显示配对的原图与 `*-after.jpg`，不在素材切换时运行调色计算。左侧为下载的原始示例，不宣称是未经摄影师处理的相机原片。源图不以素材图库形式提供批量下载，不将作者作品宣称为项目原创。实际编辑仍使用本项目 `EditorCore`。相框使用独立的 CC0 木纹贴图并由程序生成框形，来源另见 [相框素材说明](../frames/CREDITS.md)。

@@ -162,8 +162,8 @@
               @pointercancel="stopHeroDrag"
               aria-label="画廊作品调色前后对比"
             >
-              <img :src="'assets/welcome/' + activeHeroEdition.file" :alt="activeHeroEdition.name" width="1600" height="1068" fetchpriority="high">
-              <canvas ref="heroCanvas" v-show="heroReady" class="hero-edited" aria-label="使用本项目调色后的山湖示例"></canvas>
+              <img v-if="heroReady" :src="'assets/welcome/' + activeHeroEdition.file" :alt="activeHeroEdition.name" width="1600" height="1068" decoding="async" fetchpriority="high">
+              <img v-if="heroReady" :src="'assets/welcome/' + activeHeroEdition.afterFile" class="hero-edited" :alt="activeHeroEdition.name + ' · 调色后'" width="1600" height="1068" decoding="async" fetchpriority="high">
 
               <span class="print-whisper-tag left">Original Negative · 原片</span>
               <span class="print-whisper-tag right">{{ activeHeroEdition.tag }}</span>

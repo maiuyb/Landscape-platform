@@ -252,7 +252,7 @@
   pointer-events: none;
   display: block;
 }
-.print-window.welcome-comparison > canvas.hero-edited {
+.print-window.welcome-comparison > img.hero-edited {
   clip-path: inset(0 0 0 var(--split, 50%));
 }
 .print-whisper-tag {

@@ -114,12 +114,13 @@ createApp({
     const frameThumbs=new Map();let frameLoadVersion=0,framePhoto=null,frameThumbnail=null;
     const samples=[{id:'lake',name:'山湖之间',file:'alpine-lake.jpg',afterFile:'alpine-lake-after.jpg',author:'Ales Krivec',source:'https://unsplash.com/photos/8aSs7QejvSw'},{id:'canyon',name:'光落山谷',file:'mountain-light.jpg',afterFile:'mountain-light-after.jpg',author:'Marc-Olivier Jodoin',source:'https://unsplash.com/photos/kyDyOHkIbC8'},{id:'coast',name:'日落湖岸',file:'coastal-sunset.jpg',afterFile:'coastal-sunset-after.jpg',author:'Ruben Daems',source:'https://www.pexels.com/photo/sunset-over-lake-and-mountains-5552745/'}];
     const heroEditions={
-      'alpine-lake':{key:'alpine-lake',id:'lake',name:'山湖之间',file:'alpine-lake.jpg',afterFile:'alpine-lake-after.jpg',tag:'Print Edition · 暖金晨雾',fig:'Fig. 01 — 《阿尔卑斯晨雾湖岸》，Ales Krivec',sub:'暖调晨光分离 · 暗部松针细节提亮 +26 · 拖动画面中央手柄可检视原片',author:'Ales Krivec',source:'https://unsplash.com/photos/8aSs7QejvSw',setup(s){s.adjustments.exposure=.28;s.adjustments.highlights=-22;s.adjustments.shadows=26;s.adjustments.temperature=14;s.adjustments.vibrance=18;s.effects.dehaze=14;s.effects.clarity=12;}},
-      'devils-tower':{key:'devils-tower',id:'tower',name:'怀俄明孤峰',file:'devils-tower.jpg',afterFile:'devils-tower-after.jpg',tag:'Print Edition · 自然山野',fig:'Fig. 02 — 《怀俄明玄武岩孤峰》，Silvanica1 (CC BY-SA 4.0)',sub:'岩体清晰度 +18 · 森林暗部通透还原 · 拖动画面中央手柄可检视原片',author:'Silvanica1',source:'https://commons.wikimedia.org/wiki/File:Devils_Tower_at_sunset,_Wyoming_USA.jpg',setup(s){s.adjustments.exposure=.2;s.adjustments.contrast=16;s.adjustments.shadows=22;s.effects.dehaze=20;s.effects.clarity=16;s.hsl.green.luminance=12;}},
-      'gulmarg-snow':{key:'gulmarg-snow',id:'snow',name:'克什米尔雪杉',file:'gulmarg-snow.jpg',afterFile:'gulmarg-snow-after.jpg',tag:'Print Edition · 清冷蓝调',fig:'Fig. 03 — 《克什米尔蓝调雪杉》，Gayatri Priyadarshini (CC BY-SA 4.0)',sub:'色温 -16K · 雪地高光保护 -20 · 拖动画面中央手柄可检视原片',author:'Gayatri Priyadarshini',source:'https://commons.wikimedia.org/wiki/File:Snow_covered_gulmarg_landscape_3.jpg',setup(s){s.adjustments.temperature=-16;s.adjustments.highlights=-20;s.adjustments.whites=14;s.effects.clarity=18;s.effects.dehaze=14;}},
-      'alpine-panorama':{key:'alpine-panorama',id:'panorama',name:'高海拔冰川全境横幅',file:'alpine-panorama.jpg',afterFile:'alpine-panorama-after.jpg',tag:'Print Edition · 冰川全境宽幅',fig:'Fig. 04 — 《高海拔冰川全境横幅》，Hannes Röst (CC BY-SA 3.0)',sub:'21:9 宽幅印相 · 远山空气去雾 +22 · 拖动画面中央手柄可检视原片',author:'Hannes Röst',source:'https://commons.wikimedia.org/wiki/File:Fronalpstock_big.jpg',setup(s){s.adjustments.exposure=.18;s.adjustments.contrast=16;s.adjustments.highlights=-24;s.adjustments.whites=16;s.effects.dehaze=22;s.effects.clarity=18;}}
+      'alpine-lake':{key:'alpine-lake',id:'lake',name:'山湖之间',file:'alpine-lake.jpg',afterFile:'alpine-lake-after.jpg',tag:'Print Edition · 暖金晨雾',fig:'Fig. 01 — 《阿尔卑斯晨雾湖岸》，Ales Krivec',sub:'暖调晨光分离 · 暗部松针细节提亮 +26 · 拖动画面中央手柄可检视原片',author:'Ales Krivec',source:'https://unsplash.com/photos/8aSs7QejvSw'},
+      'devils-tower':{key:'devils-tower',id:'tower',name:'怀俄明孤峰',file:'devils-tower.jpg',afterFile:'devils-tower-after.jpg',tag:'Print Edition · 自然山野',fig:'Fig. 02 — 《怀俄明玄武岩孤峰》，Silvanica1 (CC BY-SA 4.0)',sub:'岩体清晰度 +18 · 森林暗部通透还原 · 拖动画面中央手柄可检视原片',author:'Silvanica1',source:'https://commons.wikimedia.org/wiki/File:Devils_Tower_at_sunset,_Wyoming_USA.jpg'},
+      'gulmarg-snow':{key:'gulmarg-snow',id:'snow',name:'克什米尔雪杉',file:'gulmarg-snow.jpg',afterFile:'gulmarg-snow-after.jpg',tag:'Print Edition · 清冷蓝调',fig:'Fig. 03 — 《克什米尔蓝调雪杉》，Gayatri Priyadarshini (CC BY-SA 4.0)',sub:'色温 -16K · 雪地高光保护 -20 · 拖动画面中央手柄可检视原片',author:'Gayatri Priyadarshini',source:'https://commons.wikimedia.org/wiki/File:Snow_covered_gulmarg_landscape_3.jpg'},
+      'alpine-panorama':{key:'alpine-panorama',id:'panorama',name:'高海拔冰川全境横幅',file:'alpine-panorama.jpg',afterFile:'alpine-panorama-after.jpg',tag:'Print Edition · 冰川全境宽幅',fig:'Fig. 04 — 《高海拔冰川全境横幅》，Hannes Röst (CC BY-SA 3.0)',sub:'21:9 宽幅印相 · 远山空气去雾 +22 · 拖动画面中央手柄可检视原片',author:'Hannes Röst',source:'https://commons.wikimedia.org/wiki/File:Fronalpstock_big.jpg'}
     };
-    const heroPosition=ref(50),heroCanvas=ref(null),heroReady=ref(false),heroEditionKey=ref('alpine-lake'),heroDragging=ref(false),welcomeStage=ref(null),editionSwitching=ref(false);let welcomeVersion=0,editionSwitchTimer=null,revealObserver=null;
+    const heroPosition=ref(50),heroReady=ref(false),heroEditionKey=ref('alpine-lake'),heroDragging=ref(false),welcomeStage=ref(null),editionSwitching=ref(false);let welcomeVersion=0,editionSwitchTimer=null,revealObserver=null;
+    const welcomeImages=new Map();let welcomePreloadStarted=false;
     const curtain=reactive({
       visible:false,
       entering:false,
@@ -897,22 +898,49 @@ createApp({
       const existing=photos.value.find(p=>p.sampleId===sample.id);if(existing)return activatePhoto(existing);
       try{const r=await fetch('assets/welcome/'+sample.file);if(!r.ok)throw Error('示例暂时无法读取');const file=new File([await r.blob()],sample.name+'.jpg',{type:'image/jpeg',lastModified:1});await addPhotos([file]);const entry=photos.value.find(p=>p.file===file);if(entry)entry.sampleId=sample.id;}catch(e){fail('示例载入失败：'+e.message+'，也可以选择自己的照片。');}
     }
-    async function drawWelcome(){
-      const version=++welcomeVersion;await nextTick();if(imageLoaded.value||!heroCanvas.value)return;
-      initScrollReveal();
-      const ed=activeHeroEdition.value;
-      try{const image=new Image();image.src='assets/welcome/'+ed.file;await image.decode();if(version!==welcomeVersion||!heroCanvas.value)return;const s=Core.createState();if(ed.setup)ed.setup(s);draw(heroCanvas.value,Core.render(image,s,{maxSide:1200}));heroReady.value=true;}catch{heroReady.value=false;}
-    }
-    function selectHeroEdition(key,scroll=false){
-      if(!heroEditions[key])return;
-      if(heroEditionKey.value!==key){
-        editionSwitching.value=true;
-        clearTimeout(editionSwitchTimer);
-        editionSwitchTimer=setTimeout(()=>{editionSwitching.value=false;},520);
-        animateHeroSplitSweep(16,920);
+    function prepareWelcomeImages(key,priority='low'){
+      let entry=welcomeImages.get(key);
+      if(!entry){
+        const edition=heroEditions[key];
+        const images=[edition.file,edition.afterFile].map(file=>{
+          const image=new Image();image.decoding='async';image.fetchPriority=priority;
+          image.src='assets/welcome/'+file;return image;
+        });
+        entry={images,ready:Promise.all(images.map(image=>image.decode()))};
+        welcomeImages.set(key,entry);
+        entry.ready.catch(()=>{if(welcomeImages.get(key)===entry)welcomeImages.delete(key);});
       }
-      heroEditionKey.value=key;drawWelcome();
-      if(scroll)document.getElementById('main-print')?.scrollIntoView({behavior:'smooth'});
+      if(priority==='high')entry.images.forEach(image=>{image.fetchPriority='high';});
+      return entry.ready;
+    }
+    async function preloadWelcomeImages(){
+      // Keep decoded pairs for instant repeat switches; warm one pair at a time.
+      for(const key of Object.keys(heroEditions)){
+        try{await prepareWelcomeImages(key);}catch{/* A selected edition can retry a failed preload. */}
+      }
+    }
+    function showWelcome(){return selectHeroEdition(heroEditionKey.value,false,false);}
+    async function selectHeroEdition(key,scroll=false,animate=true){
+      if(!heroEditions[key])return;
+      const version=++welcomeVersion;
+      try{
+        await prepareWelcomeImages(key,'high');
+        if(version!==welcomeVersion||imageLoaded.value)return;
+        const changed=heroEditionKey.value!==key;
+        if(changed){editionSwitching.value=false;await nextTick();}
+        if(version!==welcomeVersion||imageLoaded.value)return;
+        // Commit both decoded images together, retaining the old pair while loading.
+        heroEditionKey.value=key;heroReady.value=true;error.value='';await nextTick();initScrollReveal();
+        if(changed&&animate){
+          editionSwitching.value=true;clearTimeout(editionSwitchTimer);
+          editionSwitchTimer=setTimeout(()=>{editionSwitching.value=false;},520);
+          animateHeroSplitSweep(16,920);
+        }
+        if(scroll)document.getElementById('main-print')?.scrollIntoView({behavior:'smooth'});
+        if(!welcomePreloadStarted){welcomePreloadStarted=true;void preloadWelcomeImages();}
+      }catch{
+        if(version===welcomeVersion)fail('示例图片暂时无法读取，请重试或选择其他作品。');
+      }
     }
     function setHeroSplitFromClientX(clientX){
       const el=welcomeStage.value;if(!el)return;const rect=el.getBoundingClientRect();if(!rect.width)return;
@@ -927,9 +955,9 @@ createApp({
       if(e.key==='ArrowLeft'){e.preventDefault();heroPosition.value=Math.max(5,heroPosition.value-5);}
       else if(e.key==='ArrowRight'){e.preventDefault();heroPosition.value=Math.min(95,heroPosition.value+5);}
     }
-    watch(imageLoaded,loaded=>{if(!loaded)drawWelcome();});
+    watch(imageLoaded,loaded=>{if(!loaded)showWelcome();});
     onMounted(()=>{
-      drawWelcome();
+      showWelcome();
       if(typeof navigator==='undefined'||!navigator.webdriver||location.search.includes('intro=1')){
         playIntroCurtain();
       }
@@ -1636,7 +1664,7 @@ createApp({
       cancelUprightAnalysis();
       stopHeroSplitSweep();if(parallaxRaf!==null)cancelAnimationFrame(parallaxRaf);
       clearTimeout(curtainTimerA);clearTimeout(curtainTimerB);clearInterval(curtainTick);clearTimeout(editionSwitchTimer);clearTimeout(noticeTimer);revealObserver?.disconnect();
-      importVersion++;aiAbort?.abort();welcomeVersion++; observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
+      importVersion++;aiAbort?.abort();welcomeVersion++;welcomeImages.clear(); observer?.disconnect(); clearTimeout(thumbnailTimer);thumbnailGeneration++; if (frame !== null) cancelAnimationFrame(frame);
       renderer?.dispose();
       if (originalImageUrl.value) URL.revokeObjectURL(originalImageUrl.value);
       window.removeEventListener('popstate',authorHistoryChanged);window.removeEventListener('message',communityMessage);window.removeEventListener('message',authOverlayMessage);window.removeEventListener('keydown', keydown); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('scroll', onWindowScroll); window.removeEventListener('storage', authStorageChanged); window.removeEventListener('storage', storedPreferencesChanged); window.removeEventListener('landscape:user-updated', onUserUpdated); document.removeEventListener('click', closeUserMenu);
@@ -1647,7 +1675,7 @@ createApp({
       uprightLoupe,uprightLoupeCanvas,uprightEndpointFocus,hideUprightLoupe,uprightMode,uprightDisplay,uprightGuides,uprightAxis,uprightSelected,uprightStatus,uprightInvalid,uprightBusy,uprightApplyBlocked,beginUprightGuides,automaticPerspective,resetUpright,uprightPointerDown,uprightPointerMove,uprightPointerUp,uprightGuideKey,deleteUprightGuide,
       pendingPreset,presetConfirmDialog,cancelPreset,confirmPreset,
       curtain,playIntroCurtain,switchToEditor,editionSwitching,updateMatSpotlight,resetMatSpotlight,
-      openLogin,editorBlank,openEditorWorkspace,returnToHome,confirmReturnHome,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroCanvas,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
+      openLogin,editorBlank,openEditorWorkspace,returnToHome,confirmReturnHome,photoStripCollapsed,setPhotoStripCollapsed,photos,activePhotoId,importing,photoBusy,activatePhoto,photoKey,askClosePhoto,removePhoto,closePhotoId,closePhotoDialog,samples,heroEditions,heroEditionKey,activeHeroEdition,selectHeroEdition,welcomeStage,heroDragging,startHeroDrag,moveHeroDrag,stopHeroDrag,heroHandleKey,trySample,heroPosition,heroReady,frameOpen,frameDialog,frameCanvas,frameOptions,frameScale,frameExporting,frameReady,frameLoading,frameError,prepareFrameMaterials,registerFrameThumb,frameDimensions,frameStyles:Frames.styles,openFrames,exportFrame,
 
       legacyBrightnessControl,panelTab,panelTabs,panelScroller,switchPanel,tabKey,aiConnection,refreshAIStatus,aiDraft,aiInput,aiMessages,aiUnread,aiDemo,aiAppliedName,locateProposal,presetCategory,presetCategories,presetSearch,presetFavorites,presetIntro,visiblePresets,legacyPresets,activePreset,applyPreset,setPresetAmount,resetPresetAmount,removePreset,togglePresetFavorite,registerThumbnail,requestThumbnails,groupAdjusted,compareGroup,holdGroup,resetToolGroup,proposalSummary,endGroupComparison:()=>{compareGroup.value=null;},
       effectControls,vignetteControls,vignetteMode,changeVignetteMode,calibrationControls,maskControls,advancedValue,setAdvanced,inputAdvanced,resetAdvanced,resetAdvancedGroup,
