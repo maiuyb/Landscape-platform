@@ -1187,6 +1187,18 @@ async function openDetail(id) {
     ? `<span class="detail-fav-count">★ 收藏 ${rec.favorite_count || 0}</span>`
     : `<button class="btn ${rec.is_favorited ? 'ghost' : ''}" id="dFav">${rec.is_favorited ? '★ 已收藏' : '☆ 收藏'}（${rec.favorite_count}）</button>`;
   const delBtn = owner ? `<button class="btn danger" id="dDel" data-work-id="${Number(rec.id)}">删除作品</button>` : '';
+  const sourceLink = (url, label) => {
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return esc(label);
+      return `<a href="${esc(parsed.href)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
+    } catch { return esc(label); }
+  };
+  const source = rec.source ? `<aside class="recipe-source">
+    <p>摄影原作：${esc(rec.source.photographer)} · ${sourceLink(rec.source.source_url, '查看原作')} · ${sourceLink(rec.source.license_url, rec.source.license)}</p>
+    <p>${esc(rec.source.before_note)}</p>
+    ${rec.parameter_summary ? `<p class="recipe-parameter-summary">${esc(rec.parameter_summary)}</p>` : ''}
+  </aside>` : '';
 
   $('#detailBody').innerHTML = `
     <h3>${esc(rec.name)}</h3>
@@ -1195,6 +1207,7 @@ async function openDetail(id) {
       <div class="card-meta">${rec.author_id ? `<button type="button" class="author-link" data-author-id="${rec.author_id}">@ ${esc(rec.author)}</button>` : `<span>@ ${esc(rec.author)}</span>`}${rec.category ? `<span class="chip">${esc(rec.category)}</span>` : ''}</div>
       <div class="detail-tags">${(rec.tags || []).map((t) => `<span class="chip">#${esc(t)}</span>`).join(' ')}</div>
       <p class="desc">${esc(rec.description || '（暂无说明）')}</p>
+      ${source}
       <button class="recipe-toggle" id="recipeToggle" type="button" aria-expanded="false" aria-controls="recipeBody">
         <span>调色配方</span>
         <svg class="recipe-caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>

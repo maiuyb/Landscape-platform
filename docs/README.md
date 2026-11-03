@@ -15,5 +15,6 @@
 | 运维 | [AI 接入](operations/ai.md) | 模式、配置、请求数据、执行限制 |
 | 运维 | [账号与积分](operations/accounts.md) | 注册、邮箱、隐私、积分及赞助核验 |
 | 运维 | [部署运维](operations/deployment.md) | 安装、HTTPS、自动更新、数据与恢复 |
+| 运维 | [社区素材导入](operations/community-library.md) | 200 组前后图、完整配方、来源说明和原位更新 |
 
 第一次了解项目，先读根 [README](../README.md)、产品需求和研究计划。接续开发时再阅读架构、测试说明及相关运维文档。

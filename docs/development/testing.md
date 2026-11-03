@@ -45,6 +45,8 @@ npm.cmd run test:browser -- auth-security-browser.cjs account-preferences-browse
 
 `welcome-startup` 延迟首组原图与效果图，等待真实开屏动画结束，检查内嵌预览仍可见、原图不等效果图就能显示，以及最终对比滑杆就绪；根路径和 `/landscape` 分别验证。
 
+`test_community_import.py` 检查社区素材的预检、原位更新、重复导入、非法图片/配方/来源拒绝和写入失败回滚，保留收藏、作者及无关作品。它使用临时合成素材，不要求本地存在 200 张摄影资料。真实交付包另通过[社区素材导入](../operations/community-library.md)的准备工具逐张验证。
+
 ## 夹具与结果
 
 `isolated-browser-support.cjs` 管理服务生命周期；`community-test-server.py` 使用临时存储和合成账号种子；`credits-browser-server.py` 使用内存邮箱。测试用入口只存在于夹具，不注册到生产应用。功能账号检查通过夹具准备用户，认证专项通过真实认证接口检查邮箱与挑战。

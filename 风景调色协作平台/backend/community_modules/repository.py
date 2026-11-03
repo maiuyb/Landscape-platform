@@ -321,5 +321,10 @@ def serialize_recipe(conn, row, user_id=None, with_steps=True):
     }
     if with_steps:
         data['steps'] = _json_list(row['steps'])
+        source = conn.execute('SELECT * FROM recipe_sources WHERE recipe_id = ?', (row['id'],)).fetchone()
+        if source:
+            data['source'] = {key: source[key] for key in
+                              ('photographer', 'source_url', 'license', 'license_url', 'before_note')}
+            data['parameter_summary'] = source['parameter_summary']
     data.update(recovery_info(row['deleted_at'] if 'deleted_at' in keys else None))
     return data

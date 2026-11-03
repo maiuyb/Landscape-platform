@@ -70,6 +70,20 @@ def init_db():
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS recipe_sources (
+            recipe_id INTEGER PRIMARY KEY REFERENCES recipes(id) ON DELETE CASCADE,
+            dataset TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            photographer TEXT NOT NULL,
+            source_url TEXT NOT NULL,
+            license TEXT NOT NULL,
+            license_url TEXT NOT NULL,
+            before_note TEXT NOT NULL,
+            parameter_summary TEXT NOT NULL,
+            source_sha256 TEXT NOT NULL,
+            content_digest TEXT NOT NULL,
+            UNIQUE(dataset, source_id)
+        )''')
         c.execute('''CREATE TABLE IF NOT EXISTS favorites (
             user_id INTEGER NOT NULL,
             recipe_id INTEGER NOT NULL,

@@ -163,6 +163,11 @@ html.embedded .search-submit:hover { background: var(--gallery-forest-hover); }
   font-weight: 600; color: var(--gallery-ink);
 }
 .muted { color: var(--gallery-caption); font-size: 12px; }
+.recipe-source { margin: 12px 0; padding: 12px 14px; border-left: 2px solid var(--gallery-border); background: var(--gallery-mat); color: var(--gallery-caption); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.recipe-source p { margin: 0 0 6px; }
+.recipe-source p:last-child { margin-bottom: 0; }
+.recipe-source a { color: var(--gallery-forest); text-decoration: underline; }
+.recipe-source .recipe-parameter-summary { color: var(--gallery-ink); }
 
 .recommend-row {
   display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px;
