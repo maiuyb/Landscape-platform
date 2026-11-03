@@ -919,7 +919,11 @@ createApp({
         try{await prepareWelcomeImages(key);}catch{/* A selected edition can retry a failed preload. */}
       }
     }
-    function showWelcome(){return selectHeroEdition(heroEditionKey.value,false,false);}
+    function showWelcome(){
+      // Reveal the initial original/inline preview independently of the after image.
+      nextTick(initScrollReveal);
+      return selectHeroEdition(heroEditionKey.value,false,false);
+    }
     async function selectHeroEdition(key,scroll=false,animate=true){
       if(!heroEditions[key])return;
       const version=++welcomeVersion;
