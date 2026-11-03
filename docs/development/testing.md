@@ -36,7 +36,7 @@ npm.cmd run test:browser -- auth-security-browser.cjs account-preferences-browse
 | 历史、预设与会话 | `editor-feedback`、`editor-history-gesture`、`editor-geometry-history`、`editor-presets`、`editor-workspace`、`editor-welcome`、`welcome-images`、`welcome-startup` |
 | AI 与配方复用 | `editor-ai`、`editor-recipe-reuse`、`editor-share-cancel`、`editor-account-workflow` |
 | 构图 | `editor-upright`、`editor-upright-loupe` |
-| 社区与部署路径 | `editor-community`、`community-main-compatibility`、`community-images`、`community-recommendation-images`、`deployment` |
+| 社区与部署路径 | `editor-community`、`community-main-compatibility`、`community-images`、`community-loading`、`community-recommendation-images`、`deployment` |
 | 用户管理 | `auth-security`、`account-preferences`、`author-portfolio`、`user-center`、`credits`、`work-management` |
 
 表中名称均补上 `-browser.cjs`。界面已移除的配方文件下载/导入不再作为操作入口；底层配方/像素回归通过仅限本地测试的 observer 读取状态，并经当前配方预览流程注入合成样例。账号保存与社区发布仍通过实际界面/API 检查。
@@ -46,6 +46,8 @@ npm.cmd run test:browser -- auth-security-browser.cjs account-preferences-browse
 `welcome-startup` 延迟首组原图与效果图，等待真实开屏动画结束，检查内嵌预览仍可见、原图不等效果图就能显示，以及最终对比滑杆就绪；根路径和 `/landscape` 分别验证。
 
 `test_community_import.py` 检查社区素材的预检、原位更新、重复导入、非法图片/配方/来源拒绝和写入失败回滚，保留收藏、作者及无关作品。它使用临时合成素材，不要求本地存在 200 张摄影资料。真实交付包另通过[社区素材导入](../operations/community-library.md)的准备工具逐张验证。
+
+`community-loading-browser` 控制慢响应、临时失败和持续失败，检查最多 4 个并行图片请求、慢图不阻塞其他图片、有限重试且不下载原图、远处图片暂缓、实际列宽选图和放大时取原图。根路径和 `/landscape` 均覆盖。后台预生成、单次解码多尺寸、公开图片/私有接口缓存边界和 Nginx 配置失败恢复另有后端测试。
 
 ## 夹具与结果
 

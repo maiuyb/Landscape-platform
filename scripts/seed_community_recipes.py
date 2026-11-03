@@ -205,9 +205,8 @@ def run_import(database, uploads, assets, owner, apply, allow_new, warm):
         if warm:
             from thumbnails import build_thumbnail
             for entry in changes:
-                for width in (800, 1200):
-                    if not build_thumbnail(uploads, entry['asset']['files'][1][1], width):
-                        raise ValueError('Thumbnail preparation failed')
+                if not build_thumbnail(uploads, entry['asset']['files'][1][1], 1200, prepare_all=True):
+                    raise ValueError('Thumbnail preparation failed')
         with closing(connection(database)) as conn:
             conn.execute('BEGIN IMMEDIATE')
             try:

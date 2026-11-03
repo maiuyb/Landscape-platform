@@ -98,6 +98,27 @@ class UploadTests(unittest.TestCase):
         finally:
             self.backend.app.wsgi_app = original
 
+    def test_public_image_cache_policy_excludes_errors_and_all_business_responses(self):
+        from PIL import Image
+        image = Path(self.backend.UPLOAD_DIR)/'cache-policy.png'
+        Image.new('RGB', (64, 40), '#315c73').save(image)
+        for path in ('/uploads/cache-policy.png', '/api/thumb/cache-policy.png?w=400'):
+            response = self.client.get(path, buffered=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers.getlist('Cache-Control'), ['public, max-age=3600'])
+            cached = self.client.get(path, headers={'If-None-Match':response.headers['ETag']}, buffered=True)
+            self.assertEqual(cached.status_code, 304)
+            self.assertEqual(cached.headers['Cache-Control'], 'public, max-age=3600')
+        for path in ('/api/health','/api/recipes','/api/auth/me','/api/thumb/missing.png','/uploads/missing.png'):
+            self.assertEqual(self.client.get(path).headers['Cache-Control'], 'no-store')
+
+    def test_upload_queues_preparation_without_blocking_on_image_decode(self):
+        with patch.dict(self.backend.app.config, {'THUMBNAIL_WARMUP':True}), \
+             patch.object(self.backend.thumbnail_warmer, 'submit') as submit:
+            response = self.upload(64)
+        self.assertEqual(response.status_code, 200)
+        submit.assert_called_once_with(response.get_json()['url'].rsplit('/',1)[1])
+
     def test_exactly_twenty_mib_is_accepted_with_multipart_overhead(self):
         limit = self.backend.MAX_UPLOAD_FILE_BYTES
         response = self.upload(limit)

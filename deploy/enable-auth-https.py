@@ -169,7 +169,10 @@ def main():
     proxy_connect_timeout 5s;
     add_header Cache-Control "no-store" always;
 '''
-        PROXY.write_text('location = /landscape { return 308 /landscape/; }\n'
+        image_include = ('include /etc/nginx/snippets/landscape-image-proxy.conf;\n'
+            if Path('/etc/nginx/snippets/landscape-image-proxy.conf').is_file()
+            and Path('/etc/nginx/conf.d/landscape-images.conf').is_file() else '')
+        PROXY.write_text(image_include+'location = /landscape { return 308 /landscape/; }\n'
             'location ^~ /landscape/api/auth/ {\n'
             '    limit_req zone=landscape_auth_ip burst=10 nodelay;\n'
             '    limit_req zone=landscape_auth_site burst=20 nodelay;\n'
@@ -178,7 +181,8 @@ def main():
             'location @landscape_auth_limited {\n    default_type application/json;\n'
             '    add_header Retry-After 5 always;\n    add_header Cache-Control "no-store" always;\n'
             '    return 429 \'{"error":"操作过于频繁，请稍后重试。","code":"rate_limited","retry_after_seconds":5}\';\n}\n'
-            'location /landscape/ {\n    proxy_pass http://127.0.0.1:5051/;\n    client_max_body_size 21m;\n'+upstream+'}\n')
+            'location /landscape/ {\n    proxy_pass http://127.0.0.1:5051/;\n    client_max_body_size 21m;\n'+
+            upstream.replace('    add_header Cache-Control "no-store" always;\n', '')+'}\n')
         TLS.write_text('server {\n    listen 443 ssl;\n    server_name '+IP+';\n'
             '    ssl_certificate /etc/letsencrypt/live/landscape-ip/fullchain.pem;\n'
             '    ssl_certificate_key /etc/letsencrypt/live/landscape-ip/privkey.pem;\n'

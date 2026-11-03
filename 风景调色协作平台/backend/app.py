@@ -2,6 +2,7 @@
 import os
 import uuid
 from thumbnails import build_thumbnail, upload_name, width_bucket, ThumbnailBusy
+from thumbnail_jobs import ThumbnailWarmer
 from ai_service import AIService, AIError, MAX_BODY, validate_request
 from flask import Flask, Request, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -72,6 +73,25 @@ app.register_blueprint(credits_bp)
 from community_modules.security import install as install_auth_security
 install_auth_security(app)
 
+# Production releases warm existing covers off the request path. Tests/development
+# can opt in explicitly without starting work against a user's local database.
+app.config['THUMBNAIL_WARMUP'] = os.environ.get('LANDSCAPE_WARM_THUMBNAILS',
+    '1' if os.environ.get('LANDSCAPE_REVISION') else '0') == '1'
+thumbnail_warmer = ThumbnailWarmer(UPLOAD_DIR)
+if app.config['THUMBNAIL_WARMUP']:
+    thumbnail_warmer.start_existing(app.config['COMMUNITY_DB_PATH'])
+
+
+@app.after_request
+def cache_policy(response):
+    public_image = request.path.startswith(('/api/thumb/', '/uploads/'))
+    if public_image and response.status_code in (200, 304):
+        response.headers['Cache-Control'] = 'public, max-age=3600'
+    else:
+        # HTML/scripts and every account/API response continue to update immediately.
+        response.headers['Cache-Control'] = 'no-store'
+    return response
+
 @app.route('/community/')
 def community_index():
     return send_from_directory(os.path.join(FRONTEND_DIR, 'community'), 'index.html')
@@ -115,7 +135,8 @@ def upload():
     filename = f"{uuid.uuid4().hex}.{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     file.save(filepath)
-    # Generate lazily under the shared thumbnail memory/concurrency limit.
+    if app.config['THUMBNAIL_WARMUP']:
+        thumbnail_warmer.submit(filename)
     return json_ok({
         'url': f'{request.script_root}/uploads/{filename}',
         'thumb': f'{request.script_root}/api/thumb/{filename}?w=800'

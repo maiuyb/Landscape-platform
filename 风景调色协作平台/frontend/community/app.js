@@ -253,10 +253,10 @@ function uploadOriginalUrl(url) {
   const name = localUploadName(url);
   return name ? `${APP_PREFIX}/uploads/${name}` : String(url || '');
 }
-// Image attributes can retry the original once; a failed fallback remains an honest placeholder.
+// Legacy avatar/portfolio images retain their fallback; managed community photos retry thumbnails only.
 document.addEventListener('error', event => {
   const img = event.target;
-  if (!(img instanceof HTMLImageElement) || !img.dataset.originalSrc) return;
+  if (!(img instanceof HTMLImageElement) || !img.dataset.originalSrc || img.dataset.thumbSrc) return;
   img.removeAttribute('srcset');
   if (!img.dataset.usedOriginal) {
     img.dataset.usedOriginal = '1';
@@ -649,7 +649,7 @@ async function loadRecommend() {
   box.innerHTML = list.map((rec, i) => `
     <div class="mini" data-id="${rec.id}">
       ${i < 3 ? `<div class="rank">TOP${i + 1}</div>` : ''}
-      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 1200))}" width="400" height="533" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" data-thumb-src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 1200))}" width="400" height="533" alt="${esc(rec.name)}" loading="lazy" decoding="async">
       <div class="cap">${esc(rec.name)}<br><span class="muted">★ ${rec.favorite_count}</span></div>
     </div>`).join('') || '<div class="muted">暂无推荐</div>';
   box.querySelectorAll('.mini').forEach((m) => { m.onclick = () => openDetail(+m.dataset.id); });
@@ -848,7 +848,7 @@ function appendGalleryCard(rec) {
   btn.type = 'button';
   btn.className = 'gallery-card';
   btn.setAttribute('aria-label', rec.name);
-  btn.innerHTML = `<img data-original-src="${esc(uploadOriginalUrl(cover))}" src="${esc(thumbUrl(cover, 800))}" srcset="${esc(thumbSrcset(cover))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async"><span class="gallery-meta"><strong>${esc(rec.name)}</strong><span>${rec.category ? esc(rec.category)+' · ' : ''}☆ ${count}</span></span>`;
+  btn.innerHTML = `<img data-original-src="${esc(uploadOriginalUrl(cover))}" data-thumb-src="${esc(thumbUrl(cover, 800))}" data-thumb-srcset="${esc(thumbSrcset(cover))}" sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async"><span class="gallery-meta"><strong>${esc(rec.name)}</strong><span>${rec.category ? esc(rec.category)+' · ' : ''}☆ ${count}</span></span>`;
   btn.onclick = () => openDetail(rec.id);
   if (state.view === 'mine') {
     const wrapper = document.createElement('div');
@@ -892,7 +892,7 @@ function appendCard(rec) {
   card.className = 'card';
   card.innerHTML = `
     <div class="card-cover" data-id="${rec.id}">
-      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 800))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 480px) 100vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <img data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" data-thumb-src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 800))}" data-thumb-srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="(max-width: 480px) 100vw, (max-width: 900px) 33vw, 25vw" width="400" height="260" alt="${esc(rec.name)}" loading="lazy" decoding="async">
       ${rec.category ? `<span class="badge">${esc(rec.category)}</span>` : ''}
     </div>
     <div class="card-body">
@@ -959,7 +959,7 @@ function previewImage(rec) {
   if (!hasPair) {
     return {
       pair: false,
-      html: `<div class="detail-imgs single"><figure><img class="detail-img" src="${esc(uploadOriginalUrl(after || before))}" alt="${esc(rec.name)}" decoding="async">
+      html: `<div class="detail-imgs single"><figure><img class="detail-img" data-thumb-src="${esc(thumbUrl(after || before, 1200))}" data-original-src="${esc(uploadOriginalUrl(after || before))}" alt="${esc(rec.name)}" decoding="async">
         <figcaption class="muted">单图 · 未提供前后对比</figcaption></figure></div>`,
     };
   }
@@ -972,8 +972,8 @@ function previewImage(rec) {
   return {
     pair: true,
     html: `<div class="detail-imgs pair">
-        <figure><img class="detail-img" src="${esc(uploadOriginalUrl(before))}" alt="${esc(capA)}" decoding="async"><figcaption class="muted">${esc(capA)}</figcaption></figure>
-        <figure><img class="detail-img" src="${esc(uploadOriginalUrl(after))}" alt="${esc(capB)}" decoding="async"><figcaption class="muted">${esc(capB)}</figcaption></figure>
+        <figure><img class="detail-img" data-thumb-src="${esc(thumbUrl(before, 1200))}" data-original-src="${esc(uploadOriginalUrl(before))}" alt="${esc(capA)}" decoding="async"><figcaption class="muted">${esc(capA)}</figcaption></figure>
+        <figure><img class="detail-img" data-thumb-src="${esc(thumbUrl(after, 1200))}" data-original-src="${esc(uploadOriginalUrl(after))}" alt="${esc(capB)}" decoding="async"><figcaption class="muted">${esc(capB)}</figcaption></figure>
       </div>${note}`,
   };
 }
@@ -1226,7 +1226,7 @@ async function openDetail(id) {
   $('#detailBody').querySelectorAll('.detail-img').forEach((img) => {
     img.addEventListener('click', (event) => {
       event.stopPropagation();
-      openLightbox(img.currentSrc || img.src, img.alt);
+      openLightbox(img.dataset.originalSrc || img.currentSrc || img.src, img.alt);
     });
   });
   $('#detailBody').querySelectorAll('.author-link').forEach((link) => {
@@ -1486,7 +1486,7 @@ function appendRecord(rec) {
   const el = document.createElement('div');
   el.className = 'record';
   el.innerHTML = `
-      <img class="record-thumb" data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 200))}" srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="88px" width="88" height="60" alt="${esc(rec.name)}" loading="lazy" decoding="async">
+      <img class="record-thumb" data-original-src="${esc(uploadOriginalUrl(rec.cover_after || rec.cover_before))}" data-thumb-src="${esc(thumbUrl(rec.cover_after || rec.cover_before, 200))}" data-thumb-srcset="${esc(thumbSrcset(rec.cover_after || rec.cover_before))}" sizes="88px" width="88" height="60" alt="${esc(rec.name)}" loading="lazy" decoding="async">
     <div class="record-info">
       <div class="record-name">${esc(rec.name)}${rec.category ? ` <span class="chip">${esc(rec.category)}</span>` : ''}</div>
       <div class="record-meta">发布时间：${esc(rec.created_at || '—')}</div>

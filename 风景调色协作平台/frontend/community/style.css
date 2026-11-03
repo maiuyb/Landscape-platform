@@ -369,6 +369,9 @@ html.embedded .search-submit:hover { background: var(--gallery-forest-hover); }
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .record:hover { transform: translateY(-1px); box-shadow: var(--gallery-shadow-print); }
+img[data-thumb-src] { transition: opacity .16s ease; }
+img[data-thumb-src]:not([data-image-status="ready"]):not([data-image-status="failed"]) { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { img[data-thumb-src] { transition: none; } }
 .record-thumb {
   width: 88px; height: 60px; object-fit: cover;
   border-radius: 2px; flex-shrink: 0; background: #141514;
@@ -991,6 +994,7 @@ html[data-gallery-columns="5"] .grid:not(.gallery-mode) { grid-template-columns:
 }
 .gallery-card:hover .gallery-meta,
 .gallery-card:focus-visible .gallery-meta { opacity: 1; transform: translateY(0); }
+.gallery-card:has(img[data-thumb-src]:not([data-image-status="ready"])) { background: var(--gallery-mat); }
 .gallery-meta strong {
   font-family: var(--gallery-serif);
   font-size: calc(14px * var(--ui-font-scale)); font-weight: 600; line-height: 1.35;

@@ -65,7 +65,8 @@ def main():
             raise SystemExit('Site layout differs; stop for review before changing Nginx.')
     source = Path(__file__).resolve().parent
     for name in ('landscape.service', 'landscape-update.service', 'landscape-update.timer',
-                 'landscape-start.py', 'landscape-update.py', 'landscape-nginx.conf'):
+                 'landscape-start.py', 'landscape-update.py', 'landscape-nginx.conf',
+                 'landscape-image-cache.conf', 'landscape-image-proxy.conf'):
         if not (source / name).is_file():
             raise SystemExit('Missing installation file: ' + name)
     app_exists = Path('/etc/systemd/system/landscape.service').exists()
@@ -128,6 +129,12 @@ def main():
     shutil.copyfile(site, backup / ('nginx-site-' + stamp + '.conf'))
     snippet = Path('/etc/nginx/snippets/landscape.conf')
     snippet_before = snippet.read_bytes() if snippet.exists() else None
+    image_files = {Path('/etc/nginx/conf.d/landscape-images.conf'): 'landscape-image-cache.conf',
+                   Path('/etc/nginx/snippets/landscape-image-proxy.conf'): 'landscape-image-proxy.conf'}
+    image_before = {target: target.read_bytes() if target.exists() else None for target in image_files}
+    for target, name in image_files.items():
+        shutil.copyfile(source / name, target)
+        target.chmod(0o644)
     shutil.copyfile(source / 'landscape-nginx.conf', snippet)
     snippet.chmod(0o644)
     if include not in before:
@@ -140,6 +147,11 @@ def main():
             snippet.unlink()
         else:
             snippet.write_bytes(snippet_before)
+        for target, content in image_before.items():
+            if content is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.write_bytes(content)
         raise
     run('systemctl', 'daemon-reload')
     run('systemctl', 'enable', 'landscape.service', 'landscape-update.timer')

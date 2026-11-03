@@ -62,6 +62,17 @@ class ThumbnailTests(unittest.TestCase):
         self.assertEqual(len(count), 1)
         self.assertEqual(len(set(results)), 1)
 
+    def test_background_preparation_decodes_once_and_preserves_existing_buckets(self):
+        existing = thumb.build_thumbnail(self.root, self.source.name, 800)
+        before = existing.read_bytes()
+        with patch.object(thumb.Image, 'open', wraps=Image.open) as opened:
+            thumb.build_thumbnail(self.root, self.source.name, 1200, prepare_all=True)
+        self.assertEqual(opened.call_count, 1)
+        self.assertEqual(existing.read_bytes(), before)
+        with patch.object(thumb.Image, 'open', side_effect=AssertionError('prepared sizes must not decode')):
+            for width in thumb.WIDTHS:
+                self.assertTrue(thumb.build_thumbnail(self.root, self.source.name, width).is_file())
+
     def test_cross_process_generation_lock(self):
         folder = self.root / '.thumbs'; folder.mkdir()
         script = '''import importlib.util,sys,time

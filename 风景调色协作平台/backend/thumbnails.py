@@ -113,7 +113,7 @@ def _prune(folder, keep):
             continue
 
 
-def build_thumbnail(directory, name, width):
+def build_thumbnail(directory, name, width, *, prepare_all=False):
     source = upload_path(directory, name)
     if not source:
         return None
@@ -122,11 +122,13 @@ def build_thumbnail(directory, name, width):
     folder.mkdir(exist_ok=True)
     info = source.stat()
     signature = f'{info.st_mtime_ns:x}-{info.st_size:x}'
-    target = folder / f'{name}.{signature}.{width}.webp'
-    if target.is_file():
+    targets = {w: folder / f'{name}.{signature}.{w}.webp' for w in (WIDTHS if prepare_all else (width,))}
+    target = targets[width]
+    if all(path.is_file() for path in targets.values()):
         return target
     with _generation_lock(folder):
-        if target.is_file():
+        missing = {w: path for w, path in targets.items() if not path.is_file()}
+        if not missing:
             return target
         temporary = folder / ('.tmp-' + uuid.uuid4().hex)
         try:
@@ -138,18 +140,21 @@ def build_thumbnail(directory, name, width):
                     # JPEG can decode directly at a reduced resolution, before full pixel allocation.
                     if image.format == 'JPEG':
                         rotated = image.getexif().get(274) in (5, 6, 7, 8)
-                        box = (round(width * image.width / image.height), width) if rotated else (width, round(width * image.height / image.width))
+                        largest = max(missing)
+                        box = (round(largest * image.width / image.height), largest) if rotated else (largest, round(largest * image.height / image.width))
                         image.draft('RGB', tuple(max(1, n) for n in box))
                     ImageOps.exif_transpose(image, in_place=True)
                     if image.mode not in ('RGB', 'RGBA'):
                         image = image.convert('RGB')
-                    height = max(1, round(image.height * min(1, width / image.width)))
-                    image.thumbnail((width, height), Image.Resampling.LANCZOS, reducing_gap=3)
-                    image.save(temporary, format='WEBP', quality=82, method=4)
-            after = source.stat()
-            if (after.st_mtime_ns, after.st_size) != (info.st_mtime_ns, info.st_size):
-                return None
-            os.replace(temporary, target)
+                    # Warm all missing buckets with one source decode, shrinking in place.
+                    for size, destination in sorted(missing.items(), reverse=True):
+                        height = max(1, round(image.height * min(1, size / image.width)))
+                        image.thumbnail((size, height), Image.Resampling.LANCZOS, reducing_gap=3)
+                        image.save(temporary, format='WEBP', quality=82, method=4)
+                        after = source.stat()
+                        if (after.st_mtime_ns, after.st_size) != (info.st_mtime_ns, info.st_size):
+                            return None
+                        os.replace(temporary, destination)
             _prune(folder, target)
             return target
         except (OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
