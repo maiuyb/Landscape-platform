@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
 import urllib.request
 from urllib.parse import urlsplit
 
@@ -103,14 +104,20 @@ def verify_live(origin):
         raise ValueError('Need one existing community image for verification')
     name = (recipes[0]['cover_after'] or recipes[0]['cover_before']).rsplit('/', 1)[-1]
     url = base+'/api/thumb/'+name+'?w=800'
-    for _ in range(2):
-        with urllib.request.urlopen(urllib.request.Request(url, method='HEAD'), timeout=20) as response:
+    # systemctl reload returns after signalling the master. Old workers may still
+    # accept the next connection before the replacement workers become ready.
+    deadline = time.monotonic() + 10
+    cache, policy = None, ''
+    while time.monotonic() < deadline:
+        with urllib.request.urlopen(urllib.request.Request(url, method='HEAD'),
+                                    timeout=max(.1, deadline-time.monotonic())) as response:
             headers = response.headers
             policy = ','.join(headers.get_all('Cache-Control', []))
-            if 'no-store' in policy or 'public' not in policy:
-                raise RuntimeError('Public image caching not enabled')
-    if headers.get('X-Landscape-Image-Cache') != 'HIT':
-        raise RuntimeError('Image edge cache did not hit')
+            cache = headers.get('X-Landscape-Image-Cache')
+            if 'no-store' not in policy and 'public' in policy and cache == 'HIT':
+                return
+        time.sleep(.25)
+    raise RuntimeError(f'New image cache did not become ready within 10s (cache={cache}, policy={policy})')
 
 
 def main():

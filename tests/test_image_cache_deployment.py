@@ -1,10 +1,14 @@
 """Real temporary config files; no privileged changes or network."""
 import importlib.util
+import io
+import json
+from email.message import Message
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.response import addinfourl
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('image_cache_installer', ROOT/'deploy/enable-image-cache.py')
@@ -12,6 +16,32 @@ installer = importlib.util.module_from_spec(spec);spec.loader.exec_module(instal
 
 
 class ImageCacheDeploymentTests(unittest.TestCase):
+    def response(self, body=None, policy='no-store', cache=None):
+        headers = Message();headers['Cache-Control'] = policy
+        if cache:headers['X-Landscape-Image-Cache'] = cache
+        return addinfourl(io.BytesIO(json.dumps(body).encode()), headers, 'https://example.test')
+
+    def initial_responses(self):
+        return [self.response({'status':'ok'}), self.response({'recipes':[{'cover_after':'/uploads/photo.jpg'}]})]
+
+    def test_graceful_reload_waits_past_old_worker_and_miss_until_real_hit(self):
+        responses = self.initial_responses() + [
+            self.response(policy='public, max-age=3600, no-store'),
+            self.response(policy='public, max-age=3600',cache='MISS'),
+            self.response(policy='public, max-age=3600',cache='HIT')]
+        with patch.object(installer.urllib.request,'urlopen',side_effect=responses) as request, \
+             patch.object(installer.time,'sleep'):
+            installer.verify_live('https://example.test')
+        self.assertEqual(request.call_count,5)
+
+    def test_wait_is_bounded_and_does_not_accept_a_cache_miss_as_success(self):
+        responses = self.initial_responses() + [self.response(policy='public, max-age=3600',cache='MISS')]
+        with patch.object(installer.urllib.request,'urlopen',side_effect=responses), \
+             patch.object(installer.time,'monotonic',side_effect=[0,0,0,11]), \
+             patch.object(installer.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'within 10s'):
+                installer.verify_live('https://example.test')
+
     def test_only_general_proxy_header_changes_and_upgrade_is_idempotent(self):
         text = '''location ^~ /landscape/api/auth/ {
     limit_req zone=landscape_auth_ip;

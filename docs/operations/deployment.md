@@ -68,7 +68,7 @@ HTTPS 验证后设置不带路径的 `PUBLIC_ORIGIN`，旧 HTTP 项目路径跳�
 sudo python3 /opt/landscape/current/deploy/enable-image-cache.py --apply
 ```
 
-省略 `--apply` 只列出待更新文件。工具保留 HTTP→HTTPS 跳转及认证限流，只更新项目的公开图片规则；配置备份位于 `/var/backups/landscape/image-cache-*`。Nginx 检查、reload、公开健康接口或图片缓存命中验证失败时恢复原配置。不会新增 sudo 授权、修改数据库、读取或修改应用密钥。
+省略 `--apply` 只列出待更新文件。工具保留 HTTP→HTTPS 跳转及认证限流，只更新项目的公开图片规则；配置备份位于 `/var/backups/landscape/image-cache-*`。重载后最多等待 10 秒，让旧工作进程完成平滑切换，并要求实际缓存命中。Nginx 检查、reload、公开健康接口或图片缓存命中验证失败时恢复原配置。不会新增 sudo 授权、修改数据库、读取或修改应用密钥。
 
 线上缩略图响应应只有允许缓存的策略，并在重复访问时出现 `X-Landscape-Image-Cache: HIT`；API 仍应为 `no-store`。浏览器验证需分别使用新会话和同一会话重复访问，检查图片传输量、首屏就绪、失败重试和滚动时加载，不能仅凭图片可访问便认定缓存已生效。
 
