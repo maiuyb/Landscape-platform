@@ -831,8 +831,13 @@ createApp({
         if(panelScroller.value)panelScroller.value.scrollTop=panelScroll[panelTab.value];
         initRenderer();schedulePaint();requestThumbnails();
         if(oldUrl)URL.revokeObjectURL(oldUrl);if(oldImage)oldImage.src='';if(oldPreview){oldPreview.width=1;oldPreview.height=1;}
-        if(waitingRecipe.value){const pending=waitingRecipe.value;waitingRecipe.value=null;await openCommunityRecipe(pending);}
         notify(`已载入 ${entry.file.name} · ${image.naturalWidth} × ${image.naturalHeight}，每张照片的编辑单独保留。`);
+        if(waitingRecipe.value){
+          const pending=waitingRecipe.value;waitingRecipe.value=null;imageLoading.value=false;await nextTick();
+          const recipe=Community.reuse(pending.recipe,{geometry:pending.geometry,masks:pending.masks});
+          beginPreview(recipe,{replaceGeometry:pending.geometry});
+          if(preview.value)applyPreview();
+        }
       }catch(e){if(image)image.src='';URL.revokeObjectURL(url);fail(`读取失败：${e.message}。当前照片已保留。`);}
       finally{if(version===importVersion)imageLoading.value=false;}
     }
@@ -1585,7 +1590,13 @@ createApp({
     }
     function previewCommunityRecipe(){
       if(recipeDetailLoading.value||recipeDetailError.value)return;
-      if(!imageLoaded.value){waitingRecipe.value=Core.clone(recipeDetail.value);closeRecipeDetail();currentView.value='editor';notify('配方已暂存，请先选择自己的照片。');return;}
+      if(!imageLoaded.value){
+        waitingRecipe.value={recipe:Core.clone(recipeDetail.value),geometry:reuseGeometry.value,masks:reuseMasks.value};
+        closeRecipeDetail();currentView.value='editor';
+        notify('请选择一张照片，选择后将自动套用配方。');
+        requestAnimationFrame(()=>document.getElementById('image-input')?.click());
+        return;
+      }
       const recipe=Community.reuse(recipeDetail.value,{geometry:reuseGeometry.value,masks:reuseMasks.value});
       beginPreview(recipe,{replaceGeometry:reuseGeometry.value});
     }

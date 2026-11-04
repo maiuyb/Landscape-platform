@@ -101,7 +101,7 @@
       <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">{{ currentView === 'community' ? '风景配方社区' : (imageLoaded || editorBlank) ? '馆藏暗房显影台' : '协作工作区' }}</span></span></a>
       <nav aria-label="主导航">
         <button v-if="currentView === 'editor' && (imageLoaded || editorBlank)" class="header-home" @click="returnToHome">返回首页</button>
-        <button class="nav-view-btn nav-view-left" :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">编辑器</button>
+        <button class="nav-view-btn nav-view-left" :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">进入工作区</button>
         <button class="nav-view-btn nav-view-right" :aria-current="currentView === 'community' ? 'page' : undefined" @click="openCommunityBrowse">浏览社区</button>
         <button v-if="imageLoaded" class="header-share" @click="openShare" :disabled="locked">分享到社区</button>
         <button v-if="imageLoaded" class="primary header-export" @click="openExport" :disabled="locked">导出照片</button>
@@ -121,7 +121,6 @@
     <div class="notice error notice-toast" v-if="error" role="alert"><span v-text="error"></span><button type="button" class="notice-close" aria-label="关闭错误提示" @click="error = ''">×</button></div>
     <div class="notice notice-toast" v-else-if="message" role="status"><span v-text="message"></span><button type="button" class="notice-close" aria-label="关闭提示" @click="message = ''">×</button></div>
 
-    <div class="notice" v-if="waitingRecipe && !imageLoaded"><span>待用配方「{{ waitingRecipe.name }}」· 选择自己的照片后再预览。</span><button @click="waitingRecipe=null">取消待用配方</button></div>
     <main class="workspace" :class="{'welcome-mode':!imageLoaded && !editorBlank}" v-show="currentView === 'editor'">
       <section class="welcome-page" v-if="!imageLoaded && !editorBlank" @dragover.prevent @drop.prevent="handleDrop" aria-label="照片导入">
         <!-- Section 01: Centered Curatorial Manifesto -->
