@@ -99,6 +99,17 @@ button[aria-current=page] {
   letter-spacing: 0.03em;
 }
 
+.app-header .brand img {
+  border-radius: 50%;
+  box-shadow: 0 4px 12px -3px rgba(140, 101, 62, 0.22);
+  transition: transform 0.36s var(--ease-apple), box-shadow 0.36s var(--ease-apple);
+}
+
+.app-header .brand:hover img {
+  transform: scale(1.06) rotate(8deg);
+  box-shadow: 0 8px 18px -4px rgba(140, 101, 62, 0.32);
+}
+
 .app-header .brand-sub {
   color: var(--bronze);
   font-family: var(--gallery-sans);
