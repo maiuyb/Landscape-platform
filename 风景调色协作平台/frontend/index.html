@@ -100,7 +100,7 @@
     <header class="app-header">
       <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">{{ currentView === 'community' ? '风景配方社区' : (imageLoaded || editorBlank) ? '馆藏暗房显影台' : '协作工作区' }}</span></span></a>
       <nav aria-label="主导航">
-        <button v-if="currentView === 'editor' && (imageLoaded || editorBlank)" class="header-home" @click="returnToHome">返回首页</button>
+        <button v-if="currentView === 'community' || (currentView === 'editor' && (imageLoaded || editorBlank))" class="header-home" @click="returnToHome">返回首页</button>
         <button class="nav-view-btn nav-view-left" :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">进入工作区</button>
         <button class="nav-view-btn nav-view-right" :aria-current="currentView === 'community' ? 'page' : undefined" @click="openCommunityBrowse">浏览社区</button>
         <button v-if="imageLoaded" class="header-share" @click="openShare" :disabled="locked">分享到社区</button>
@@ -138,7 +138,7 @@
             <button type="button" class="btn-pill welcome-try" @click="trySample(activeHeroEdition)" :disabled="photoBusy">
               先用示例试试看
             </button>
-            <button type="button" class="btn-pill" @click="openCommunity">
+            <button type="button" class="btn-pill welcome-browse" @click="openCommunity">
               浏览社区公开作品 →
             </button>
             <button type="button" class="btn-pill curtain-replay-btn" @click="playIntroCurtain" title="重播山川显影星盘开屏动画">

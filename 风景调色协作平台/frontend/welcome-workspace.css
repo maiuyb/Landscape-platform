@@ -158,6 +158,15 @@
   border-color: var(--gallery-ink);
   background: rgba(23, 24, 23, 0.035);
 }
+.welcome-page .intro-cta-group .btn-pill {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 21px;
+}
+.welcome-page .intro-cta-group .welcome-try,
+.welcome-page .intro-cta-group .welcome-browse {
+  font-weight: 500;
+}
 .welcome-page .btn-pill.solid {
   background: var(--gallery-forest);
   color: #FFFFFF;
@@ -213,7 +222,7 @@
   margin-bottom: 16px;
 }
 .quiet-promise {
-  font-size: 12px;
+  font-size: 18px;
   color: var(--gallery-caption);
   letter-spacing: 0.02em;
 }
