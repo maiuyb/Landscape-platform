@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>风景调色协作平台</title>
-  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="icon" href="logo.svg?v=a1" type="image/svg+xml">
+  <link rel="alternate icon" href="favicon.ico?v=a1" type="image/x-icon">
   <link rel="preload" as="image" href="assets/welcome/alpine-lake.jpg" fetchpriority="high">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="theme.css">
@@ -98,7 +99,7 @@
     </div>
 
     <header class="app-header">
-      <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg" alt=""><span>风景调色<span class="brand-sub">{{ currentView === 'community' ? '风景配方社区' : (imageLoaded || editorBlank) ? '馆藏暗房显影台' : '协作工作区' }}</span></span></a>
+      <a class="brand" href="#" @click.prevent="switchToEditor"><img src="logo.svg?v=a1" alt=""><span>风景调色<span class="brand-sub">{{ currentView === 'community' ? '风景配方社区' : (imageLoaded || editorBlank) ? '馆藏暗房显影台' : '协作工作区' }}</span></span></a>
       <nav aria-label="主导航">
         <button v-if="currentView === 'community' || (currentView === 'editor' && (imageLoaded || editorBlank))" class="header-home" @click="returnToHome">返回首页</button>
         <button class="nav-view-btn nav-view-left" :aria-current="currentView === 'editor' ? 'page' : undefined" @click="openEditorWorkspace">进入工作区</button>
