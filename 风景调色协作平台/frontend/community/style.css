@@ -678,7 +678,7 @@ html.uc-mode .toolbar .tabs { display: none; }
   font-family: var(--gallery-sans); font-size: 13px;
 }
 .uc-back:hover { border-color: var(--gallery-forest); color: var(--gallery-forest); }
-.uc-account-panel { max-width: 760px; }
+.uc-account-panel { max-width: 980px; }
 .uc-account-panel h1 {
   font-family: var(--gallery-serif); font-size: 28px; font-weight: 600;
   color: var(--gallery-ink); margin: 0 0 20px;

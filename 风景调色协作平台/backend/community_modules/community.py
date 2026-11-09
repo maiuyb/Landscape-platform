@@ -365,12 +365,13 @@ def my_uploads():
     """上传记录：包含已删除的内容及其上传/删除状态，用于 7 天找回。"""
     page, page_size = _paginate_params()
     status = request.args.get('status', 'all')
+    search = request.args.get('search', '').strip()[:100]
     if status not in ('all', 'deleted'):
         return jsonify({'error': '作品记录筛选不正确'}), 400
     conn = get_db()
     try:
         rows, total = repo.query_recipes(
-            conn, author_id=g.current_user['id'], sort='latest',
+            conn, author_id=g.current_user['id'], search=search, sort='latest',
             page=page, page_size=page_size, include_deleted=True,
             deleted_only=(status == 'deleted'))
         items = [repo.serialize_recipe(conn, r, g.current_user['id']) for r in rows]

@@ -29,6 +29,7 @@ const state = {
   pairing: 'manual',
   profileAvatarDraft: null,
   recordFilter: 'all',
+  recordSearch: '',
 };
 
 const $ = (s) => document.querySelector(s);
@@ -667,12 +668,15 @@ async function loadCategories() {
 }
 
 function workScope() {
-  return state.view === 'mine' || state.view === 'favorites' ? state.view : '';
+  if (state.view === 'mine' || state.view === 'favorites') return state.view;
+  if (state.view === 'records') return state.recordFilter === 'deleted' ? 'deleted' : 'records';
+  return '';
 }
 
 function workFilterActive(scope = workScope()) {
   if (scope === 'mine') return !!(state.personalSearch || state.mineCategory);
   if (scope === 'favorites') return !!(state.favoriteSearch || state.favoriteCategory);
+  if (scope === 'records' || scope === 'deleted') return !!state.recordSearch;
   return false;
 }
 
@@ -698,7 +702,7 @@ let workCategoryRequest = 0;
 let workSearchTimer = null;
 
 function updateWorkDividers(view = state.view) {
-  const show = view === 'mine' || view === 'favorites';
+  const show = ['mine', 'favorites', 'records', 'deleted'].includes(view);
   for (const id of ['workIntroDivider', 'workContentDivider']) {
     const divider = document.getElementById(id);
     if (divider) divider.hidden = !show;
@@ -713,14 +717,21 @@ function updateWorkFilter() {
   if (!scope) return;
   const input = $('#workSearch');
   const select = $('#workCategory');
+  const recordScope = scope === 'records' || scope === 'deleted';
   const favorites = scope === 'favorites';
   if (input) {
-    input.placeholder = favorites ? '搜索我的收藏' : '搜索我的作品';
-    input.setAttribute('aria-label', favorites ? '搜索我的收藏' : '搜索我的作品');
-    input.value = favorites ? state.favoriteSearch : state.personalSearch;
+    const label = recordScope
+      ? (scope === 'deleted' ? '搜索删除记录' : '搜索发布记录')
+      : (favorites ? '搜索我的收藏' : '搜索我的作品');
+    input.placeholder = label;
+    input.setAttribute('aria-label', label);
+    input.value = recordScope ? state.recordSearch : (favorites ? state.favoriteSearch : state.personalSearch);
   }
-  if (select) select.value = favorites ? state.favoriteCategory : state.mineCategory;
-  loadWorkCategories(scope);
+  if (select) {
+    select.hidden = recordScope;
+    select.value = favorites ? state.favoriteCategory : state.mineCategory;
+  }
+  if (!recordScope) loadWorkCategories(scope);
 }
 
 async function loadWorkCategories(scope) {
@@ -743,16 +754,18 @@ async function loadWorkCategories(scope) {
 function setWorkSearch(value, immediate = false) {
   const scope = workScope();
   if (!scope) return;
-  const key = scope === 'favorites' ? 'favoriteSearch' : 'personalSearch';
+  const recordScope = scope === 'records' || scope === 'deleted';
+  const key = recordScope ? 'recordSearch' : (scope === 'favorites' ? 'favoriteSearch' : 'personalSearch');
   state[key] = String(value || '').trim();
   clearTimeout(workSearchTimer);
-  if (immediate) loadRecipes(true);
-  else workSearchTimer = setTimeout(() => { if (scope === workScope()) loadRecipes(true); }, 250);
+  const load = () => recordScope ? loadRecords(true) : loadRecipes(true);
+  if (immediate) load();
+  else workSearchTimer = setTimeout(() => { if (scope === workScope()) load(); }, 250);
 }
 
 function setWorkCategory(value) {
   const scope = workScope();
-  if (!scope) return;
+  if (!scope || scope === 'records' || scope === 'deleted') return;
   const key = scope === 'favorites' ? 'favoriteCategory' : 'mineCategory';
   state[key] = String(value || '');
   loadRecipes(true);
@@ -1447,7 +1460,8 @@ function renderWorkManagement(message, failed = false) {
   const countText = isFavorites ? '件收藏作品'
     : view === 'mine' ? '件已发布作品'
     : view === 'deleted' ? '条删除记录' : '条发布记录';
-  $('#workManagementStatus').textContent = message ?? (matched ? `找到 ${count} 件作品` : `${count} ${countText}`);
+  const matchedText = view === 'records' || view === 'deleted' ? `找到 ${count} 条记录` : `找到 ${count} 件作品`;
+  $('#workManagementStatus').textContent = message ?? (matched ? matchedText : `${count} ${countText}`);
   $('#workManagementRetry').hidden = !failed;
 }
 
@@ -1461,6 +1475,7 @@ async function loadRecords(reset) {
   $('#records').innerHTML = '';
   const p = new URLSearchParams({ page: state.recPage || 1, page_size: 20 });
   if (state.recordFilter === 'deleted') p.set('status', 'deleted');
+  if (state.recordSearch) p.set('search', state.recordSearch);
   const r = await api('/api/me/uploads?' + p.toString(), { auth: true });
   if (request !== state.listRequest || state.view !== 'records') return;
   state.loading = false;
@@ -1470,7 +1485,9 @@ async function loadRecords(reset) {
   if (state.recPage > lastPage) { state.recPage = lastPage; return loadRecords(false); }
   (r.data.recipes || []).forEach(appendRecord);
   $('#empty').style.display = (state.recTotal === 0) ? 'block' : 'none';
-  $('#empty').textContent = state.recordFilter === 'deleted' ? '没有已删除的作品。' : '还没有发布记录。';
+  $('#empty').textContent = state.recordSearch
+    ? (state.recordFilter === 'deleted' ? '没有找到匹配的删除记录。' : '没有找到匹配的发布记录。')
+    : (state.recordFilter === 'deleted' ? '没有已删除的作品。' : '还没有发布记录。');
   renderPagination();
   renderWorkManagement();
 }

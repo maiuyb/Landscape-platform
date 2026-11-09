@@ -33,23 +33,11 @@ html:not(.uc-mode) .grid.gallery-mode {
 
 /* Quiet hairline rules give the private works shelves a clearer hierarchy. */
 .work-divider {
-  position: relative;
   height: 1px;
   margin: 0 0 16px;
   background: rgba(140, 101, 62, 0.22);
 }
 .work-divider[hidden] { display: none; }
-.work-divider::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border: 1px solid rgba(140, 101, 62, 0.46);
-  background: var(--gallery-bg);
-  transform: translate(-50%, -50%) rotate(45deg);
-}
 .work-divider-content { margin: -4px 0 20px; }
 
 /* Compact filters for the user's own published works and favorites. */

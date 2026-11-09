@@ -342,6 +342,7 @@
               </div>
             </div>
           </div>
+          <div class="preview-bar recipe-preview-bar" v-if="preview"><div><strong>正在预览「{{ preview.name }}」</strong><span>更新配方中列出的设置，保留其他调整；尚未计入历史。</span></div><button @click="cancelPreview">取消预览</button><button class="primary" @click="applyPreview">应用到照片</button></div>
           </div>
           <section class="detail-inspector" v-if="inspectorOpen" aria-label="100% 细节窗口">
             <div class="panel-heading"><strong>100% 细节</strong><span class="small" v-if="inspectorBusy" role="status">更新中…</span><button @click="inspectorOpen=false" aria-label="关闭细节查看">×</button></div>
@@ -350,7 +351,6 @@
             <div class="segmented"><button @click="inspectorBefore=true" :aria-pressed="inspectorBefore">原图细节</button><button @click="inspectorBefore=false" :aria-pressed="!inspectorBefore">编辑后细节</button></div>
             <div class="detail-navigation" aria-label="移动细节查看位置"><button @click="nudgeInspector(-.05,0)" aria-label="细节向左">←</button><button @click="nudgeInspector(0,-.05)" aria-label="细节向上">↑</button><button @click="nudgeInspector(0,.05)" aria-label="细节向下">↓</button><button @click="nudgeInspector(.05,0)" aria-label="细节向右">→</button></div>
           </section>
-          <div class="preview-bar" v-if="preview"><div><strong>正在预览「{{ preview.name }}」</strong><span>更新配方中列出的设置，保留其他调整；尚未计入历史。</span></div><button @click="cancelPreview">取消预览</button><button class="primary" @click="applyPreview">应用到照片</button></div>
           <div class="preview-bar" v-if="wbPicking"><div><strong>白平衡取样</strong><span>点击照片中的白色或浅灰区域，Esc 可退出。</span></div><button @click="wbPicking = false">取消取样</button></div>
           <div class="preview-bar mask-status" v-if="maskEditing && selectedMask"><div><strong>编辑蒙版 · {{ selectedMask.name }}</strong><span>{{ selectedMask.type === 'brush' ? '拖动绘制；每一笔均可撤销。' : selectedMask.type === 'linear' ? '拖动绘制渐变，起点不调整、终点完全调整；拖动端点可修改。' : '从中心拖出椭圆；拖动中心或范围控制点可修改。' }} Esc 完成绘制。</span></div><button @click="editMask">完成绘制</button></div>
           <footer class="canvas-footer" :class="{'has-strip-tab':photoStripCollapsed}"><span>原图始终保留在本机 · 对比不改变编辑</span><div><button @click="restore('undo')" :disabled="!canUndo || locked">撤销</button><button @click="restore('redo')" :disabled="!canRedo || locked">重做</button><button @click="resetImage" :disabled="!dirty || locked">重置</button></div><button v-if="photoStripCollapsed" class="strip-reopen" @click="setPhotoStripCollapsed(false)" aria-label="展开照片区域" :title="'展开照片区域（'+photos.length+' 张）'" aria-expanded="false" aria-controls="photo-strip"><svg viewBox="0 0 24 20" aria-hidden="true"><path d="m7 12 5-5 5 5"/></svg></button></footer>
@@ -463,7 +463,7 @@
  <details class="subgroup ai-privacy"><summary>图片如何用于建议？</summary><p class="small">点击获取建议后，当前照片的压缩参考图、描述、编辑参数及本张照片最近三轮成功交流会发送到本项目后端；云端模式下转交千问分析。原尺寸照片和蒙版笔迹不随此请求发送，本项目后端不落盘保存 AI 参考图或交流内容。普通调色与导出在你的设备上完成。未配置密钥时明确展示固定演示方案。</p></details>
  </section>
  </div>
- <div class="workspace-output" :class="{ collapsed: quickPresetsCollapsed }"><div class="workspace-output-head"><span>快捷配方集</span><button type="button" class="workspace-output-toggle" @click="toggleQuickPresets" :aria-expanded="!quickPresetsCollapsed" aria-controls="workspaceOutputActions" :aria-label="quickPresetsCollapsed ? '展开快捷配方集' : '收起快捷配方集'" :title="quickPresetsCollapsed ? '展开快捷配方集' : '收起快捷配方集'"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div><div id="workspaceOutputActions" class="workspace-output-body"><div class="recipe-actions"><button @click="openSavedRecipes">常用配方</button><button @click="saveCurrentRecipe" :disabled="locked">保存当前配方</button></div></div></div>
+   <div class="workspace-output" :class="{ collapsed: quickPresetsCollapsed }"><div class="workspace-output-head"><span>快捷配方集</span><button type="button" class="workspace-output-toggle" @click="toggleQuickPresets" :aria-expanded="!quickPresetsCollapsed" aria-controls="workspaceOutputActions" :aria-label="quickPresetsCollapsed ? '展开快捷配方集' : '收起快捷配方集'" :title="quickPresetsCollapsed ? '展开快捷配方集' : '收起快捷配方集'"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div><div id="workspaceOutputActions" class="workspace-output-body"><div class="recipe-actions"><button @click="openSavedRecipes">常用配方</button><button @click="saveCurrentRecipe" :disabled="locked">保存当前配方</button></div></div></div>
 </aside>
       </template>
     </main>

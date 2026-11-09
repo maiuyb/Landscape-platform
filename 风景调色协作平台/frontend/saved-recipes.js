@@ -1,6 +1,6 @@
 /* Shared private recipe library UI for the editor and community. */
 window.RecipeLibrary = (() => {
-  let options, list, edit, host, page=1, search='', generation=0, session='', editing=null, opener=null, sourceSaving=false, editSaving=false;
+  let options, list, edit, host, page=1, search='', generation=0, session='', editing=null, opener=null, sourceSaving=false, editSaving=false, previewingName='';
   const token=()=>localStorage.getItem('landscape:token')||localStorage.getItem('cd_token')||'';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const find=id=>document.getElementById(id);
@@ -12,6 +12,13 @@ window.RecipeLibrary = (() => {
     return result;
   }
   function configure(value){options=value;session=token();}
+  function setPreviewingRecipe(name){
+    const next=String(name||'');
+    if(next===previewingName)return;
+    previewingName=next;
+    if((list?.open||host)&&find('savedRecipeList'))load();
+  }
+  function previewEnded(){setPreviewingRecipe('');}
   function sessionChanged(){
     if(session===token())return;
     session=token();generation++;editing=null;
@@ -34,7 +41,12 @@ window.RecipeLibrary = (() => {
       const button=e.target.closest('button[data-saved-action]');if(!button)return;
       e.preventDefault();e.stopPropagation();
       const entry=button.closest('[data-saved-id]').recipe;
+      if(button.dataset.savedAction==='cancel-preview'){
+        options.cancelPreview?.();
+        return;
+      }
       if(button.dataset.savedAction==='preview'){
+        previewingName=entry.name;
         list.close();options.preview({...entry.recipe,name:entry.name,description:entry.note||entry.description,author:entry.author});
       }else if(button.dataset.savedAction==='edit')openEditor(entry);
       else if(confirm(`从常用配方移除「${entry.name}」？原作品和收藏不受影响。`)){
@@ -77,14 +89,20 @@ window.RecipeLibrary = (() => {
       const pages=Math.max(1,Math.ceil(data.total/12));if(page>pages){page=pages;return load();}
       find('savedRecipeStatus').textContent=data.total?`${data.total} 份常用配方`:(search?'没有匹配的配方。':'还没有常用配方。可从社区作品中存取，也可保存当前照片的调色配方。');
       find('savedRecipePage').textContent=`${page} / ${pages}`;find('savedRecipePrev').disabled=page<=1;find('savedRecipeNext').disabled=page>=pages;
-      for(const entry of data.recipes){
+      const entries=[...(data.recipes||[])];
+      if(previewingName){const index=entries.findIndex(entry=>entry.name===previewingName);if(index>0)entries.unshift(entries.splice(index,1)[0]);}
+      for(const entry of entries){
         const article=document.createElement('details');article.className='saved-recipe-entry';article.dataset.savedId=entry.id;article.recipe=entry;article.open=expanded.has(String(entry.id));
         const steps=Array.isArray(entry.recipe?.steps)?entry.recipe.steps:[];
         const stepHtml=steps.map(step=>{const params=step?.params&&typeof step.params==='object'?step.params:{};const value=params.value!=null?`${Number(params.value)>0?'+':''}${params.value}`:(params.name!=null?params.name:JSON.stringify(params));return `<li><span>${esc(step?.type||'调整')}</span><span>${esc(value)}</span></li>`;}).join('');
         const note=String(entry.note||'').trim();
         const description=String(entry.description||'').trim();
         const tags=Array.isArray(entry.tags)?entry.tags:[];
-        article.innerHTML=`<summary><strong>${esc(entry.name)}</strong><span class="saved-recipe-summary-actions"><button type="button" class="saved-recipe-quick-preview" data-saved-action="preview">预览</button><span class="saved-recipe-chevron" aria-hidden="true"></span></span></summary><div class="saved-recipe-body">${entry.author?`<p class="saved-recipes-hint">来自 ${esc(entry.author)}</p>`:''}<div class="saved-recipe-fields"><div class="saved-recipe-field"><span class="saved-recipe-field-label">配方描述</span><span class="saved-recipe-field-value">${esc(description||'暂无描述')}</span></div><div class="saved-recipe-field"><span class="saved-recipe-field-label">配方标签</span><span class="saved-recipe-field-value">${tags.length?tags.map(esc).join(' · '):'暂无标签'}</span></div>${note?`<div class="saved-recipe-field"><span class="saved-recipe-field-label">我的备注</span><span class="saved-recipe-field-value">${esc(note)}</span></div>`:''}</div>${stepHtml?`<details class="saved-recipe-formula"><summary><span>调色配方</span><span class="saved-recipe-formula-caret" aria-hidden="true"></span></summary><ul class="saved-recipe-steps">${stepHtml}</ul></details>`:''}<div class="saved-recipes-actions"><button type="button" data-saved-action="preview">在我的照片上预览</button><button type="button" data-saved-action="edit">编辑备注</button><button type="button" data-saved-action="remove">移除</button></div></div>`;
+        const isPreviewing=!!previewingName&&entry.name===previewingName;
+        const summaryActions=isPreviewing
+          ? '<button type="button" class="saved-recipe-cancel-preview" data-saved-action="cancel-preview">取消预览</button><button type="button" class="saved-recipe-quick-preview is-previewing" data-saved-action="preview" disabled aria-disabled="true">已预览</button>'
+          : '<button type="button" class="saved-recipe-quick-preview" data-saved-action="preview">预览</button>';
+        article.innerHTML=`<summary><strong>${esc(entry.name)}</strong><span class="saved-recipe-summary-actions">${summaryActions}<span class="saved-recipe-chevron" aria-hidden="true"></span></span></summary><div class="saved-recipe-body">${entry.author?`<p class="saved-recipes-hint">来自 ${esc(entry.author)}</p>`:''}<div class="saved-recipe-fields"><div class="saved-recipe-field"><span class="saved-recipe-field-label">配方描述</span><span class="saved-recipe-field-value">${esc(description||'暂无描述')}</span></div><div class="saved-recipe-field"><span class="saved-recipe-field-label">配方标签</span><span class="saved-recipe-field-value">${tags.length?tags.map(esc).join(' · '):'暂无标签'}</span></div>${note?`<div class="saved-recipe-field"><span class="saved-recipe-field-label">我的备注</span><span class="saved-recipe-field-value">${esc(note)}</span></div>`:''}</div>${stepHtml?`<details class="saved-recipe-formula"><summary><span>调色配方</span><span class="saved-recipe-formula-caret" aria-hidden="true"></span></summary><ul class="saved-recipe-steps">${stepHtml}</ul></details>`:''}<div class="saved-recipes-actions"><button type="button" data-saved-action="preview">在我的照片上预览</button><button type="button" data-saved-action="edit">编辑备注</button><button type="button" data-saved-action="remove">移除</button></div></div>`;
         find('savedRecipeList').append(article);
       }
     }catch(error){if(version===generation){find('savedRecipeStatus').textContent=error.message;find('savedRecipeRetry').hidden=false;}}
@@ -101,5 +119,5 @@ window.RecipeLibrary = (() => {
   }
   function saveCurrent(recipe,name){if(!requireLogin())return;mount();openEditor({recipe,name,note:''});}
   window.addEventListener('storage',sessionChanged);
-  return {configure,sessionChanged,open,showIn,closePanel,saveSource,saveCurrent};
+  return {configure,sessionChanged,open,showIn,closePanel,saveSource,saveCurrent,setPreviewingRecipe,previewEnded};
 })();

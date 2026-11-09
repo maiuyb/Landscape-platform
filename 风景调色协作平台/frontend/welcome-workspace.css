@@ -784,7 +784,7 @@
 .hg-curtain-stage {
   position: fixed;
   inset: 0;
-  z-index: 140;
+  z-index: 10000;
   pointer-events: none;
   overflow: hidden;
   display: grid;

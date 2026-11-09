@@ -429,7 +429,7 @@ createApp({
     let panPointer = null, panStart = null, panMoved = false, suppressClickUntil = 0;
     function panAvailable() {
       const panel = canvasContainer.value;
-      if (!panel || !imageLoaded.value || locked.value) return false;
+      if (!panel || !imageLoaded.value || imageLoading.value || exporting.value || sharing.value || importing.value || frameExporting.value) return false;
       if (cropOpen.value || straightenOpen.value || perspectiveOpen.value || maskEditing.value || wbPicking.value || inspectorOpen.value) return false;
       return panel.scrollWidth > panel.clientWidth + 1 || panel.scrollHeight > panel.clientHeight + 1;
     }
@@ -717,7 +717,7 @@ createApp({
     watch([inspectorOpen,inspectorPosition],schedulePaint,{deep:true,flush:'post'});
     watch([maskId,maskEditing,showMask],schedulePaint,{flush:'post'});
     watch(
-      [zoom, imageLoaded, () => previewSize.width, () => previewSize.height, cropOpen, straightenOpen, perspectiveOpen, maskEditing, wbPicking, inspectorOpen],
+      [zoom, imageLoaded, () => previewSize.width, () => previewSize.height, preview, cropOpen, straightenOpen, perspectiveOpen, maskEditing, wbPicking, inspectorOpen],
       () => nextTick(updatePanCursor),
       { flush: 'post' }
     );
@@ -789,7 +789,7 @@ createApp({
     }
     function resetImage() {
       if (locked.value) return;
-      vignetteDirection.value='dark';state.value = Core.createState(); commit(); notify('已恢复原图，可撤销这次重置。');
+      vignetteDirection.value='dark';state.value = Core.createState(); commit(); notify('已恢复原图，可撤销或重新调整。');
     }
     function snapshotPhoto(){
       const entry=photos.value.find(p=>p.id===activePhotoId.value);if(!entry||!imageLoaded.value)return;
@@ -836,7 +836,6 @@ createApp({
           const pending=waitingRecipe.value;waitingRecipe.value=null;imageLoading.value=false;await nextTick();
           const recipe=Community.reuse(pending.recipe,{geometry:pending.geometry,masks:pending.masks});
           beginPreview(recipe,{replaceGeometry:pending.geometry});
-          if(preview.value)applyPreview();
         }
       }catch(e){if(image)image.src='';URL.revokeObjectURL(url);fail(`读取失败：${e.message}。当前照片已保留。`);}
       finally{if(version===importVersion)imageLoading.value=false;}
@@ -1321,6 +1320,7 @@ createApp({
         const proposal = Core.recipeState(base, recipe);
         delete proposal.state.presetSession;
         preview.value = { name: recipe.name, state: proposal.state, warnings: proposal.warnings };
+        window.RecipeLibrary?.setPreviewingRecipe?.(recipe.name);
         closeRecipeDetail(); currentView.value = 'editor'; panelTab.value='edit'; compareMode.value = 'edited';
         if (proposal.warnings.length) notify(proposal.warnings.join('；'));
       } catch (e) { fail(e.message); }
@@ -1340,10 +1340,10 @@ createApp({
     }
     function applyPreview() {
       if (!preview.value) return; const name = preview.value.name;
-      state.value = Core.clone(preview.value.state); preview.value = null; commit(); notify(`已应用「${name}」，可以继续调色或撤销。`);
+      state.value = Core.clone(preview.value.state); preview.value = null; window.RecipeLibrary?.previewEnded?.(); commit(); notify(`已应用「${name}」，可以继续调色或撤销。`);
       if(panelTab.value==='ai'){aiAppliedName.value=name;aiStatus.value=`已应用「${name}」，可以切到编辑继续微调，也可以撤销。`;aiMessages.value.push({role:'assistant',text:aiStatus.value});}
     }
-    function cancelPreview() { preview.value = null; schedulePaint(); notify('已取消预览，保留之前的编辑。'); }
+    function cancelPreview() { preview.value = null; window.RecipeLibrary?.previewEnded?.(); schedulePaint(); notify('已取消预览，保留之前的编辑。'); }
     function removeFilter() { state.value.filter = null; state.value.filterStrength = 100; commit(); }
     function diagnosis(maxSide = 224) {
       const canvas = Core.render(sourceImage.value, state.value, { maxSide });
@@ -1652,7 +1652,7 @@ createApp({
     }
     RecipeLibrary.configure({
       request:(path,method,body)=>api(path,{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})}),
-      login:openLogin, notify, preview:recipe=>{if(photoBusy.value||preview.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value){notify('请先完成当前预览或操作，再使用常用配方。');return;}openCommunityRecipe(recipe);}
+      login:openLogin, notify, cancelPreview:()=>cancelPreview(), preview:recipe=>{if(photoBusy.value||preview.value||cropOpen.value||straightenOpen.value||perspectiveOpen.value){notify('请先完成当前预览或操作，再使用常用配方。');return;}openCommunityRecipe(recipe);}
     });
     function openSavedRecipes(){RecipeLibrary.open();}
     function saveCurrentRecipe(){if(locked.value)return;commit();RecipeLibrary.saveCurrent(Core.toRecipe(state.value),(filename.value.replace(/\.[^.]+$/,'')+'的配方').slice(0,100));}

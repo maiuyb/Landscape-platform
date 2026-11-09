@@ -1488,6 +1488,14 @@ button[aria-current=page] {
   background: #F3F0EA;
   border-top: 1px solid rgba(23, 24, 23, 0.1);
 }
+.recipe-preview-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: auto;
+}
 
 .crop-bar,
 .straighten-bar,
